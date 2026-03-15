@@ -29,6 +29,9 @@ import './index.css';
 // Import the database to ensure it's initialized
 import { initializeDatabase } from '@db/database';
 
+// Performance diagnostics — exposes window.__perfDiag for console debugging
+import './utils/performanceDiagnostics';
+
 /**
  * DEBUG LOGGER
  * A helper to output formatted debug messages to the console.

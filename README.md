@@ -477,6 +477,7 @@ Dream-E/
 │   ├── utils/                        # Utilities
 │   │   ├── blobCache.ts              # Asset offloading (base64 → blob URLs)
 │   │   ├── thumbnailCache.ts         # Canvas node thumbnail generation
+│   │   ├── performanceDiagnostics.ts  # Console-based performance health checks
 │   │   ├── idGenerator.ts            # UUID generation
 │   │   └── owContextStore.ts         # Open World context persistence
 │   │

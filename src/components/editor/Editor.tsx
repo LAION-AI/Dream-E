@@ -139,9 +139,18 @@ function EditorInner() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
 
-  // Project store — use targeted selectors so unrelated state changes
-  // (e.g., isDirty toggling) don't trigger full canvas re-renders.
-  const currentProject = useProjectStore(s => s.currentProject);
+  // ── R1 FIX: GRANULAR SELECTORS ──
+  // Instead of selecting the entire project (which triggers re-render on ANY
+  // mutation — notes, chat, entities, isDirty, etc.), select only the fields
+  // the sync effect actually needs. Immer only creates new references for
+  // fields that were mutated, so subscribing to `project.nodes` won't trigger
+  // a re-render when only `project.notes` changed. For operations that need
+  // the full project (save, export, focus), use getState() at call time.
+  const projectNodes = useProjectStore(s => s.currentProject?.nodes);
+  const projectEdges = useProjectStore(s => s.currentProject?.edges);
+  const projectSettings = useProjectStore(s => s.currentProject?.settings);
+  const projectTitle = useProjectStore(s => s.currentProject?.info?.title);
+  const hasProject = useProjectStore(s => !!s.currentProject);
   const loadProject = useProjectStore(s => s.loadProject);
   const saveProject = useProjectStore(s => s.saveProject);
   const addNode = useProjectStore(s => s.addNode);
@@ -277,7 +286,9 @@ function EditorInner() {
    * saved in the store and will sync on the next non-typing update.
    */
   // Track the last synced node/edge references to skip redundant setNodes/setEdges calls
-  const lastSyncedNodesRef = useRef<string>('');
+  // R4 FIX: Use a node list reference instead of an O(N) string fingerprint.
+  // This avoids allocating a multi-KB string on every sync just to compare.
+  const lastSyncedNodesListRef = useRef<Node[]>([]);
   const lastSyncedEdgesRef = useRef<string>('');
 
   /**
@@ -300,7 +311,7 @@ function EditorInner() {
   const syncRafRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (currentProject) {
+    if (projectNodes && projectEdges) {
       // Skip sync while user is focused on a text input to prevent focus loss
       if (isUserEditingRef.current) {
         return;
@@ -314,8 +325,11 @@ function EditorInner() {
         cancelAnimationFrame(syncRafRef.current);
       }
 
-      // Capture current values for the closure
-      const projSnapshot = currentProject;
+      // R1 FIX: Capture the granular selector values instead of the full project.
+      // This means this effect only fires when nodes/edges/selection actually change,
+      // NOT when unrelated fields (notes, isDirty, entities, chat) change.
+      const capturedNodes = projectNodes;
+      const capturedEdges = projectEdges;
       const selNodeId = selectedNodeId;
       const selEdgeId = selectedEdgeId;
 
@@ -332,7 +346,7 @@ function EditorInner() {
       const nextMap = new Map<string, Node>();
       let nodesChanged = false;
 
-      const flowNodes: Node[] = projSnapshot.nodes.map((node) => {
+      const flowNodes: Node[] = capturedNodes.map((node) => {
         const prev = prevMap.get(node.id);
         const isSelected = node.id === selNodeId;
 
@@ -373,7 +387,7 @@ function EditorInner() {
       prevFlowNodesRef.current = nextMap;
 
       // Convert StoryEdges to React Flow edges
-      const flowEdges: Edge[] = projSnapshot.edges.map((edge) => ({
+      const flowEdges: Edge[] = capturedEdges.map((edge) => ({
         id: edge.id,
         source: edge.source,
         sourceHandle: edge.sourceHandle,
@@ -386,17 +400,24 @@ function EditorInner() {
           : edge.style,
       }));
 
-      // Fingerprint check: if nothing structurally changed, skip setNodes/setEdges.
-      // The fingerprint includes positions and selection — together with the
-      // data-reference stability above, this prevents unnecessary React Flow
-      // re-renders that were causing O(N²) per-sync work.
-      const nodeFingerprint = flowNodes.map(n => `${n.id}:${n.position.x},${n.position.y}:${n.selected}`).join('|');
-      const edgeFingerprint = flowEdges.map(e => `${e.id}:${(e as any).selected}`).join('|');
+      // R4 FIX: Replace O(N) string fingerprint with reference-based comparison.
+      // The old approach built a multi-KB string via .map().join('|') on every
+      // sync (potentially 30-60 times/second during drag). Instead, we check
+      // if any node's position or selection reference changed using O(N)
+      // reference comparisons (=== is O(1) per item, no string allocation).
+      const prevList = lastSyncedNodesListRef.current;
+      const posSelChanged = flowNodes.length !== prevList.length || flowNodes.some((n, i) => {
+        const prev = prevList[i];
+        return !prev || prev.position !== n.position || prev.selected !== n.selected || prev.id !== n.id;
+      });
 
-      if (nodeFingerprint !== lastSyncedNodesRef.current || nodesChanged) {
+      if (posSelChanged || nodesChanged) {
         setNodes(flowNodes);
-        lastSyncedNodesRef.current = nodeFingerprint;
+        lastSyncedNodesListRef.current = flowNodes;
       }
+
+      // Edge fingerprint uses simple selection comparison (edges rarely change)
+      const edgeFingerprint = flowEdges.map(e => `${e.id}:${(e as any).selected}`).join('|');
       if (edgeFingerprint !== lastSyncedEdgesRef.current) {
         setEdges(flowEdges);
         lastSyncedEdgesRef.current = edgeFingerprint;
@@ -421,14 +442,14 @@ function EditorInner() {
         }
       };
     }
-  }, [currentProject, selectedNodeId, selectedEdgeId, setNodes, setEdges, syncTrigger]);
+  }, [projectNodes, projectEdges, selectedNodeId, selectedEdgeId, setNodes, setEdges, syncTrigger]);
 
   /**
    * Find the scene node with the longest path from the start node.
    * Uses BFS to compute distances, returns the farthest scene node.
    * This is the "most recent" node in Open World mode.
    */
-  const findDeepestSceneNode = useCallback((proj: typeof currentProject) => {
+  const findDeepestSceneNode = useCallback((proj: { nodes: any[]; edges: any[]; settings: any } | null) => {
     if (!proj || proj.nodes.length === 0) return null;
     const startNodeId = proj.settings.startNodeId;
     if (!startNodeId) return null;
@@ -477,17 +498,18 @@ function EditorInner() {
   const focusConsumedRef = useRef(false);
   useEffect(() => {
     if (focusConsumedRef.current) return;
-    if (!currentProject || currentProject.nodes.length === 0) return;
+    if (!projectNodes || projectNodes.length === 0) return;
 
     const { focusNodeId, setFocusNodeId } = useEditorStore.getState();
 
     // Find the target node: explicit focusNodeId, or deepest scene as fallback
     let targetNode = focusNodeId
-      ? currentProject.nodes.find(n => n.id === focusNodeId)
+      ? projectNodes.find(n => n.id === focusNodeId)
       : null;
 
     if (!targetNode) {
-      targetNode = findDeepestSceneNode(currentProject) || null;
+      const proj = useProjectStore.getState().currentProject;
+      targetNode = findDeepestSceneNode(proj) || null;
     }
 
     if (!targetNode) return;
@@ -503,7 +525,7 @@ function EditorInner() {
       selectNode(targetId);
       if (focusNodeId) setFocusNodeId(null);
     }, 300);
-  }, [currentProject, nodes, selectNode, reactFlow, findDeepestSceneNode]);
+  }, [projectNodes, nodes, selectNode, reactFlow, findDeepestSceneNode]);
 
   /**
    * Handle new connection between nodes
@@ -709,6 +731,7 @@ function EditorInner() {
    * then batch-delete them (single undo step). Does NOT delete the selected node itself.
    */
   const handleDeleteAllAfter = useCallback(() => {
+    const currentProject = useProjectStore.getState().currentProject;
     if (!selectedNodeId || !currentProject) return;
 
     // Build adjacency list (source → targets)
@@ -740,7 +763,7 @@ function EditorInner() {
     if (visited.size === 0) return;
 
     deleteNodes(Array.from(visited));
-  }, [selectedNodeId, currentProject, deleteNodes]);
+  }, [selectedNodeId, deleteNodes]);
 
   /**
    * Cut the selected node (copy + delete)
@@ -748,7 +771,8 @@ function EditorInner() {
    */
   const handleCutNode = useCallback(() => {
     if (selectedNodeId) {
-      const nodeToCopy = currentProject?.nodes.find((n) => n.id === selectedNodeId);
+      const proj = useProjectStore.getState().currentProject;
+      const nodeToCopy = proj?.nodes.find((n) => n.id === selectedNodeId);
       if (nodeToCopy) {
         // Copy to clipboard first — structuredClone avoids 2x memory
         // spike from intermediate JSON string (B5 fix)
@@ -758,21 +782,22 @@ function EditorInner() {
         deleteNode(selectedNodeId);
       }
     }
-  }, [selectedNodeId, currentProject?.nodes, deleteNode]);
+  }, [selectedNodeId, deleteNode]);
 
   /**
    * Copy the selected node to clipboard
    */
   const handleCopyNode = useCallback(() => {
     if (selectedNodeId) {
-      const nodeToCopy = currentProject?.nodes.find((n) => n.id === selectedNodeId);
+      const proj = useProjectStore.getState().currentProject;
+      const nodeToCopy = proj?.nodes.find((n) => n.id === selectedNodeId);
       if (nodeToCopy) {
         // Store a deep copy — structuredClone avoids 2x memory spike (B5 fix)
         setCopiedNode(structuredClone(nodeToCopy));
         setCopyCounter(1); // Reset counter for new copy source
       }
     }
-  }, [selectedNodeId, currentProject?.nodes]);
+  }, [selectedNodeId]);
 
   /**
    * Paste the copied node at an offset position
@@ -809,6 +834,7 @@ function EditorInner() {
    * Preserves all connections — only repositions nodes visually.
    */
   const handleAutoLayout = useCallback(() => {
+    const currentProject = useProjectStore.getState().currentProject;
     if (!currentProject) return;
     const startNodeId = currentProject.settings.startNodeId;
     if (!startNodeId) return;
@@ -837,7 +863,7 @@ function EditorInner() {
         moveNode(nodeId, { x, y });
       });
     }
-  }, [currentProject, moveNode]);
+  }, [moveNode]);
 
   /**
    * Handle keyboard shortcuts
@@ -921,6 +947,7 @@ function EditorInner() {
    * browsers that don't support it (Firefox, Safari).
    */
   const handleSaveAs = async () => {
+    const currentProject = useProjectStore.getState().currentProject;
     if (!currentProject) return;
 
     try {
@@ -1043,7 +1070,7 @@ function EditorInner() {
   }
 
   // Error state
-  if (error || !currentProject) {
+  if (error || !hasProject) {
     return (
       <div className="h-screen bg-editor-bg flex items-center justify-center">
         <div className="text-center">
@@ -1074,7 +1101,7 @@ function EditorInner() {
 
           <div className="flex items-center gap-2">
             <h1 className="font-semibold text-editor-text">
-              {currentProject.info.title}
+              {projectTitle || 'Untitled'}
             </h1>
             {isSaving ? (
               <span className="text-xs text-editor-muted animate-pulse">Saving...</span>
@@ -1222,7 +1249,7 @@ function EditorInner() {
             size="sm"
             leftIcon={<Download size={16} />}
             onClick={() => {
-              setSaveAsFilename(currentProject?.info.title || '');
+              setSaveAsFilename(projectTitle || '');
               setIsSaveAsOpen(true);
             }}
           >

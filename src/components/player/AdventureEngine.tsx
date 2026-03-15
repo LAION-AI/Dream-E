@@ -162,7 +162,13 @@ export default function AdventureEngine() {
 
   // Constants for audio transitions
   const FADE_DURATION = 2000; // 2 seconds crossfade
-  const MAX_CONCURRENT_HOWLS = 6; // Safety cap — force-unload oldest if exceeded
+  const MAX_CONCURRENT_HOWLS = 4; // R3 FIX: Reduced from 6 — URL-based reuse makes fewer needed
+  const FADE_SAFETY_TIMEOUT = FADE_DURATION + 3000; // R3 FIX: Force-stop if fade hangs
+
+  // R3 FIX: URL-based Howl cache — reuse existing Howl instances for the same audio URL.
+  // Prevents redundant PCM decoding (500KB-2MB per duplicate) when the same background
+  // music plays across multiple scenes. Max 4 entries, cleaned up on unmount.
+  const howlCacheRef = useRef<Map<string, Howl>>(new Map());
 
   /**
    * Safely check if a URL is valid (not a broken blob URL)
@@ -188,6 +194,19 @@ export default function AdventureEngine() {
     try {
       // Convert data URLs to blob URLs to keep binary out of JS heap
       const audioUrl = getBlobUrl(url);
+
+      // R3 FIX: Check URL-based cache first — reuse existing Howl instance
+      // if it's still loaded. This avoids redundant PCM decoding.
+      const cached = howlCacheRef.current.get(audioUrl);
+      if (cached && cached.state() !== 'unloaded') {
+        // Reset event handlers for the new use case
+        cached.loop(loop);
+        cached.volume(volume);
+        if (onEnd) cached.on('end', onEnd);
+        audioRegistryRef.current.add(cached);
+        return cached;
+      }
+
       const howl = new Howl({
         src: [audioUrl],
         loop,
@@ -208,6 +227,14 @@ export default function AdventureEngine() {
       });
       // DIAGNOSTIC: Track all Howl instances
       audioRegistryRef.current.add(howl);
+
+      // R3 FIX: Store in URL-based cache (bounded to MAX_CONCURRENT_HOWLS entries)
+      howlCacheRef.current.set(audioUrl, howl);
+      if (howlCacheRef.current.size > MAX_CONCURRENT_HOWLS) {
+        // Evict the oldest cache entry
+        const oldest = howlCacheRef.current.keys().next().value;
+        if (oldest) howlCacheRef.current.delete(oldest);
+      }
 
       // Enforce concurrent Howl limit — if too many instances exist
       // (e.g., rapid scene transitions creating new Howls before old
@@ -268,6 +295,10 @@ export default function AdventureEngine() {
         return;
       }
 
+      // R3 FIX: Use FADE_SAFETY_TIMEOUT instead of FADE_DURATION to give
+      // the fade a small buffer, but force-stop if it hangs. This prevents
+      // Howl instances from sitting in a limbo state indefinitely if the
+      // browser audio context is locked or the fade callback never fires.
       setTimeout(() => {
         try {
           howl.stop();
@@ -278,7 +309,7 @@ export default function AdventureEngine() {
           audioRegistryRef.current.delete(howl);
         }
         resolve();
-      }, FADE_DURATION);
+      }, FADE_SAFETY_TIMEOUT);
     });
   };
 
@@ -481,6 +512,8 @@ export default function AdventureEngine() {
         try { howl.stop(); howl.unload(); } catch {}
       }
       audioRegistryRef.current.clear();
+      // R3 FIX: Clear URL-based Howl cache on unmount
+      howlCacheRef.current.clear();
 
       // Release player-mode blob URLs and thumbnails on unmount.
       // This ensures memory is freed even if the user navigates away
@@ -523,6 +556,56 @@ export default function AdventureEngine() {
       delete (window as any).__listenerAudit;
     };
   }, []);
+
+  // ── R2 FIX: PERIODIC BLOB HARD-REVOCATION ────────────────────
+  // During extended play sessions, soft-evicted blob URLs accumulate
+  // native memory (the browser keeps the underlying blob data alive
+  // until URL.revokeObjectURL() is called). The B4 fix only revokes
+  // after an OW scene save — this timer ensures revocation also happens
+  // during non-OW play or when OW saves fail silently.
+  //
+  // Every 30 seconds, we collect blob URLs for current + recent scenes
+  // + all entities, then hard-revoke everything else.
+  useEffect(() => {
+    if (!session) return;
+
+    const id = setInterval(() => {
+      const proj = useProjectStore.getState().currentProject;
+      if (!proj) return;
+
+      const retainSet = new Set<string>();
+
+      // Retain current + last 4 visited scenes' assets
+      const recentNodeIds = visitedScenesRef.current.slice(-BLOB_RETAIN_COUNT);
+      for (const nodeId of recentNodeIds) {
+        const node = proj.nodes.find(n => n.id === nodeId);
+        if (node && node.type === 'scene') {
+          const data = node.data as Record<string, unknown>;
+          for (const f of ['backgroundImage', 'backgroundMusic', 'voiceoverAudio']) {
+            const v = data[f];
+            if (typeof v === 'string' && v.startsWith('blob:')) retainSet.add(v);
+          }
+        }
+      }
+
+      // Retain ALL entity assets (needed for image generation reference)
+      for (const entity of (proj.entities || [])) {
+        for (const f of ['referenceImage', 'referenceVoice', 'defaultMusic'] as const) {
+          const v = (entity as any)[f];
+          if (typeof v === 'string' && v.startsWith('blob:')) retainSet.add(v);
+        }
+      }
+
+      const revoked = revokeStaleEvictions(retainSet);
+      if (revoked > 0) {
+        console.log(`[AdventureEngine] Periodic revocation: freed ${revoked} stale blob URLs`);
+      }
+    }, 30_000);
+
+    return () => clearInterval(id);
+    // Only re-create the interval when a session starts/ends (not on every scene change).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!session]);
 
   // ── TTS State Management ──────────────────────────────────────
   // Tracks TTS generation + playback so we can:
