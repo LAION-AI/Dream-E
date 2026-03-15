@@ -569,7 +569,7 @@ export function generateOpenWorldScene(
       // ── Step 1: Build context ────────────────────────────────────
       onStatus({ phase: 'building_context', detail: 'Gathering story context...' });
 
-      const context = buildOpenWorldContext(project, session, userAction);
+      let context = buildOpenWorldContext(project, session, userAction);
       console.log(
         `[OpenWorld] Context built: ~${context.estimatedTokens} tokens (${context.userMessage.length} chars), ` +
         `${context.fullProfileEntityIds.length} full profiles, ` +
@@ -579,6 +579,128 @@ export function generateOpenWorldScene(
         phase: 'building_context',
         detail: `Context: ~${context.estimatedTokens} tokens, ${context.fullProfileEntityIds.length} entity profiles`,
       });
+
+      // ── Step 1.5: AUTO-GENERATE MISSING ENTITY REFERENCE IMAGES ──
+      // BEFORE calling the writer LLM, scan ALL entities in the project.
+      // Any entity that exists in the world database but lacks a reference
+      // image gets a 512x512 portrait generated automatically. This ensures
+      // the writer LLM always sees entities WITH images (no [⚠ NO REFERENCE
+      // IMAGE] warnings), and the scene image generator has full visual context.
+      //
+      // This runs BEFORE the writer call so that:
+      //   1. Entity summaries in the context don't show missing-image warnings
+      //   2. Gemini writer receives reference images for ALL entities
+      //   3. Scene image generation has all reference images available
+      if (onEntityImageReady) {
+        const imgSettings = useImageGenStore.getState();
+        const hasImgKey = imgSettings.provider === 'gemini'
+          ? !!imgSettings.googleApiKey
+          : !!imgSettings.apiKey;
+
+        if (hasImgKey) {
+          const allEntities = project.entities || [];
+          const entitiesNeedingImages = allEntities.filter(e => !e.referenceImage);
+
+          if (entitiesNeedingImages.length > 0) {
+            console.log(`[OpenWorld] Step 1.5: ${entitiesNeedingImages.length} entities missing reference images: ${entitiesNeedingImages.map(e => e.name).join(', ')}`);
+
+            // Get the current scene image as a style reference for Gemini
+            let styleRefBase64: string | null = null;
+            if (currentSceneImage && imgSettings.provider === 'gemini') {
+              if (currentSceneImage.startsWith('data:')) {
+                styleRefBase64 = currentSceneImage;
+              } else if (currentSceneImage.startsWith('blob:')) {
+                styleRefBase64 = await blobUrlToBase64(currentSceneImage);
+              }
+            }
+
+            // Generate reference images sequentially (one at a time to avoid memory spikes)
+            for (const entity of entitiesNeedingImages) {
+              if (controller.signal.aborted) break;
+
+              onStatus({
+                phase: 'generating_entity_images',
+                detail: `Generating reference image for ${entity.name} (${entity.category})...`,
+              });
+
+              // Build prompt from entity profile
+              const profile = entity.profile || {};
+              const appearance = [
+                profile.appearance, profile.hair, profile.build, profile.clothing,
+                profile.age, profile.race, profile.species,
+              ].filter(Boolean).join(', ');
+
+              let prompt: string;
+              if (entity.category === 'character') {
+                prompt = `Portrait of ${entity.name}. ${appearance || entity.description}. Detailed character portrait, centered composition, 512x512 pixels. Focus on this specific character.`;
+              } else if (entity.category === 'location') {
+                prompt = `${entity.name}. ${entity.description}. Establishing shot, detailed environment, wide angle, 512x512 pixels.`;
+              } else if (entity.category === 'object') {
+                prompt = `${entity.name}. ${entity.description}. Detailed close-up of this object, centered composition, 512x512 pixels.`;
+              } else {
+                prompt = `Visual representation of "${entity.name}". ${entity.description}. Abstract or symbolic illustration, 512x512 pixels.`;
+              }
+
+              try {
+                const styleTag = imgSettings.defaultImageStyle?.trim();
+                const fullPrompt = styleTag ? `${prompt}. Style: ${styleTag}` : prompt;
+
+                const refImgsForPortrait: string[] = [];
+                if (styleRefBase64) refImgsForPortrait.push(styleRefBase64);
+
+                const res = await fetch('/api/generate-image', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    prompt: fullPrompt,
+                    width: 512,
+                    height: 512,
+                    provider: imgSettings.provider,
+                    apiKey: imgSettings.apiKey,
+                    model: imgSettings.model,
+                    endpoint: imgSettings.endpoint,
+                    googleApiKey: imgSettings.googleApiKey,
+                    geminiImageModel: imgSettings.geminiImageModel,
+                    referenceImages: refImgsForPortrait,
+                  }),
+                });
+
+                if (res.ok) {
+                  const data = await res.json();
+                  const imageDataUrl = data.dataUrl || data.imageUrl;
+                  if (imageDataUrl) {
+                    // Persist the reference image on the entity immediately
+                    onEntityImageReady(entity.id, imageDataUrl);
+                    // Also update the in-memory project so Step 1b and Step 5
+                    // can see this entity now has a reference image
+                    entity.referenceImage = imageDataUrl;
+                    onStatus({
+                      phase: 'generating_entity_images',
+                      detail: `Reference image for ${entity.name} ready`,
+                    });
+                    console.log(`[OpenWorld] Step 1.5: Generated reference image for ${entity.name} [${entity.id}]`);
+                  }
+                } else {
+                  const errText = await res.text().catch(() => 'unknown');
+                  console.warn(`[OpenWorld] Step 1.5: Failed to generate ref image for ${entity.name}:`, errText);
+                  onStatus({
+                    phase: 'generating_entity_images',
+                    detail: `Could not generate image for ${entity.name} (continuing)`,
+                  });
+                }
+              } catch (err) {
+                console.warn(`[OpenWorld] Step 1.5: Error generating ref image for ${entity.name}:`, err);
+              }
+            }
+
+            // Rebuild context now that entities have reference images,
+            // so the writer LLM sees updated entity summaries without warnings
+            const updatedContext = buildOpenWorldContext(project, session, userAction);
+            context = updatedContext;
+            console.log(`[OpenWorld] Step 1.5: Context rebuilt after generating ${entitiesNeedingImages.length} entity images`);
+          }
+        }
+      }
 
       // ── Step 1b: Collect entity reference images for writing LLM ──
       // When the writer is Gemini, sending entity reference images as inline
