@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <!--
+    =============================================================================
+    DREAM-E - HTML ENTRY POINT
+    =============================================================================
+
+    This is the single HTML page for our Single-Page Application (SPA).
+
+    HOW SPAs WORK:
+    Unlike traditional websites where each page is a separate HTML file,
+    SPAs load once and then JavaScript handles all the "page" changes.
+
+    When you navigate in Dream-E:
+    - The URL changes (e.g., /edit/project-123)
+    - JavaScript intercepts this
+    - The appropriate React components are rendered
+    - No full page reload happens!
+
+    This makes the app feel fast and native-like.
+
+    =============================================================================
+    -->
+
+    <!-- CHARACTER ENCODING: Use UTF-8 for all characters (emojis, special chars) -->
+    <meta charset="UTF-8" />
+
+    <!-- VIEWPORT: Make the page responsive on mobile devices -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- FAVICON: The small icon shown in browser tabs -->
+    <!-- You can replace this with your own icon in /public/favicon.ico -->
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+
+    <!-- PAGE TITLE: Shown in browser tabs and bookmarks -->
+    <title>Dream-E - Visual Story Editor</title>
+
+    <!-- META DESCRIPTION: For search engines -->
+    <meta name="description" content="Create interactive text adventures and RPGs with a visual node editor. No coding required." />
+
+    <!-- THEME COLOR: For mobile browsers (affects status bar on Android) -->
+    <meta name="theme-color" content="#1a1a2e" />
+
+    <!--
+    GOOGLE FONTS
+    We load fonts that match our design themes:
+    - Inter: Clean, modern UI font for the editor
+    - Cinzel: Elegant serif for Fantasy theme
+    - Merriweather: Readable serif for Fantasy body text
+    - Orbitron: Futuristic for Cyberpunk theme
+    - Roboto Mono: Monospace for Cyberpunk body
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;600;700&family=Merriweather:wght@400;700&family=Orbitron:wght@400;500;700&family=Roboto+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+    <!--
+    PREVENT FLASH OF UNSTYLED CONTENT (FOUC)
+    This inline script runs immediately to set the correct theme
+    before the page renders, preventing a flash of wrong colors.
+    -->
+    <script>
+      // Check if user prefers dark mode (most will for this app)
+      // We default to dark mode for the editor
+      document.documentElement.classList.add('dark');
+    </script>
+  </head>
+
+  <body>
+    <!--
+    ROOT ELEMENT
+    This is where React mounts the entire application.
+    Everything you see in Dream-E is rendered inside this div.
+
+    The "antialiased" class improves font rendering.
+    -->
+    <div id="root" class="antialiased"></div>
+
+    <!--
+    MAIN SCRIPT
+    This loads our React application.
+
+    type="module" means:
+    - Modern JavaScript (ES modules with import/export)
+    - Deferred loading (doesn't block page rendering)
+    - Strict mode enabled
+
+    Vite automatically:
+    - Processes this during development
+    - Bundles it for production
+    -->
+    <script type="module" src="/src/main.tsx"></script>
+
+    <!--
+    NOSCRIPT FALLBACK
+    Shown if JavaScript is disabled.
+    Very rare these days, but good practice.
+    -->
+    <noscript>
+      <div style="text-align: center; padding: 50px; font-family: system-ui;">
+        <h1>Dream-E requires JavaScript</h1>
+        <p>Please enable JavaScript in your browser to use this application.</p>
+      </div>
+    </noscript>
+  </body>
+</html>

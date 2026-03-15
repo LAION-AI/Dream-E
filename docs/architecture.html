@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture &amp; File Structure — Dream-E Docs</title>
+<style>
+  :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; line-height: 1.6; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  a { color: var(--accent); }
+  h1 { font-size: 2rem; margin-bottom: 8px; }
+  .back { color: var(--muted); text-decoration: none; font-size: 0.9rem; display: inline-block; margin-bottom: 16px; }
+  h2 { font-size: 1.3rem; margin: 32px 0 12px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { font-size: 1.1rem; margin: 20px 0 8px; color: var(--green); }
+  p, li { margin-bottom: 8px; }
+  ul { padding-left: 20px; }
+  code { background: #1c2128; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: #1c2128; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+  .note { background: #1f6feb15; border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a class="back" href="index.html">&larr; Back to Index</a>
+<h1>Architecture &amp; File Structure</h1>
+
+<h2>High-Level Architecture</h2>
+
+<pre>
+Browser (React SPA)
+  ├── Dashboard (project list, create/import/delete)
+  ├── Editor (React Flow canvas + inspector + toolbar)
+  │     ├── Node editing (scene/choice/modifier/comment)
+  │     ├── Entity management (characters, locations, objects, concepts)
+  │     ├── Variable management (game stats, inventory)
+  │     ├── AI Chat (agentic loop via Claude Code)
+  │     └── AI Settings (image gen, TTS, writer config)
+  └── Player (AdventureEngine)
+        ├── Standard mode (predefined branching narrative)
+        └── Open World mode (AI-generated scenes)
+              ├── Context construction (openWorldContext.ts)
+              ├── AI generation (openWorldService.ts → vite middleware → Gemini/OpenAI API)
+              ├── Image generation (Gemini/BFL/OpenAI)
+              ├── Music search (BM25 FastAPI server)
+              └── TTS (Gemini chunked streaming)
+
+Vite Dev Server (vite.config.ts middleware)
+  ├── POST /api/open-world     → Gemini / OpenAI streaming
+  ├── POST /api/generate-image → BFL / OpenAI / Gemini image gen
+  ├── POST /api/generate-tts   → Gemini TTS
+  ├── POST /api/chat           → Claude Code subprocess
+  ├── POST /api/chat-reset     → Clear chat history
+  └── GET  /api/music/*        → Proxy to BM25 server (port 7862)
+
+Persistence
+  ├── IndexedDB (via Dexie.js) → Projects, assets, save slots
+  └── localStorage → User preferences, AI settings, save data
+</pre>
+
+<h2>Complete File Listing</h2>
+
+<h3>Components (32 files)</h3>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>components/assets/AssetManager.tsx</code></td><td>Modal for uploading and managing media assets (images, audio). Bulk operations.</td></tr>
+  <tr><td><code>components/chat/ChatWindow.tsx</code></td><td>AI assistant chat modal. Sends messages through agentic loop. Displays command results.</td></tr>
+  <tr><td><code>components/common/Button.tsx</code></td><td>Reusable button component with variants (primary, secondary, danger, ghost).</td></tr>
+  <tr><td><code>components/common/Modal.tsx</code></td><td>Reusable modal with focus management. <code>hasFocusedRef</code> prevents re-focus on prop changes.</td></tr>
+  <tr><td><code>components/common/Tabs.tsx</code></td><td>Tabbed panel UI component.</td></tr>
+  <tr><td><code>components/common/index.ts</code></td><td>Re-exports Button, Modal, Tabs.</td></tr>
+  <tr><td><code>components/dashboard/Dashboard.tsx</code></td><td>Project list screen. Create new, load existing, import, delete projects.</td></tr>
+  <tr><td><code>components/editor/Editor.tsx</code></td><td>Main React Flow canvas. Manages viewport, node rendering, drag-drop, focus-on-return, keyboard shortcuts.</td></tr>
+  <tr><td><code>components/editor/Toolbar.tsx</code></td><td>Left sidebar. Draggable node types (scene/choice/modifier/comment) + cut/copy/paste/delete actions.</td></tr>
+  <tr><td><code>components/editor/HelpModal.tsx</code></td><td>Help/instructions modal for editor usage.</td></tr>
+  <tr><td><code>components/entities/EntityManager.tsx</code></td><td>Entity CRUD modal. Category tabs (char/loc/obj/concept). State change history display.</td></tr>
+  <tr><td><code>components/entities/ProfileViewer.tsx</code></td><td>Inline-editable entity profile fields. Supports strings, numbers, booleans, arrays. Add/remove fields.</td></tr>
+  <tr><td><code>components/inspector/Inspector.tsx</code></td><td>Dispatcher component. Renders SceneInspector, ChoiceInspector, etc. based on selected node type.</td></tr>
+  <tr><td><code>components/inspector/SceneInspector.tsx</code></td><td>Scene node editor. 4 tabs: Media, Content, Outputs (choices), World (entity links). Start node button.</td></tr>
+  <tr><td><code>components/inspector/ChoiceInspector.tsx</code></td><td>Choice node editor. Condition setup (variable, operator, value). Quick-create variable inline.</td></tr>
+  <tr><td><code>components/inspector/ModifierInspector.tsx</code></td><td>Modifier node editor. Modes: Math (add/sub/mul/div), Set (direct assign), Random (min/max range).</td></tr>
+  <tr><td><code>components/inspector/CommentInspector.tsx</code></td><td>Comment node editor. Text area + color picker (8 presets).</td></tr>
+  <tr><td><code>components/inspector/SceneEntityOverlay.tsx</code></td><td>Entity state overlay for a scene. Per-entity situational attributes (text area per linked entity).</td></tr>
+  <tr><td><code>components/inspector/MediaUploader.tsx</code></td><td>File upload widget for images and audio. Drag-drop + click-to-browse. Asset name input.</td></tr>
+  <tr><td><code>components/nodes/SceneNode.tsx</code></td><td>Scene node visual. Blue, lazy-loaded thumbnail, text preview, choice output handles, start node indicator.</td></tr>
+  <tr><td><code>components/nodes/ChoiceNode.tsx</code></td><td>Choice node visual. Yellow, condition display, True/False output handles.</td></tr>
+  <tr><td><code>components/nodes/ModifierNode.tsx</code></td><td>Modifier node visual. Green, operation preview, mode badge (Math/Set/Random).</td></tr>
+  <tr><td><code>components/nodes/CommentNode.tsx</code></td><td>Comment node visual. Dashed border, custom color, text preview, no handles.</td></tr>
+  <tr><td><code>components/notes/NotesEditor.tsx</code></td><td>Project notes modal. Freeform text. Uses local state to avoid focus-stealing.</td></tr>
+  <tr><td><code>components/player/AdventureEngine.tsx</code></td><td>Game runtime. Standard + Open World modes. Scene display, choice buttons, OW generation, entity updates, TTS.</td></tr>
+  <tr><td><code>components/player/ChoiceList.tsx</code></td><td>Right-side choice buttons with conditions and lock states.</td></tr>
+  <tr><td><code>components/player/DialogBox.tsx</code></td><td>Bottom story text display with speaker name. Movable, resizable.</td></tr>
+  <tr><td><code>components/player/HUD.tsx</code></td><td>Top-left stats display. Progress bars, icons, colors per variable.</td></tr>
+  <tr><td><code>components/player/OpenWorldInput.tsx</code></td><td>Player action text input for Open World mode. Submit triggers AI generation.</td></tr>
+  <tr><td><code>components/player/StatusBox.tsx</code></td><td>OW generation status messages (building context, streaming, generating image, etc.).</td></tr>
+  <tr><td><code>components/player/SystemMenu.tsx</code></td><td>Pause menu. Save, load, settings, quit, return to editor.</td></tr>
+  <tr><td><code>components/settings/AISettingsModal.tsx</code></td><td>Configure all AI services: image gen provider, TTS, writer model, system prompt, instruction, context budget.</td></tr>
+  <tr><td><code>components/variables/VariableManager.tsx</code></td><td>Variable CRUD modal. Type selection, HUD display settings, default values, templates.</td></tr>
+</table>
+
+<h3>Services (7 files)</h3>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>services/aiChatService.ts</code></td><td>Agentic chat loop. User message &rarr; agent response &rarr; <code>&lt;&lt;&lt;SW_CMD&gt;&gt;&gt;</code> execution &rarr; results fed back. MAX_ITERATIONS=10.</td></tr>
+  <tr><td><code>services/gameStateAPI.ts</code></td><td>56+ command handlers. Scene/entity/variable/media/modifier/branch/comment/project/query/music operations.</td></tr>
+  <tr><td><code>services/gameStateAPI.registry.ts</code></td><td>Declarative command metadata array. Auto-generates system prompt from registry (zero drift).</td></tr>
+  <tr><td><code>services/gameStateAPI.context.ts</code></td><td>Serializes current project state to concise text for AI chat context.</td></tr>
+  <tr><td><code>services/gameStateAPI.types.ts</code></td><td>APIResult, ValidationError, CommandMeta, CommandHandler types.</td></tr>
+  <tr><td><code>services/openWorldService.ts</code></td><td>Full OW pipeline: context &rarr; stream AI &rarr; parse JSON &rarr; image gen &rarr; music search &rarr; create node.</td></tr>
+  <tr><td><code>services/openWorldContext.ts</code></td><td>Builds AI context for OW. All sections at full fidelity; compress only if over budget.</td></tr>
+  <tr><td><code>services/ttsService.ts</code></td><td>Chunked streaming TTS via Gemini. Splits text into growing chunks, parallel requests, in-order delivery.</td></tr>
+</table>
+
+<h3>Stores (4 files)</h3>
+<table>
+  <tr><th>File</th><th>Purpose</th><th>Persisted</th></tr>
+  <tr><td><code>stores/useProjectStore.ts</code></td><td>Project data, CRUD operations, undo/redo, chat messages. Core editing state.</td><td>IndexedDB (project data), localStorage (dirty flag)</td></tr>
+  <tr><td><code>stores/useEditorStore.ts</code></td><td>Canvas viewport, active tool, panel visibility, clipboard, focus node.</td><td>localStorage (preferences, panel state)</td></tr>
+  <tr><td><code>stores/usePlayerStore.ts</code></td><td>Game session, current scene, variables, save slots, preferences.</td><td>localStorage (preferences, saves)</td></tr>
+  <tr><td><code>stores/useImageGenStore.ts</code></td><td>Image gen provider config, TTS settings, writer model/prompt/instruction, context budget.</td><td>localStorage (all settings)</td></tr>
+</table>
+
+<h3>Types (7 files)</h3>
+<table>
+  <tr><th>File</th><th>Key Definitions</th></tr>
+  <tr><td><code>types/project.ts</code></td><td>Project, ProjectInfo, ProjectSettings, Entity, EntityStateChangeEvent, ChatMessage</td></tr>
+  <tr><td><code>types/nodes.ts</code></td><td>SceneNode, ChoiceNode, ModifierNode, CommentNode, StoryEdge, Condition</td></tr>
+  <tr><td><code>types/gamestate.ts</code></td><td>GameState, GameSession, SaveSlot, SceneDisplayData, PlayerChoice</td></tr>
+  <tr><td><code>types/variables.ts</code></td><td>Variable, VariableType, VariableValue, VariableOperation, VARIABLE_TEMPLATES</td></tr>
+  <tr><td><code>types/themes.ts</code></td><td>ThemeId, ThemeConfig (modern, fantasy, cyberpunk, scifi)</td></tr>
+  <tr><td><code>types/index.ts</code></td><td>Re-export hub for all type modules</td></tr>
+  <tr><td><code>types/xyflow.d.ts</code></td><td>Type patches for @xyflow/react v12.10.1 (missing .d.ts files)</td></tr>
+</table>
+
+<h3>Utilities (5 files)</h3>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>utils/blobCache.ts</code></td><td>Base64 &rarr; blob URL conversion + caching. Asset offloading. Rehydration for save/export. Memory diagnostics.</td></tr>
+  <tr><td><code>utils/graphDepth.ts</code></td><td>BFS graph analysis. <code>computeNodeDepths()</code> (0-1 BFS), <code>computeShortestScenePath()</code>, <code>groupNodesByDepth()</code>.</td></tr>
+  <tr><td><code>utils/idGenerator.ts</code></td><td><code>generateId(prefix)</code> &rarr; <code>"prefix_uuid"</code> using UUID v4.</td></tr>
+  <tr><td><code>utils/assetFingerprint.ts</code></td><td>Asset deduplication via content fingerprinting.</td></tr>
+  <tr><td><code>utils/injectBunnyScene.ts</code></td><td>Dev utility. <code>window.bunnyScene</code> injects sample project for testing.</td></tr>
+</table>
+
+<h3>Database (3 files)</h3>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>db/database.ts</code></td><td>Dexie.js schema. Tables: <code>projects</code>, <code>assets</code>, <code>saves</code>. Version migrations.</td></tr>
+  <tr><td><code>db/projectsDB.ts</code></td><td>Project CRUD: create, load, save, delete, list, import/export. Creates starter scene and default settings.</td></tr>
+  <tr><td><code>db/assetsDB.ts</code></td><td>Media asset CRUD: save, load, delete, list per project.</td></tr>
+</table>
+
+<h3>Config Files</h3>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>vite.config.ts</code></td><td>Dev server with API middleware endpoints. Handles Gemini/OpenAI streaming, image gen, TTS, music proxy, chat.</td></tr>
+  <tr><td><code>tailwind.config.js</code></td><td>Custom design tokens: node colors, editor palette, glassmorphism, glow effects.</td></tr>
+  <tr><td><code>tsconfig.json</code></td><td>TypeScript config. Path alias <code>@/</code> maps to <code>src/</code>.</td></tr>
+  <tr><td><code>postcss.config.js</code></td><td>Tailwind CSS + Autoprefixer processing.</td></tr>
+  <tr><td><code>package.json</code></td><td>Dependencies, scripts (<code>dev</code>, <code>build</code>, <code>preview</code>).</td></tr>
+</table>
+
+<h2>Data Flow Patterns</h2>
+
+<h3>Editing Flow</h3>
+<pre>
+User edits field in Inspector
+  &rarr; Inspector calls store.updateNode(id, { data: { ...changes } })
+  &rarr; useProjectStore.set() via Immer (immutable mutation)
+  &rarr; recordHistory() queued (debounced 500ms for text, immediate for structural)
+  &rarr; isDirty = true
+  &rarr; scheduleAutoSave() triggers after 2s
+  &rarr; saveProject() writes to IndexedDB (rehydrates blob URLs to base64)
+  &rarr; Editor.tsx sync trigger updates React Flow nodes/edges arrays
+  &rarr; Canvas re-renders (skipped if user is typing in text input)
+</pre>
+
+<h3>Open World Generation Flow</h3>
+<pre>
+Player types action &rarr; handleChoice()
+  &rarr; useProjectStore.getState().currentProject (fresh, not stale player store copy)
+  &rarr; buildOpenWorldContext(project, session, action)
+  &rarr; POST /api/open-world (SSE streaming)
+  &rarr; parseOpenWorldResponse(fullText)
+  &rarr; onComplete(result) &rarr; display pending scene text + choices
+  &rarr; Background: generateImage() + searchAndAssignMusic()
+  &rarr; Player clicks "Continue to Next Scene"
+  &rarr; handleAdvanceToOwScene()
+    &rarr; Create new scene node + edge in project graph
+    &rarr; Deferred: apply entity updates (profilePatch, stateHistory, stateNote)
+    &rarr; Deferred: apply variable changes
+    &rarr; saveAndOffloadAssets() (base64 &rarr; blob URLs)
+</pre>
+
+<h3>AI Chat (Agentic Loop) Flow</h3>
+<pre>
+User sends message in ChatWindow
+  &rarr; buildUserMessage(text) includes game state context
+  &rarr; POST /api/chat (Claude Code subprocess)
+  &rarr; Parse response for &lt;&lt;&lt;SW_CMD&gt;&gt;&gt; blocks
+  &rarr; Execute each command via gameStateAPI.executeCommand()
+  &rarr; buildResultsMessage(results) fed back to agent
+  &rarr; Loop until no more commands or MAX_ITERATIONS (10)
+  &rarr; Return final text to ChatWindow
+</pre>
+
+<h2>External Dependencies</h2>
+
+<table>
+  <tr><th>Service</th><th>Provider</th><th>Usage</th></tr>
+  <tr><td>Scene generation</td><td>Google Gemini / OpenAI-compatible</td><td>Structured JSON output with streaming</td></tr>
+  <tr><td>Image generation</td><td>Google Gemini / BFL FLUX / OpenAI-compatible</td><td>Scene backgrounds, entity portraits</td></tr>
+  <tr><td>Text-to-speech</td><td>Google Gemini TTS</td><td>Chunked streaming audio narration</td></tr>
+  <tr><td>Music search</td><td>Local BM25 FastAPI (port 7862)</td><td>RPG background music, 2,580 tracks</td></tr>
+  <tr><td>AI chat agent</td><td>Claude Code subprocess</td><td>Agentic game state manipulation</td></tr>
+</table>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,178 @@
+{
+  /**
+   * =============================================================================
+   * TYPESCRIPT CONFIGURATION
+   * =============================================================================
+   *
+   * This file tells TypeScript how to compile your code.
+   *
+   * WHAT IS TYPESCRIPT?
+   * TypeScript is JavaScript with types. It catches errors before runtime:
+   * - "This function expects a number but you passed a string"
+   * - "This property doesn't exist on this object"
+   * - "You forgot to handle null values"
+   *
+   * The TypeScript compiler (tsc) reads this config to know:
+   * - Which files to compile
+   * - What JavaScript version to output
+   * - How strict to be with type checking
+   *
+   * =============================================================================
+   */
+  "compilerOptions": {
+    /**
+     * TARGET
+     * Which version of JavaScript to compile to.
+     * ES2020 is widely supported by modern browsers.
+     */
+    "target": "ES2020",
+
+    /**
+     * USE DEFINE FOR CLASS FIELDS
+     * Uses the standard ECMAScript behavior for class fields.
+     * This ensures our code works correctly with modern JavaScript.
+     */
+    "useDefineForClassFields": true,
+
+    /**
+     * LIB
+     * Which built-in type definitions to include.
+     * - ES2020: Core JavaScript features
+     * - DOM: Browser APIs (document, window, etc.)
+     * - DOM.Iterable: Iteration over DOM collections
+     */
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+
+    /**
+     * MODULE
+     * How modules are handled.
+     * ESNext uses modern import/export syntax.
+     */
+    "module": "ESNext",
+
+    /**
+     * SKIP LIB CHECK
+     * Skip type checking of declaration files (.d.ts)
+     * This speeds up compilation and avoids issues with
+     * conflicting type definitions from different packages.
+     */
+    "skipLibCheck": true,
+
+    /* ========== BUNDLER MODE OPTIONS ========== */
+
+    /**
+     * MODULE RESOLUTION
+     * How TypeScript finds modules when you import them.
+     * "bundler" mode works best with Vite.
+     */
+    "moduleResolution": "bundler",
+
+    /**
+     * ALLOW IMPORTING TS EXTENSIONS
+     * Allows importing .ts and .tsx files directly.
+     */
+    "allowImportingTsExtensions": true,
+
+    /**
+     * RESOLVE JSON MODULE
+     * Allows importing JSON files like: import data from './data.json'
+     */
+    "resolveJsonModule": true,
+
+    /**
+     * ISOLATE MODULES
+     * Ensures each file can be compiled independently.
+     * Required for tools like Babel and ESBuild.
+     */
+    "isolatedModules": true,
+
+    /**
+     * NO EMIT
+     * TypeScript won't output JavaScript files.
+     * We let Vite handle the actual compilation.
+     * TypeScript is just for type checking.
+     */
+    "noEmit": true,
+
+    /**
+     * JSX
+     * How JSX syntax (<Component />) is handled.
+     * "react-jsx" uses the new JSX transform (React 17+)
+     * No need to import React in every file.
+     */
+    "jsx": "react-jsx",
+
+    /* ========== STRICT TYPE CHECKING ========== */
+
+    /**
+     * STRICT
+     * Enables all strict type checking options.
+     * This catches more bugs but requires more precise code.
+     */
+    "strict": true,
+
+    /**
+     * NO UNUSED LOCALS
+     * Warning on unused local variables (disabled for development).
+     */
+    "noUnusedLocals": false,
+
+    /**
+     * NO UNUSED PARAMETERS
+     * Warning on unused function parameters (disabled for development).
+     */
+    "noUnusedParameters": false,
+
+    /**
+     * TYPES
+     * Include type definitions for Vite and Node
+     */
+    "types": ["vite/client"],
+
+    /**
+     * NO FALLTHROUGH CASES IN SWITCH
+     * Error when a switch case falls through without break.
+     * Prevents common bug where you forget 'break'.
+     */
+    "noFallthroughCasesInSwitch": true,
+
+    /* ========== PATH ALIASES ========== */
+
+    /**
+     * BASE URL
+     * Base directory for resolving non-relative modules.
+     */
+    "baseUrl": ".",
+
+    /**
+     * PATHS
+     * Map import paths to file locations.
+     * These must match the aliases in vite.config.ts!
+     */
+    "paths": {
+      "@/*": ["src/*"],
+      "@components/*": ["src/components/*"],
+      "@stores/*": ["src/stores/*"],
+      "@types/*": ["src/types/*"],
+      "@engine/*": ["src/engine/*"],
+      "@db/*": ["src/db/*"],
+      "@utils/*": ["src/utils/*"],
+      "@hooks/*": ["src/hooks/*"],
+      "@themes/*": ["src/themes/*"],
+      "@services/*": ["src/services/*"]
+    }
+  },
+
+  /**
+   * INCLUDE
+   * Which files TypeScript should check.
+   * - "src" folder contains our application code
+   */
+  "include": ["src"],
+
+  /**
+   * EXCLUDE
+   * Files to exclude from type checking.
+   */
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,51 @@
+{
+  /**
+   * =============================================================================
+   * TYPESCRIPT CONFIGURATION FOR NODE.JS FILES
+   * =============================================================================
+   *
+   * This configuration is specifically for Node.js files like vite.config.ts
+   * These files run in Node.js, not in the browser, so they need
+   * different settings.
+   *
+   * =============================================================================
+   */
+  "compilerOptions": {
+    /**
+     * SKIP LIB CHECK
+     * Skip type checking of declaration files for faster compilation.
+     */
+    "skipLibCheck": true,
+
+    /**
+     * MODULE
+     * Use ESNext module syntax for modern Node.js
+     */
+    "module": "ESNext",
+
+    /**
+     * MODULE RESOLUTION
+     * Use bundler mode for consistency with Vite
+     */
+    "moduleResolution": "bundler",
+
+    /**
+     * ALLOW SYNTHETIC DEFAULT IMPORTS
+     * Allows: import something from 'module'
+     * Instead of: import * as something from 'module'
+     */
+    "allowSyntheticDefaultImports": true,
+
+    /**
+     * NO EMIT
+     * Don't emit files, just type check
+     */
+    "noEmit": true
+  },
+
+  /**
+   * INCLUDE
+   * Only include configuration files that run in Node.js
+   */
+  "include": ["vite.config.ts"]
+}

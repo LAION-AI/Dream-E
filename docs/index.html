@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dream-E Documentation</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --yellow: #d29922; --red: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; line-height: 1.6; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  h1 { font-size: 2.2rem; margin-bottom: 8px; }
+  .subtitle { color: var(--muted); font-size: 1.1rem; margin-bottom: 40px; }
+  h2 { font-size: 1.4rem; margin: 32px 0 16px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; text-decoration: none; color: var(--text); transition: border-color 0.2s; }
+  .card:hover { border-color: var(--accent); }
+  .card h3 { font-size: 1.1rem; margin-bottom: 8px; }
+  .card p { color: var(--muted); font-size: 0.9rem; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-right: 6px; }
+  .badge-blue { background: #1f6feb33; color: var(--accent); }
+  .badge-green { background: #23883033; color: var(--green); }
+  .badge-yellow { background: #9e6a0333; color: var(--yellow); }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }
+  code { background: #1c2128; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  .tech-stack { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+  .tech-stack span { background: #1c2128; padding: 4px 12px; border-radius: 16px; font-size: 0.85rem; }
+  .overview-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 24px; margin: 24px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Dream-E Documentation</h1>
+<p class="subtitle">Visual node editor for interactive fiction and open-world text-adventure RPGs.</p>
+
+<div class="overview-box">
+  <p>Dream-E is a browser-based authoring tool for creating branching narrative games. It provides a visual node graph editor for designing story structure, an entity system for world-building, and an AI-powered Open World mode that generates scenes dynamically based on player actions.</p>
+  <p style="margin-top: 12px; color: var(--muted);">Tech stack:</p>
+  <div class="tech-stack">
+    <span>React 18</span>
+    <span>TypeScript</span>
+    <span>Vite</span>
+    <span>Zustand</span>
+    <span>React Flow</span>
+    <span>Tailwind CSS</span>
+    <span>Dexie.js (IndexedDB)</span>
+    <span>Howler.js</span>
+    <span>Lucide Icons</span>
+  </div>
+</div>
+
+<h2>Documentation Pages</h2>
+
+<div class="card-grid">
+  <a class="card" href="architecture.html">
+    <h3>Architecture &amp; File Structure</h3>
+    <p>Project layout, all source files, stores, services, database, utilities. Complete map of every file and its purpose.</p>
+  </a>
+  <a class="card" href="canvas-editor.html">
+    <h3>Canvas Editor (Standard Mode)</h3>
+    <p>Node types, inspector panel, toolbar, keyboard shortcuts, entity linking, variables, import/export, undo/redo.</p>
+  </a>
+  <a class="card" href="open-world-mode.html">
+    <h3>Open World Mode</h3>
+    <p>AI scene generation pipeline, context construction, entity state changes, music search, image generation, TTS.</p>
+  </a>
+  <a class="card" href="ai-settings.html">
+    <h3>AI Settings &amp; Configuration</h3>
+    <p>Image generation providers, TTS settings, writer model, system prompt, instruction, context budget, art style.</p>
+  </a>
+  <a class="card" href="api-reference.html">
+    <h3>Game State API Reference</h3>
+    <p>56+ commands across 11 groups. Scene, entity, variable, media, modifier, branch, comment, project, query, and music operations.</p>
+  </a>
+  <a class="card" href="memory-optimization.html">
+    <h3>Memory Optimization</h3>
+    <p>Blob URL cache, asset offloading, lean history snapshots, lazy node thumbnails, reference image rehydration.</p>
+  </a>
+  <a class="card" href="stores-and-types.html">
+    <h3>Stores &amp; Type Definitions</h3>
+    <p>Zustand stores (Project, Editor, Player, ImageGen), TypeScript interfaces, data flow patterns.</p>
+  </a>
+</div>
+
+<h2>Quick Reference</h2>
+
+<table>
+  <tr><th>Aspect</th><th>Detail</th></tr>
+  <tr><td>Entry point</td><td><code>src/main.tsx</code> &rarr; <code>App.tsx</code> (React Router)</td></tr>
+  <tr><td>Routes</td><td><code>/</code> Dashboard, <code>/edit/:id</code> Editor, <code>/play/:id</code> Player</td></tr>
+  <tr><td>Node types</td><td>Scene (blue), Choice (yellow), Modifier (green), Comment (gray)</td></tr>
+  <tr><td>Entity categories</td><td>Character, Location, Object, Concept</td></tr>
+  <tr><td>AI providers</td><td>Google Gemini, OpenAI-compatible, BFL FLUX</td></tr>
+  <tr><td>Default writer model</td><td><code>gemini-3-flash-preview</code></td></tr>
+  <tr><td>Default context budget</td><td>500,000 tokens</td></tr>
+  <tr><td>Persistence</td><td>IndexedDB (projects), localStorage (preferences)</td></tr>
+  <tr><td>Music server</td><td>BM25 FastAPI on port 7862, 2,580 tracks, 18 genres</td></tr>
+  <tr><td>Dev server</td><td><code>npx vite --host</code> on port 5173</td></tr>
+</table>
+
+<h2>Key Directories</h2>
+
+<table>
+  <tr><th>Path</th><th>Contents</th></tr>
+  <tr><td><code>src/components/</code></td><td>32 React components organized by feature (editor, player, inspector, nodes, entities, settings, etc.)</td></tr>
+  <tr><td><code>src/services/</code></td><td>7 service files (AI chat, game state API, open world, TTS)</td></tr>
+  <tr><td><code>src/stores/</code></td><td>4 Zustand stores (project, editor, player, AI settings)</td></tr>
+  <tr><td><code>src/types/</code></td><td>TypeScript type definitions (project, nodes, gamestate, variables, themes)</td></tr>
+  <tr><td><code>src/utils/</code></td><td>Utilities (blob cache, graph depth, ID generator)</td></tr>
+  <tr><td><code>src/db/</code></td><td>IndexedDB operations (database schema, project CRUD, asset storage)</td></tr>
+  <tr><td><code>rpg-music-server/</code></td><td>FastAPI BM25 music search server (Python)</td></tr>
+</table>
+
+</div>
+</body>
+</html>

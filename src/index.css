@@ -1,0 +1,624 @@
+/**
+ * =============================================================================
+ * GLOBAL STYLES - DREAM-E
+ * =============================================================================
+ *
+ * This file contains:
+ * 1. Tailwind CSS directives (base, components, utilities)
+ * 2. CSS custom properties (variables) for theming
+ * 3. Global styles that apply to the entire application
+ * 4. Custom utility classes
+ *
+ * HOW TAILWIND WORKS:
+ * The @tailwind directives below inject Tailwind's generated CSS:
+ * - @tailwind base: Reset/normalize styles
+ * - @tailwind components: Component classes
+ * - @tailwind utilities: Utility classes (bg-blue-500, p-4, etc.)
+ *
+ * =============================================================================
+ */
+
+/* ============================================================================
+   TAILWIND DIRECTIVES
+   ============================================================================ */
+
+/* Base styles: Modern CSS reset and default element styles */
+@tailwind base;
+
+/* Component classes: Reusable component patterns */
+@tailwind components;
+
+/* Utility classes: The core of Tailwind (bg-*, text-*, p-*, etc.) */
+@tailwind utilities;
+
+/* ============================================================================
+   CSS CUSTOM PROPERTIES (VARIABLES)
+   ============================================================================
+
+   CSS variables allow us to define values once and reuse them everywhere.
+   They also enable dynamic theming - we can change a variable's value
+   and all elements using it update automatically.
+
+   HOW TO USE:
+   - Define: --variable-name: value;
+   - Use: property: var(--variable-name);
+
+   ============================================================================ */
+
+:root {
+  /* --------------------------------------------------------------------------
+     EDITOR THEME VARIABLES
+     These define the dark theme for the node editor.
+     -------------------------------------------------------------------------- */
+
+  /* Background colors */
+  --editor-bg: #1a1a2e;
+  --editor-surface: #16213e;
+  --editor-surface-hover: #1e2a4a;
+
+  /* Border colors */
+  --editor-border: #0f3460;
+  --editor-border-light: rgba(255, 255, 255, 0.1);
+
+  /* Text colors */
+  --editor-text: #e4e4e7;
+  --editor-text-muted: #a1a1aa;
+
+  /* Accent colors */
+  --editor-accent: #0ea5e9;
+  --editor-accent-hover: #38bdf8;
+
+  /* Node colors */
+  --node-scene: #3b82f6;
+  --node-scene-bg: rgba(59, 130, 246, 0.1);
+  --node-choice: #eab308;
+  --node-choice-bg: rgba(234, 179, 8, 0.1);
+  --node-modifier: #22c55e;
+  --node-modifier-bg: rgba(34, 197, 94, 0.1);
+  --node-comment: #6b7280;
+  --node-comment-bg: rgba(107, 114, 128, 0.1);
+
+  /* Status colors */
+  --success: #22c55e;
+  --warning: #eab308;
+  --error: #ef4444;
+  --info: #3b82f6;
+
+  /* --------------------------------------------------------------------------
+     GLASSMORPHISM VARIABLES
+     For the frosted glass effect on panels.
+     -------------------------------------------------------------------------- */
+
+  --glass-bg: rgba(22, 33, 62, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur: 12px;
+
+  /* --------------------------------------------------------------------------
+     ANIMATION VARIABLES
+     Consistent timing for all animations.
+     -------------------------------------------------------------------------- */
+
+  --animation-fast: 150ms;
+  --animation-normal: 250ms;
+  --animation-slow: 350ms;
+
+  /* --------------------------------------------------------------------------
+     SPACING VARIABLES
+     Consistent spacing throughout the UI.
+     -------------------------------------------------------------------------- */
+
+  --toolbar-width: 60px;
+  --inspector-width: 25vw;
+  --topbar-height: 48px;
+
+  /* --------------------------------------------------------------------------
+     PLAYER THEME VARIABLES (DEFAULT - MODERN)
+     These are overridden by theme-specific styles.
+     -------------------------------------------------------------------------- */
+
+  --player-primary: #3b82f6;
+  --player-secondary: #6366f1;
+  --player-accent: #8b5cf6;
+  --player-text: #ffffff;
+  --player-text-muted: rgba(255, 255, 255, 0.7);
+  --player-bg: rgba(0, 0, 0, 0.7);
+  --player-border: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================================================
+   PLAYER THEME: FANTASY
+   ============================================================================
+   Warm colors, parchment textures, gold accents.
+   Fonts: Cinzel for headers, Merriweather for body.
+   ============================================================================ */
+
+.theme-fantasy {
+  --player-primary: #b8860b;       /* Dark goldenrod */
+  --player-secondary: #8b4513;     /* Saddle brown */
+  --player-accent: #daa520;        /* Goldenrod */
+  --player-text: #f5f5dc;          /* Beige */
+  --player-text-muted: rgba(245, 245, 220, 0.7);
+  --player-bg: rgba(62, 39, 35, 0.85);
+  --player-border: #b8860b;
+  --player-font-header: 'Cinzel', serif;
+  --player-font-body: 'Merriweather', serif;
+  --player-border-style: double;
+  --player-border-width: 4px;
+  --player-radius: 4px;
+}
+
+/* ============================================================================
+   PLAYER THEME: CYBERPUNK
+   ============================================================================
+   Dark with neon accents, sharp edges, digital feel.
+   Fonts: Orbitron for headers, Roboto Mono for body.
+   ============================================================================ */
+
+.theme-cyberpunk {
+  --player-primary: #ff00ff;       /* Magenta */
+  --player-secondary: #00ffff;     /* Cyan */
+  --player-accent: #ff6b6b;        /* Coral */
+  --player-text: #ffffff;
+  --player-text-muted: rgba(255, 255, 255, 0.6);
+  --player-bg: rgba(10, 10, 20, 0.9);
+  --player-border: #00ffff;
+  --player-font-header: 'Orbitron', sans-serif;
+  --player-font-body: 'Roboto Mono', monospace;
+  --player-border-style: solid;
+  --player-border-width: 2px;
+  --player-radius: 0px;
+  --player-glow: 0 0 10px var(--player-secondary);
+}
+
+/* ============================================================================
+   PLAYER THEME: MODERN
+   ============================================================================
+   Clean, minimal, glassmorphism effect.
+   Fonts: Inter for everything.
+   ============================================================================ */
+
+.theme-modern {
+  --player-primary: #6366f1;       /* Indigo */
+  --player-secondary: #8b5cf6;     /* Violet */
+  --player-accent: #a855f7;        /* Purple */
+  --player-text: #ffffff;
+  --player-text-muted: rgba(255, 255, 255, 0.7);
+  --player-bg: rgba(30, 30, 40, 0.7);
+  --player-border: rgba(255, 255, 255, 0.15);
+  --player-font-header: 'Inter', sans-serif;
+  --player-font-body: 'Inter', sans-serif;
+  --player-border-style: solid;
+  --player-border-width: 1px;
+  --player-radius: 16px;
+}
+
+/* ============================================================================
+   BASE STYLES
+   ============================================================================
+   Applied to all elements using Tailwind's @layer base.
+   ============================================================================ */
+
+@layer base {
+  /* Apply smooth scrolling to the entire page */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Default body styles */
+  body {
+    @apply bg-editor-bg text-editor-text;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Remove default focus outlines and add custom ones */
+  *:focus {
+    @apply outline-none;
+  }
+
+  *:focus-visible {
+    @apply ring-2 ring-editor-accent ring-offset-2 ring-offset-editor-bg;
+  }
+
+  /* Improve text selection appearance */
+  ::selection {
+    @apply bg-editor-accent text-white;
+  }
+
+  /* Custom scrollbar styling for WebKit browsers */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-editor-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-editor-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-editor-accent;
+  }
+}
+
+/* ============================================================================
+   COMPONENT STYLES
+   ============================================================================
+   Reusable component patterns using Tailwind's @layer components.
+   ============================================================================ */
+
+@layer components {
+  /* --------------------------------------------------------------------------
+     GLASS PANEL
+     Frosted glass effect for panels and cards.
+     -------------------------------------------------------------------------- */
+  .glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+  }
+
+  /* --------------------------------------------------------------------------
+     NODE BASE STYLES
+     Common styles for all node types in the editor.
+     -------------------------------------------------------------------------- */
+  .node-base {
+    @apply rounded-node shadow-lg transition-shadow duration-200;
+    min-width: 200px;
+    max-width: 280px;
+  }
+
+  .node-base:hover {
+    @apply shadow-xl;
+  }
+
+  .node-base.selected {
+    @apply ring-2 ring-offset-2 ring-offset-editor-bg;
+  }
+
+  /* Scene node (blue) */
+  .node-scene {
+    @apply node-base;
+    background: var(--node-scene-bg);
+    border: 2px solid var(--node-scene);
+  }
+
+  .node-scene.selected {
+    @apply ring-node-scene shadow-glow-blue;
+  }
+
+  /* Choice node (yellow) */
+  .node-choice {
+    @apply node-base;
+    background: var(--node-choice-bg);
+    border: 2px solid var(--node-choice);
+  }
+
+  .node-choice.selected {
+    @apply ring-node-choice shadow-glow-yellow;
+  }
+
+  /* Modifier node (green) */
+  .node-modifier {
+    @apply node-base;
+    background: var(--node-modifier-bg);
+    border: 2px solid var(--node-modifier);
+  }
+
+  .node-modifier.selected {
+    @apply ring-node-modifier shadow-glow-green;
+  }
+
+  /* Comment node (gray) */
+  .node-comment {
+    @apply node-base;
+    background: var(--node-comment-bg);
+    border: 2px dashed var(--node-comment);
+  }
+
+  /* --------------------------------------------------------------------------
+     BUTTON STYLES
+     -------------------------------------------------------------------------- */
+  .btn {
+    @apply px-4 py-2 rounded-button font-medium transition-all duration-200;
+    @apply focus:ring-2 focus:ring-offset-2 focus:ring-offset-editor-bg;
+  }
+
+  .btn-primary {
+    @apply btn bg-editor-accent text-white hover:bg-editor-accent/80;
+    @apply focus:ring-editor-accent;
+  }
+
+  .btn-secondary {
+    @apply btn bg-editor-surface text-editor-text hover:bg-editor-surface/80;
+    @apply border border-editor-border focus:ring-editor-border;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-editor-text hover:bg-editor-surface;
+  }
+
+  .btn-danger {
+    @apply btn bg-error text-white hover:bg-error/80;
+    @apply focus:ring-error;
+  }
+
+  /* --------------------------------------------------------------------------
+     INPUT STYLES
+     -------------------------------------------------------------------------- */
+  .input {
+    @apply w-full px-3 py-2 rounded-button;
+    @apply bg-editor-surface border border-editor-border;
+    @apply text-editor-text placeholder-editor-muted;
+    @apply focus:border-editor-accent focus:ring-1 focus:ring-editor-accent;
+    @apply transition-colors duration-200;
+  }
+
+  .input-label {
+    @apply block text-sm font-medium text-editor-muted mb-1;
+  }
+
+  /* --------------------------------------------------------------------------
+     PLAYER UI STYLES
+     Styles for the game player interface.
+     -------------------------------------------------------------------------- */
+  .player-box {
+    background: var(--player-bg);
+    border: var(--player-border-width) var(--player-border-style) var(--player-border);
+    border-radius: var(--player-radius);
+    box-shadow: var(--player-glow, none);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .player-button {
+    @apply px-4 py-3 font-medium transition-all duration-200;
+    background: var(--player-bg);
+    border: var(--player-border-width) var(--player-border-style) var(--player-border);
+    border-radius: var(--player-radius);
+    color: var(--player-text);
+  }
+
+  .player-button:hover:not(:disabled) {
+    background: var(--player-primary);
+    border-color: var(--player-primary);
+  }
+
+  .player-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .player-button.locked {
+    opacity: 0.6;
+    border-color: var(--player-text-muted);
+  }
+}
+
+/* ============================================================================
+   UTILITY CLASSES
+   ============================================================================
+   Custom utility classes using Tailwind's @layer utilities.
+   ============================================================================ */
+
+@layer utilities {
+  /* Text truncation with ellipsis */
+  .text-truncate {
+    @apply truncate;
+  }
+
+  /* Multi-line text truncation */
+  .text-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .text-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Glow effects */
+  .glow-blue {
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+  }
+
+  .glow-yellow {
+    box-shadow: 0 0 15px rgba(234, 179, 8, 0.5);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 15px rgba(34, 197, 94, 0.5);
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Ken Burns effect for background images */
+  .ken-burns {
+    animation: kenBurns 20s ease-in-out infinite alternate;
+  }
+
+  @keyframes kenBurns {
+    0% {
+      transform: scale(1);
+    }
+    100% {
+      transform: scale(1.1);
+    }
+  }
+
+  /* Typewriter cursor */
+  .typewriter-cursor::after {
+    content: '|';
+    animation: cursorBlink 1s step-end infinite;
+  }
+
+  @keyframes cursorBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* Floating text animation (for damage numbers, etc.) */
+  .float-up {
+    animation: floatUp 1s ease-out forwards;
+  }
+
+  @keyframes floatUp {
+    0% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-30px);
+    }
+  }
+}
+
+/* ============================================================================
+   REACT FLOW CUSTOMIZATION
+   ============================================================================
+   Override default React Flow styles to match our design.
+   ============================================================================ */
+
+/* Canvas background */
+.react-flow__background {
+  background-color: var(--editor-bg) !important;
+}
+
+/* Grid pattern */
+.react-flow__background-pattern {
+  stroke: var(--editor-border) !important;
+}
+
+/* Selection box */
+.react-flow__selection {
+  background: rgba(14, 165, 233, 0.1) !important;
+  border: 1px dashed var(--editor-accent) !important;
+}
+
+/* Edge (connection line) */
+.react-flow__edge-path {
+  stroke-width: 2px !important;
+}
+
+/* Animated edge (for flow visualization) */
+.react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 5;
+  animation: flow 0.5s linear infinite;
+}
+
+@keyframes flow {
+  from {
+    stroke-dashoffset: 10;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Connection line while dragging */
+.react-flow__connection-line {
+  stroke: var(--editor-accent) !important;
+  stroke-width: 2px !important;
+}
+
+/* MiniMap styles */
+.react-flow__minimap {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 8px !important;
+}
+
+.react-flow__minimap-mask {
+  fill: rgba(14, 165, 233, 0.1) !important;
+}
+
+/* Controls */
+.react-flow__controls {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background: transparent !important;
+  border: none !important;
+  color: var(--editor-text) !important;
+}
+
+.react-flow__controls-button:hover {
+  background: var(--editor-surface) !important;
+}
+
+/* Handle (connection point) */
+.react-flow__handle {
+  width: 12px !important;
+  height: 12px !important;
+  border: 2px solid var(--editor-bg) !important;
+  transition: transform 0.2s !important;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.3) !important;
+}
+
+.react-flow__handle-top {
+  top: -6px !important;
+}
+
+.react-flow__handle-bottom {
+  bottom: -6px !important;
+}
+
+.react-flow__handle-left {
+  left: -6px !important;
+}
+
+.react-flow__handle-right {
+  right: -6px !important;
+}
+
+/* ============================================================================
+   THIN SCROLLBAR — used in player dialog box
+   ============================================================================ */
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.4);
+}

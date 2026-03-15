@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dream-E — Agent Operations Proposal</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #c9d1d9; --text-dim: #8b949e; --heading: #e6edf3;
+    --accent: #58a6ff; --accent2: #7ee787; --warn: #f0883e; --danger: #f85149;
+    --tag-bg: #1f2937; --tag-border: #374151;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 2rem; max-width: 1100px; margin: 0 auto; }
+  h1 { color: var(--heading); font-size: 2rem; margin-bottom: 0.3rem; }
+  h2 { color: var(--accent); font-size: 1.4rem; margin: 2.5rem 0 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+  h3 { color: var(--accent2); font-size: 1.1rem; margin: 1.5rem 0 0.5rem; }
+  h4 { color: var(--text); font-size: 0.95rem; margin: 1rem 0 0.3rem; font-weight: 600; }
+  p, li { color: var(--text); font-size: 0.92rem; }
+  .subtitle { color: var(--text-dim); font-size: 1rem; margin-bottom: 2rem; }
+  .section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.78rem; font-weight: 600; margin-right: 4px; }
+  .tag-current { background: #1a3a2a; color: #7ee787; border: 1px solid #2d5a3d; }
+  .tag-new { background: #3a1a1a; color: #f85149; border: 1px solid #5a2d2d; }
+  .tag-upgrade { background: #3a2a1a; color: #f0883e; border: 1px solid #5a3d2d; }
+  .tag-ow { background: #1a2a3a; color: #58a6ff; border: 1px solid #2d3d5a; }
+  .tag-chat { background: #2a1a3a; color: #bc8cff; border: 1px solid #3d2d5a; }
+  .tag-both { background: #1a3a3a; color: #56d4dd; border: 1px solid #2d5a5a; }
+  table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.88rem; }
+  th { background: var(--surface); color: var(--accent); text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--border); }
+  td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:hover td { background: rgba(88,166,255,0.04); }
+  code { background: var(--tag-bg); padding: 1px 5px; border-radius: 3px; font-size: 0.85rem; color: var(--accent); }
+  pre { background: var(--tag-bg); padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.82rem; line-height: 1.5; margin: 0.5rem 0; border: 1px solid var(--tag-border); }
+  ul, ol { padding-left: 1.5rem; margin: 0.4rem 0; }
+  li { margin: 0.2rem 0; }
+  .callout { padding: 0.8rem 1rem; border-radius: 6px; margin: 0.8rem 0; font-size: 0.9rem; }
+  .callout-info { background: #0d2847; border-left: 3px solid var(--accent); }
+  .callout-warn { background: #2d1b00; border-left: 3px solid var(--warn); }
+  .callout-danger { background: #2d0d0d; border-left: 3px solid var(--danger); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } body { padding: 1rem; } }
+  .legend { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
+  .op-row td:first-child { font-weight: 600; white-space: nowrap; }
+  .status-icon { font-size: 0.85rem; }
+  .arch-box { display: inline-block; padding: 4px 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--tag-bg); margin: 2px; font-size: 0.85rem; }
+  .arrow { color: var(--text-dim); margin: 0 6px; }
+  .flow { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 0.5rem 0; }
+</style>
+</head>
+<body>
+
+<h1>Dream-E Agent Operations Proposal</h1>
+<p class="subtitle">Comprehensive listing of all agent capabilities — current state, proposed expansions, and architectural changes.</p>
+
+<div class="legend">
+  <span class="tag tag-current">CURRENT</span> Already implemented
+  <span class="tag tag-new">NEW</span> Proposed addition
+  <span class="tag tag-upgrade">UPGRADE</span> Enhancement to existing
+  <span class="tag tag-ow">OW</span> Open World mode
+  <span class="tag tag-chat">CHAT</span> Chat agent
+  <span class="tag tag-both">BOTH</span> Both contexts
+</div>
+
+<!-- ================================================================== -->
+<h2>1. Executive Summary</h2>
+<!-- ================================================================== -->
+
+<div class="section">
+  <p>Dream-E currently has <strong>two separate agent contexts</strong> that can manipulate game state:</p>
+  <div class="grid-2" style="margin-top: 0.8rem;">
+    <div>
+      <h4>Chat Agent <span class="tag tag-chat">CHAT</span></h4>
+      <p>Uses <code>claude -p --resume</code> via Vite server middleware. Has access to all 56+ Game State API commands via <code>&lt;&lt;&lt;SW_CMD&gt;&gt;&gt;</code> blocks. Operates in an agentic loop (up to 10 iterations). Can chain multi-step workflows.</p>
+    </div>
+    <div>
+      <h4>Open World Storyteller <span class="tag tag-ow">OW</span></h4>
+      <p>Direct API calls to Gemini / OpenAI-compatible endpoint. Returns structured JSON with scene text + metadata. Currently has <strong>limited</strong> game state manipulation — only via <code>entityUpdates</code>, <code>variableChanges</code>, and <code>presentEntityIds</code> fields in the JSON response.</p>
+    </div>
+  </div>
+
+  <div class="callout callout-info" style="margin-top: 1rem;">
+    <strong>This proposal covers three initiatives:</strong><br>
+    <strong>A.</strong> Give the OW storyteller LLM full entity CRUD + profile patching + state management via its JSON output<br>
+    <strong>B.</strong> Replace the Chat agent's Claude Code SDK dependency with direct LLM API calls (same model as OW writer)<br>
+    <strong>C.</strong> Unify and expand the full set of agent operations across both contexts
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<h2>2. Current Architecture</h2>
+<!-- ================================================================== -->
+
+<div class="section">
+  <h3>2.1 Chat Agent Pipeline</h3>
+  <div class="flow">
+    <span class="arch-box">Browser Chat UI</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">POST /api/chat (SSE)</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">Vite Middleware</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">claude -p --resume &lt;sid&gt;</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">SSE stream back</span>
+  </div>
+  <p style="margin-top: 0.5rem;">Agent text + <code>&lt;&lt;&lt;SW_CMD:action&gt;&gt;&gt;</code> blocks → parsed in browser → <code>executeCommand()</code> → results sent back → next iteration.</p>
+
+  <h3>2.2 Open World Pipeline</h3>
+  <div class="flow">
+    <span class="arch-box">Player Action</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">buildOpenWorldContext()</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">POST /api/open-world (SSE)</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">Gemini/OpenAI API</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">JSON parse</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">Scene creation + image + music</span>
+  </div>
+  <p style="margin-top: 0.5rem;">OW model returns structured JSON with <code>sceneText</code>, <code>choices</code>, <code>imagePrompt</code>, <code>variableChanges</code>, <code>presentEntityIds</code>, <code>entityUpdates</code>, <code>musicQuery</code>.</p>
+</div>
+
+<!-- ================================================================== -->
+<h2>3. Initiative A — Expand OW Storyteller Game State Powers</h2>
+<!-- ================================================================== -->
+
+<div class="section">
+  <p>Currently the OW JSON schema supports limited state changes. We propose expanding the JSON output to include full entity lifecycle management and richer state manipulation.</p>
+
+  <h3>3.1 New JSON Output Fields</h3>
+
+  <table>
+    <tr><th>Field</th><th>Type</th><th>Purpose</th><th>Status</th></tr>
+    <tr class="op-row"><td><code>newEntities</code></td><td><code>Array&lt;{category, name, description, summary, profile}&gt;</code></td><td>Create new entities discovered/introduced in this scene (NPCs met, locations discovered, items found)</td><td><span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td><code>entityUpdates</code></td><td><code>Record&lt;id, {stateNote, profilePatch}&gt;</code></td><td>Update existing entity states + profiles based on story events</td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td><code>entityLinks</code></td><td><code>string[]</code></td><td>Entity IDs to link to the new scene node (replaces presentEntityIds for linking)</td><td><span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td><code>removeEntities</code></td><td><code>string[]</code></td><td>Entity IDs to delete (e.g. character killed, object destroyed permanently)</td><td><span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td><code>variableChanges</code></td><td><code>Record&lt;name, value&gt;</code></td><td>Set/update variable values based on story events</td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td><code>newVariables</code></td><td><code>Array&lt;{name, type, defaultValue, description}&gt;</code></td><td>Create new tracking variables when story introduces new mechanics</td><td><span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td><code>musicQuery</code></td><td><code>string</code></td><td>BM25 search query for background music</td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td><code>imagePrompt</code></td><td><code>string</code></td><td>Image generation prompt for scene background</td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td><code>generateEntityImages</code></td><td><code>Record&lt;entityId, string&gt;</code></td><td>Image prompts for newly created or updated entities (keyed by entity ID)</td><td><span class="tag tag-new">NEW</span></td></tr>
+  </table>
+
+  <h3>3.2 Entity Lifecycle — Use Cases</h3>
+
+  <table>
+    <tr><th>Use Case</th><th>JSON Field</th><th>Example</th></tr>
+    <tr><td>Player meets new NPC</td><td><code>newEntities</code></td><td><code>[{category: "character", name: "Old Sage Maren", profile: {appearance: "...", personality: "...", role: "quest giver"}}]</code></td></tr>
+    <tr><td>Player discovers new location</td><td><code>newEntities</code></td><td><code>[{category: "location", name: "Crystal Cavern", profile: {atmosphere: "...", dangers: "..."}}]</code></td></tr>
+    <tr><td>Player picks up item</td><td><code>newEntities</code></td><td><code>[{category: "object", name: "Enchanted Compass", profile: {properties: "...", uses: "..."}}]</code></td></tr>
+    <tr><td>NPC changes attitude</td><td><code>entityUpdates</code></td><td><code>{"entity_abc": {profilePatch: {"/relationships/player": "hostile"}, stateNote: "Angered by player's accusation"}}</code></td></tr>
+    <tr><td>Location changes state</td><td><code>entityUpdates</code></td><td><code>{"entity_xyz": {profilePatch: {"/atmosphere": "Burning ruins, smoke fills the air"}}}</code></td></tr>
+    <tr><td>Character dies permanently</td><td><code>removeEntities</code></td><td><code>["entity_abc"]</code></td></tr>
+    <tr><td>Item consumed / destroyed</td><td><code>removeEntities</code></td><td><code>["entity_def"]</code></td></tr>
+    <tr><td>Generate portrait for new NPC</td><td><code>generateEntityImages</code></td><td><code>{"entity_new_1": "Elderly sage with long white beard, weathered face, kind eyes, ..."}</code></td></tr>
+  </table>
+
+  <h3>3.3 Processing Pipeline (Post-Parse)</h3>
+
+  <p>After the OW JSON response is parsed, the application processes state changes in this order:</p>
+  <ol>
+    <li><strong>Create new entities</strong> — <code>newEntities</code> → call <code>create_entity</code> for each, collect generated IDs</li>
+    <li><strong>Apply entity updates</strong> — <code>entityUpdates</code> → call <code>patch_entity_profile</code> + <code>update_entity_state</code></li>
+    <li><strong>Remove entities</strong> — <code>removeEntities</code> → call <code>delete_entity</code> for each</li>
+    <li><strong>Create new variables</strong> — <code>newVariables</code> → call <code>create_variable</code></li>
+    <li><strong>Apply variable changes</strong> — <code>variableChanges</code> → update runtime variable values</li>
+    <li><strong>Create scene node</strong> — with text, choices, links to present entities</li>
+    <li><strong>Link entities to scene</strong> — <code>entityLinks</code> + newly created entity IDs</li>
+    <li><strong>Generate images</strong> — scene image (<code>imagePrompt</code>) + entity images (<code>generateEntityImages</code>) in parallel</li>
+    <li><strong>Search music</strong> — <code>musicQuery</code> → BM25 search + download</li>
+  </ol>
+
+  <div class="callout callout-warn">
+    <strong>Context Update Requirement:</strong> The OW system prompt and instruction must be updated to document these new JSON fields and when the model should use them. The <code>responseSchema</code> (Gemini structured output) must also be expanded.
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<h2>4. Initiative B — Replace Chat SDK with Direct LLM API</h2>
+<!-- ================================================================== -->
+
+<div class="section">
+  <h3>4.1 Current Problem</h3>
+  <ul>
+    <li>Chat agent uses <code>claude -p --resume &lt;session_id&gt;</code> — requires Claude Code CLI installed + authenticated (OAuth login)</li>
+    <li>Tight coupling to Anthropic-specific tooling; can't use the user's configured writer model (Gemini, etc.)</li>
+    <li>Requires the Vite dev server middleware to spawn child processes</li>
+    <li>Session persistence relies on Claude Code's internal session management</li>
+  </ul>
+
+  <h3>4.2 Proposed Architecture</h3>
+  <div class="flow">
+    <span class="arch-box">Browser Chat UI</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">POST /api/chat (SSE)</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">Vite Middleware</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">Gemini / OpenAI API (direct)</span>
+    <span class="arrow">→</span>
+    <span class="arch-box">SSE stream back</span>
+  </div>
+
+  <p style="margin-top: 0.5rem;">Reuse the same writer settings (provider, model, API key, endpoint) from <code>useImageGenStore.writer</code>. The middleware becomes a thin proxy — same pattern as <code>/api/open-world</code>.</p>
+
+  <h3>4.3 What Changes</h3>
+  <table>
+    <tr><th>Component</th><th>Before</th><th>After</th></tr>
+    <tr><td>Server middleware</td><td>Spawns <code>claude -p</code> child process</td><td>HTTP call to Gemini/OpenAI API (same as OW endpoint)</td></tr>
+    <tr><td>Authentication</td><td>Claude Code OAuth</td><td>User's API key from AI Settings</td></tr>
+    <tr><td>Model</td><td>Claude (hardcoded)</td><td>User-configured model (Gemini, GPT-4, custom, etc.)</td></tr>
+    <tr><td>Session history</td><td>Managed by Claude Code</td><td>Server-side array of messages (in-memory or project-persisted)</td></tr>
+    <tr><td><code>aiChatService.ts</code></td><td>SSE reader + agentic loop</td><td>Same agentic loop, but sends provider config alongside message</td></tr>
+    <tr><td>System prompt</td><td>Sent as first user message</td><td>Sent as proper system message role</td></tr>
+    <tr><td>Dependencies</td><td>Requires Claude Code CLI</td><td>No external dependencies — just an API key</td></tr>
+  </table>
+
+  <h3>4.4 Chat Session History Management</h3>
+  <p>The server middleware maintains a message history array per session:</p>
+  <pre>[
+  { role: "system", content: "&lt;auto-generated system prompt from registry&gt;" },
+  { role: "user", content: "[Game State]\n...\n\nUser message here" },
+  { role: "assistant", content: "I'll create that scene...\n&lt;&lt;&lt;SW_CMD:create_scene&gt;&gt;&gt;..." },
+  { role: "user", content: "[Command Results]\n...\n[Updated Game State]\n..." },
+  ...
+]</pre>
+  <p>On <code>POST /api/chat-reset</code>, the history array is cleared. Optionally, history could be persisted into <code>project.chatMessages</code> for cross-session continuity.</p>
+
+  <div class="callout callout-info">
+    <strong>Backward Compatibility:</strong> The browser-side agentic loop (<code>aiChatService.ts</code>) remains nearly identical. Only the request payload changes — adding <code>provider</code>, <code>model</code>, <code>apiKey</code>, <code>endpoint</code> fields. The <code>&lt;&lt;&lt;SW_CMD&gt;&gt;&gt;</code> command format and execution loop stay the same.
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<h2>5. Complete Agent Operations Catalog</h2>
+<!-- ================================================================== -->
+
+<div class="section">
+  <p>Every operation the agent can perform, across both Chat and OW contexts. Grouped by domain.</p>
+
+  <!-- SCENES -->
+  <h3>5.1 Scene Management</h3>
+  <table>
+    <tr><th>Operation</th><th>Command / Field</th><th>Context</th><th>Status</th></tr>
+    <tr class="op-row"><td>Create scene node</td><td><code>create_scene</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Create scene (OW auto)</td><td>Implicit — new node created per scene</td><td><span class="tag tag-ow">OW</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Update scene text/label/speaker</td><td><code>update_scene</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Delete scene</td><td><code>delete_scene</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Add choice to scene</td><td><code>add_choice</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Update choice label</td><td><code>update_choice</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Delete choice</td><td><code>delete_choice</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Set choice condition</td><td><code>set_choice_condition</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Remove choice condition</td><td><code>remove_choice_condition</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Set start node</td><td><code>set_start_node</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Scene CRUD from chat (direct API)</td><td>Same commands</td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-upgrade">UPGRADE</span></td></tr>
+  </table>
+
+  <!-- CONNECTIONS -->
+  <h3>5.2 Connection / Edge Management</h3>
+  <table>
+    <tr><th>Operation</th><th>Command / Field</th><th>Context</th><th>Status</th></tr>
+    <tr class="op-row"><td>Connect two nodes</td><td><code>connect_nodes</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Connect (OW auto)</td><td>Implicit — edge from current → new scene</td><td><span class="tag tag-ow">OW</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Disconnect nodes</td><td><code>disconnect_nodes</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Reconnect edge</td><td><code>reconnect_edge</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+  </table>
+
+  <!-- ENTITIES -->
+  <h3>5.3 Entity Management (Characters, Locations, Objects, Concepts)</h3>
+  <table>
+    <tr><th>Operation</th><th>Chat Command</th><th>OW JSON Field</th><th>Status</th></tr>
+    <tr class="op-row"><td>Create entity</td><td><code>create_entity</code></td><td><code>newEntities[]</code></td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span> / <span class="tag tag-ow">OW</span> <span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td>Update entity name/desc/summary</td><td><code>update_entity</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Delete entity</td><td><code>delete_entity</code></td><td><code>removeEntities[]</code></td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span> / <span class="tag tag-ow">OW</span> <span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td>Set full profile</td><td><code>set_entity_profile</code></td><td>via <code>newEntities[].profile</code></td><td><span class="tag tag-both">BOTH</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Get profile</td><td><code>get_entity_profile</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Patch profile (JSON Patch)</td><td><code>patch_entity_profile</code></td><td><code>entityUpdates[id].profilePatch</code></td><td><span class="tag tag-both">BOTH</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Link entity to scene</td><td><code>link_entity_to_scene</code></td><td><code>entityLinks[]</code></td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span> / <span class="tag tag-ow">OW</span> <span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td>Unlink entity from scene</td><td><code>unlink_entity_from_scene</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Set entity state in scene</td><td><code>update_entity_state</code></td><td><code>entityUpdates[id].stateNote</code></td><td><span class="tag tag-both">BOTH</span> <span class="tag tag-current">CURRENT</span></td></tr>
+  </table>
+
+  <!-- VARIABLES -->
+  <h3>5.4 Variable Management</h3>
+  <table>
+    <tr><th>Operation</th><th>Chat Command</th><th>OW JSON Field</th><th>Status</th></tr>
+    <tr class="op-row"><td>Create variable</td><td><code>create_variable</code></td><td><code>newVariables[]</code></td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span> / <span class="tag tag-ow">OW</span> <span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td>Update variable properties</td><td><code>update_variable</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Delete variable</td><td><code>delete_variable</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Change variable value at runtime</td><td>—</td><td><code>variableChanges</code></td><td><span class="tag tag-ow">OW</span> <span class="tag tag-current">CURRENT</span></td></tr>
+  </table>
+
+  <!-- MEDIA -->
+  <h3>5.5 Media — Images</h3>
+  <table>
+    <tr><th>Operation</th><th>Chat Command</th><th>OW Mechanism</th><th>Status</th></tr>
+    <tr class="op-row"><td>Generate scene image</td><td><code>generate_scene_image</code></td><td><code>imagePrompt</code> field → auto-gen</td><td><span class="tag tag-both">BOTH</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Generate entity image</td><td><code>generate_entity_image</code></td><td><code>generateEntityImages</code></td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span> / <span class="tag tag-ow">OW</span> <span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td>Set scene image from URL</td><td><code>set_scene_image</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Remove scene image</td><td><code>remove_scene_image</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Set entity image from URL</td><td><code>set_entity_image</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Remove entity image</td><td><code>remove_entity_image</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Reuse previous scene image</td><td>—</td><td><code>reuseImage: true</code></td><td><span class="tag tag-ow">OW</span> <span class="tag tag-current">CURRENT</span></td></tr>
+  </table>
+
+  <!-- AUDIO -->
+  <h3>5.6 Media — Audio (Music, Voiceover, Voice)</h3>
+  <table>
+    <tr><th>Operation</th><th>Chat Command</th><th>OW Mechanism</th><th>Status</th></tr>
+    <tr class="op-row"><td>Search RPG music library</td><td><code>search_music</code></td><td><code>musicQuery</code> → auto-search</td><td><span class="tag tag-both">BOTH</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Get music track details</td><td><code>get_music_track</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Assign music to scene</td><td><code>assign_music_to_scene</code></td><td>Auto after musicQuery</td><td><span class="tag tag-both">BOTH</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>List music genres</td><td><code>list_music_genres</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Set scene music (manual URL)</td><td><code>set_scene_music</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Remove scene music</td><td><code>remove_scene_music</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Generate TTS voiceover</td><td><code>generate_scene_voiceover</code></td><td>Auto TTS in play mode</td><td><span class="tag tag-both">BOTH</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Set scene voiceover</td><td><code>set_scene_voiceover</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Remove scene voiceover</td><td><code>remove_scene_voiceover</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Set entity voice reference</td><td><code>set_entity_voice</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Remove entity voice</td><td><code>remove_entity_voice</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Set entity default music</td><td><code>set_entity_music</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Remove entity music</td><td><code>remove_entity_music</code></td><td>—</td><td><span class="tag tag-chat">CHAT</span> <span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Auto-generate TTS for new OW scene</td><td>—</td><td><code>generateVoiceover: true</code></td><td><span class="tag tag-ow">OW</span> <span class="tag tag-new">NEW</span></td></tr>
+  </table>
+
+  <!-- LOGIC NODES -->
+  <h3>5.7 Logic Nodes (Modifiers, Branches, Comments)</h3>
+  <table>
+    <tr><th>Operation</th><th>Command</th><th>Context</th><th>Status</th></tr>
+    <tr class="op-row"><td>Create modifier node</td><td><code>create_modifier</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Update modifier</td><td><code>update_modifier</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Delete modifier</td><td><code>delete_modifier</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Create branch node</td><td><code>create_branch</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Update branch</td><td><code>update_branch</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Delete branch</td><td><code>delete_branch</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Create comment node</td><td><code>create_comment</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Update comment</td><td><code>update_comment</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Delete comment</td><td><code>delete_comment</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+  </table>
+
+  <!-- PROJECT -->
+  <h3>5.8 Project-Level Operations</h3>
+  <table>
+    <tr><th>Operation</th><th>Command</th><th>Context</th><th>Status</th></tr>
+    <tr class="op-row"><td>Update project title/desc/author/theme</td><td><code>update_project_info</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Update project notes</td><td><code>update_notes</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Set start node</td><td><code>set_start_node</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+  </table>
+
+  <!-- QUERY -->
+  <h3>5.9 Query / Read-Only Operations</h3>
+  <table>
+    <tr><th>Operation</th><th>Command</th><th>Context</th><th>Status</th></tr>
+    <tr class="op-row"><td>Get full scene details</td><td><code>get_scene_details</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Get full entity details</td><td><code>get_entity_details</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>Get entity profile</td><td><code>get_entity_profile</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>List all scenes</td><td><code>list_scenes</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>List entities (optionally filtered)</td><td><code>list_entities</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>List variables</td><td><code>list_variables</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+    <tr class="op-row"><td>List music genres</td><td><code>list_music_genres</code></td><td><span class="tag tag-chat">CHAT</span></td><td><span class="tag tag-current">CURRENT</span></td></tr>
+  </table>
+</div>
+
+<!-- ================================================================== -->
+<h2>6. OW Storyteller — Expanded JSON Schema</h2>
+<!-- ================================================================== -->
+
+<div class="section">
+  <p>The complete JSON output schema after all proposed additions. Fields marked with <code>*</code> are required.</p>
+
+  <pre>{
+  // ── Flow Analysis (written FIRST — chain-of-thought reasoning) ──
+  "playerGoalHypothesis": "string *",
+  "sceneIntentHypothesis": "string *",
+  "lastSatisfactionEstimate": "number (0-10) *",
+  "engagementStrategy": "string *",
+  "plannedStateChanges": "string *",
+
+  // ── Scene Content ──
+  "sceneText": "string *",
+  "speakerName": "string *",
+  "choices": ["string", "string", "string"],       // min 3 *
+  "sceneSummary": "string *",
+
+  // ── Visual ──
+  "imagePrompt": "string | null",
+  "reuseImage": "boolean",
+
+  // ── Audio ──
+  "musicQuery": "string | null",
+  "generateVoiceover": "boolean",                   // NEW
+
+  // ── Entity Presence ──
+  "presentEntityIds": ["entity_id", ...],           // existing entities present
+  "entityLinks": ["entity_id", ...],                // NEW: which to link to scene node
+
+  // ── Entity Lifecycle ──                         // NEW SECTION
+  "newEntities": [
+    {
+      "category": "character|location|object|concept",
+      "name": "string",
+      "description": "string",
+      "summary": "string",
+      "profile": { ... }
+    }
+  ],
+  "entityUpdates": {                                // EXISTING (expanded)
+    "entity_id": {
+      "stateNote": "string",
+      "profilePatch": { "key": "new_value", ... }
+    }
+  },
+  "removeEntities": ["entity_id", ...],             // NEW
+
+  // ── Entity Images ──                            // NEW
+  "generateEntityImages": {
+    "entity_id_or_index": "image prompt string"
+  },
+
+  // ── Variables ──
+  "variableChanges": { "varName": value },          // EXISTING
+  "newVariables": [                                 // NEW
+    {
+      "name": "string",
+      "type": "integer|float|boolean|string|collection",
+      "defaultValue": "any",
+      "description": "string"
+    }
+  ]
+}</pre>
+</div>
+
+<!-- ================================================================== -->
+<h2>7. Chat Agent — Expanded Capabilities After Direct API Migration</h2>
+<!-- ================================================================== -->
+
+<div class="section">
+  <p>After migrating from <code>claude -p</code> to direct API calls, the chat agent retains all 56+ existing commands and gains:</p>
+
+  <table>
+    <tr><th>Capability</th><th>Details</th><th>Status</th></tr>
+    <tr class="op-row"><td>Model choice</td><td>Uses whatever model the user configured in AI Settings (Gemini, GPT-4o, custom endpoints)</td><td><span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td>No CLI dependency</td><td>No need for Claude Code CLI installed — just an API key</td><td><span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td>Proper message roles</td><td>System prompt as <code>system</code> role, not embedded in first user message</td><td><span class="tag tag-upgrade">UPGRADE</span></td></tr>
+    <tr class="op-row"><td>Structured output (optional)</td><td>For Gemini: could use <code>responseSchema</code> to enforce command format instead of regex parsing</td><td><span class="tag tag-new">NEW</span></td></tr>
+    <tr class="op-row"><td>Shared model between OW + Chat</td><td>Single configuration point; both agents use the same model</td><td><span class="tag tag-upgrade">UPGRADE</span></td></tr>
+    <tr class="op-row"><td>Server-managed history</td><td>Full conversation history in middleware; cleaner session resume</td><td><span class="tag tag-upgrade">UPGRADE</span></td></tr>
+  </table>
+
+  <div class="callout callout-warn">
+    <strong>Trade-off:</strong> The current Claude Code agent has access to Claude's agentic capabilities (tool use, file reading, etc.) which a raw API call won't have. However, for Dream-E's use case (game state manipulation via structured commands), the <code>&lt;&lt;&lt;SW_CMD&gt;&gt;&gt;</code> pattern provides equivalent functionality without needing native tool use.
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<h2>8. Error Recovery & Self-Correction</h2>
+<!-- ================================================================== -->
+
+<div class="section">
+  <p>Both agent contexts should handle errors gracefully. Current patterns to maintain and expand:</p>
+
+  <table>
+    <tr><th>Error Type</th><th>Current Handling</th><th>Available In</th></tr>
+    <tr><td>Invalid entity/scene ID</td><td>Error response includes suggestion with list of valid IDs</td><td><span class="tag tag-chat">CHAT</span></td></tr>
+    <tr><td>Image gen content filter</td><td>Auto-simplify prompt, retry up to 3 times</td><td><span class="tag tag-both">BOTH</span></td></tr>
+    <tr><td>Image gen auth error</td><td>Stop retry, report to user</td><td><span class="tag tag-both">BOTH</span></td></tr>
+    <tr><td>Music server offline</td><td>Silently skip music assignment</td><td><span class="tag tag-both">BOTH</span></td></tr>
+    <tr><td>JSON parse failure</td><td>3-stage: direct → sanitized → regex fallback</td><td><span class="tag tag-ow">OW</span></td></tr>
+    <tr><td>Too few choices returned</td><td>Pad to minimum 3 with generic options</td><td><span class="tag tag-ow">OW</span></td></tr>
+    <tr><td>Command execution failure</td><td>Results sent back; agent can retry with corrected params</td><td><span class="tag tag-chat">CHAT</span></td></tr>
+    <tr><td>New entity ID reference (OW)</td><td>Create entity first, then use returned ID for links/images</td><td><span class="tag tag-ow">OW</span> <span class="tag tag-new">NEW</span></td></tr>
+    <tr><td>TTS generation failure</td><td>Silently skip; scene still functional without audio</td><td><span class="tag tag-both">BOTH</span></td></tr>
+  </table>
+</div>
+
+<!-- ================================================================== -->
+<h2>9. Implementation Roadmap</h2>
+<!-- ================================================================== -->
+
+<div class="section">
+  <h3>Phase 1 — OW Entity Lifecycle</h3>
+  <ol>
+    <li>Expand <code>OWMetadata</code> interface with <code>newEntities</code>, <code>removeEntities</code>, <code>entityLinks</code>, <code>newVariables</code>, <code>generateEntityImages</code></li>
+    <li>Update <code>parseOpenWorldResponse()</code> to extract new fields</li>
+    <li>Add post-parse pipeline in <code>generateOpenWorldScene()</code> — entity creation → updates → deletion → variable creation → scene node creation → entity linking → image gen</li>
+    <li>Update Gemini <code>responseSchema</code> in server middleware to include new fields</li>
+    <li>Update <code>DEFAULT_WRITER_INSTRUCTION</code> and <code>DEFAULT_WRITER_SYSTEM_PROMPT</code> to document new fields</li>
+    <li>Update <code>OW_CONTEXT_MANUAL.html</code></li>
+  </ol>
+
+  <h3>Phase 2 — Chat Agent Direct API Migration</h3>
+  <ol>
+    <li>Create new server middleware handler that calls Gemini / OpenAI API directly (reuse OW endpoint pattern)</li>
+    <li>Add server-side message history management (array of messages per session)</li>
+    <li>Update <code>aiChatService.ts</code> to send provider config with each request</li>
+    <li>Update <code>POST /api/chat</code> handler to use direct API instead of <code>claude -p</code></li>
+    <li>Keep <code>&lt;&lt;&lt;SW_CMD&gt;&gt;&gt;</code> parsing + agentic loop unchanged in browser</li>
+    <li>Deprecate <code>claude -p</code> middleware code</li>
+  </ol>
+
+  <h3>Phase 3 — Polish & Edge Cases</h3>
+  <ol>
+    <li>Auto-TTS for OW scenes (<code>generateVoiceover</code> field)</li>
+    <li>Entity image generation from OW (<code>generateEntityImages</code>)</li>
+    <li>Structured output for chat commands (optional: use Gemini <code>responseSchema</code> to enforce command format)</li>
+    <li>Save TTS audio to Asset Library in addition to scene node</li>
+    <li>Cross-session chat history persistence</li>
+  </ol>
+</div>
+
+<!-- ================================================================== -->
+<h2>10. Summary Statistics</h2>
+<!-- ================================================================== -->
+
+<div class="section">
+  <div class="grid-2">
+    <div>
+      <h4>Current Commands</h4>
+      <table>
+        <tr><td>Scene commands</td><td>8</td></tr>
+        <tr><td>Connection commands</td><td>3</td></tr>
+        <tr><td>Entity commands</td><td>9</td></tr>
+        <tr><td>Variable commands</td><td>3</td></tr>
+        <tr><td>Media commands</td><td>15</td></tr>
+        <tr><td>Modifier commands</td><td>3</td></tr>
+        <tr><td>Branch commands</td><td>3</td></tr>
+        <tr><td>Comment commands</td><td>3</td></tr>
+        <tr><td>Project commands</td><td>3</td></tr>
+        <tr><td>Query commands</td><td>5</td></tr>
+        <tr><td>Music commands</td><td>4</td></tr>
+        <tr><td style="font-weight:700">Total Chat Commands</td><td style="font-weight:700">59</td></tr>
+      </table>
+    </div>
+    <div>
+      <h4>New OW JSON Fields</h4>
+      <table>
+        <tr><td><code>newEntities</code></td><td>Entity CRUD</td></tr>
+        <tr><td><code>removeEntities</code></td><td>Entity deletion</td></tr>
+        <tr><td><code>entityLinks</code></td><td>Scene linking</td></tr>
+        <tr><td><code>newVariables</code></td><td>Variable creation</td></tr>
+        <tr><td><code>generateEntityImages</code></td><td>Entity art</td></tr>
+        <tr><td><code>generateVoiceover</code></td><td>Auto TTS</td></tr>
+        <tr><td style="font-weight:700">New fields</td><td style="font-weight:700">6</td></tr>
+        <tr><td style="font-weight:700">Existing OW fields</td><td style="font-weight:700">12</td></tr>
+        <tr><td style="font-weight:700">Total OW fields</td><td style="font-weight:700">18</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<p style="color: var(--text-dim); text-align: center; margin-top: 3rem; font-size: 0.8rem;">
+  Dream-E Agent Operations Proposal — Generated 2026-03-10
+</p>
+
+</body>
+</html>

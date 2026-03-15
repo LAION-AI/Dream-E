@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Optimization — Dream-E Docs</title>
+<style>
+  :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; --red: #f85149; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; line-height: 1.6; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  a { color: var(--accent); }
+  h1 { font-size: 2rem; margin-bottom: 8px; }
+  .back { color: var(--muted); text-decoration: none; font-size: 0.9rem; display: inline-block; margin-bottom: 16px; }
+  h2 { font-size: 1.3rem; margin: 32px 0 12px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { font-size: 1.1rem; margin: 20px 0 8px; color: var(--green); }
+  p, li { margin-bottom: 8px; }
+  ul, ol { padding-left: 20px; }
+  code { background: #1c2128; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: #1c2128; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+  .note { background: #1f6feb15; border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 0.9rem; }
+  .warn { background: #d2992215; border-left: 3px solid var(--yellow); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a class="back" href="index.html">&larr; Back to Index</a>
+<h1>Memory Optimization</h1>
+<p style="color: var(--muted); margin-bottom: 24px;">Preventing OOM crashes in browser-based projects with many AI-generated images and audio.</p>
+
+<h2>The Problem</h2>
+<p>Each AI-generated scene image is 1-3 MB of base64 data stored as a JavaScript string on the V8 heap. A project with 20+ scenes creates hundreds of megabytes of heap pressure. With undo/redo history (up to 8 snapshots), this multiplies further. The browser tab eventually crashes with an OOM error.</p>
+
+<h2>Solution: Blob URL Cache + Asset Offloading</h2>
+<p>File: <code>src/utils/blobCache.ts</code></p>
+
+<h3>Core Concept</h3>
+<pre>
+Base64 data URL:  "data:image/png;base64,iVBOR..."  (~2 MB string on V8 heap)
+                                    ↓
+                            getBlobUrl(dataUrl)
+                                    ↓
+Blob URL:         "blob:http://localhost:5173/abc-123"  (~50 bytes on V8 heap)
+                  + Blob object in native memory (outside V8, can page to disk)
+</pre>
+
+<p>~20,000x reduction per asset. The binary data lives in the browser's native blob storage, managed by the OS memory manager, not by V8's garbage collector.</p>
+
+<h3>Two Caches</h3>
+<table>
+  <tr><th>Cache</th><th>Type</th><th>Purpose</th></tr>
+  <tr><td><code>cache</code></td><td><code>Map&lt;fingerprint, blobUrl&gt;</code></td><td>Deduplicates data URLs by fingerprint (prefix + length + tail). Ensures same image always gets same blob URL.</td></tr>
+  <tr><td><code>blobStore</code></td><td><code>Map&lt;blobUrl, Blob&gt;</code></td><td>Keeps Blob references alive. Without this, blob URLs become invalid after the Blob is garbage collected. Also used for rehydration back to base64.</td></tr>
+</table>
+
+<h3>Asset Offloading Flow</h3>
+<ol>
+  <li>New OW scene created with base64 images/audio on node data</li>
+  <li><code>saveAndOffloadAssets()</code> called after saving to IndexedDB</li>
+  <li><code>collectAssetReplacements(project)</code> scans all nodes + entities for base64 data URLs</li>
+  <li>Each base64 string is converted to a Blob → blob URL via <code>getBlobUrl()</code></li>
+  <li>Zustand store is updated (via Immer) to replace base64 strings with blob URLs</li>
+  <li>Result: ~2 MB string replaced with ~50 byte blob URL pointer. Binary data in native memory.</li>
+</ol>
+
+<h3>Asset Fields Scanned</h3>
+<table>
+  <tr><th>Object</th><th>Fields</th></tr>
+  <tr><td>Scene nodes</td><td><code>backgroundImage</code>, <code>backgroundMusic</code>, <code>voiceoverAudio</code></td></tr>
+  <tr><td>Entities</td><td><code>referenceImage</code>, <code>referenceVoice</code>, <code>defaultMusic</code></td></tr>
+</table>
+
+<h3>Rehydration for Save/Export</h3>
+<p>Before writing to IndexedDB or exporting to ZIP, blob URLs must be converted back to base64 data URLs:</p>
+<pre>
+rehydrateForSave(project)
+  → structuredClone(project)    // Cheap clone (~50 bytes per blob URL)
+  → For each blob URL field:
+      blobUrlToBase64(blobUrl)  // FileReader reads from cached Blob → base64
+  → Return clone with base64 data URLs restored
+</pre>
+
+<h2>Lean History Snapshots</h2>
+<p>The undo/redo system (MAX_HISTORY = 8) uses lean snapshots that strip large binary data:</p>
+
+<h3>Stripped Fields</h3>
+<ul>
+  <li><code>backgroundImage</code> — scene images</li>
+  <li><code>backgroundMusic</code> — scene audio</li>
+  <li><code>voiceoverAudio</code> — scene voiceover</li>
+  <li><code>referenceImage</code> — entity portraits</li>
+  <li><code>aiResponse</code> — raw AI JSON response</li>
+  <li><code>constructedContext</code> — full context string</li>
+  <li><code>constructedSystemPrompt</code> — system prompt</li>
+</ul>
+
+<p>Stripped values are replaced with <code>'__asset_stripped__'</code> placeholder.</p>
+
+<h3>Rehydration on Undo/Redo</h3>
+<p>When the user performs undo/redo, the restored snapshot has stripped assets. <code>rehydrateAssets()</code> copies live asset data from the current (pre-undo) project back into the restored snapshot. This ensures images and audio are not lost when navigating history.</p>
+
+<div class="note">
+  Combined with asset stripping, the history system achieves ~99% memory reduction compared to storing full project snapshots with binary assets.
+</div>
+
+<h2>Lazy Node Thumbnails</h2>
+<p>File: <code>src/components/nodes/SceneNode.tsx</code></p>
+
+<p>Scene node image thumbnails use <code>IntersectionObserver</code> with a 200px root margin. When a scene node is outside the visible React Flow viewport:</p>
+<ul>
+  <li>Shows a lightweight placeholder icon (no <code>&lt;img&gt;</code> element)</li>
+  <li>No image decoding occurs</li>
+  <li>When node scrolls within 200px of viewport, sets <code>isVisible=true</code> and renders the actual image</li>
+  <li>Once visible, stays visible (avoids flicker during drag/pan)</li>
+  <li>Image source uses <code>getBlobUrl()</code> — displays the blob URL, not raw base64</li>
+</ul>
+
+<h2>Post-Load Offloading</h2>
+<p>When a project is loaded from IndexedDB, it contains base64 data URLs (since they were rehydrated during save). After loading:</p>
+<ol>
+  <li><code>loadProject(id)</code> loads from IndexedDB</li>
+  <li>After a 100ms <code>setTimeout</code> (let React render first), <code>collectAssetReplacements()</code> runs</li>
+  <li>All base64 data URLs are converted to blob URLs</li>
+  <li>Store is updated with blob URLs</li>
+</ol>
+
+<h2>Reference Image Rehydration for Image Gen</h2>
+<p>Entity reference images used for Gemini image generation must be base64 data URLs (the API requires inline base64 data). After offloading, these are blob URLs. The fix:</p>
+<pre>
+openWorldService.ts:
+  For each entity reference image:
+    if (img.startsWith('data:'))  → use directly
+    if (img.startsWith('blob:'))  → await blobUrlToBase64(img) → use result
+</pre>
+<p>Same fix applied in <code>gameStateAPI.ts</code> for the <code>generate_scene_image</code> command.</p>
+
+<h2>Memory Diagnostics</h2>
+<p>Available in browser console: <code>window.__blobDiag()</code></p>
+<pre>
+{
+  blobCacheEntries: 42,       // Number of fingerprint→blobUrl mappings
+  blobStoreEntries: 42,       // Number of blobUrl→Blob mappings
+  estimatedBlobBytes: 84000000, // ~80 MB in native blob storage
+  jsHeapUsed: 15000000,       // ~15 MB V8 heap (vs ~300 MB without offloading)
+  jsHeapTotal: 25000000,
+  jsHeapLimit: 2147483648,
+  projectAssetStats: {
+    totalBase64Bytes: 0,      // No base64 on heap (all offloaded)
+    totalBlobUrlCount: 42,    // 42 blob URLs (~2.1 KB total)
+    nodeCount: 25,
+    entityCount: 8
+  }
+}
+</pre>
+
+<div class="note">
+  Pass the current project for full stats: <code>window.__blobDiag(useProjectStore.getState().currentProject)</code>
+</div>
+
+<h2>Components Using getBlobUrl()</h2>
+<table>
+  <tr><th>Component</th><th>Usage</th></tr>
+  <tr><td>SceneNode.tsx</td><td>Canvas node thumbnail display</td></tr>
+  <tr><td>MediaUploader.tsx</td><td>Inspector image/audio preview</td></tr>
+  <tr><td>AdventureEngine.tsx</td><td>All <code>setCurrentScene()</code> calls — background images, music, voiceover</td></tr>
+  <tr><td>SceneEntityOverlay.tsx</td><td>Entity reference image display</td></tr>
+  <tr><td>AssetManager.tsx</td><td>Asset list thumbnails</td></tr>
+  <tr><td>Howl audio</td><td>Background music and voiceover playback</td></tr>
+</table>
+
+<h2>Lifecycle Summary</h2>
+<pre>
+Project loaded from IndexedDB (base64 data URLs)
+    ↓ setTimeout(100ms)
+collectAssetReplacements() → store updated with blob URLs
+    ↓
+User edits / OW generates new scenes (base64 for new assets)
+    ↓
+saveAndOffloadAssets() → save to IndexedDB, then convert new base64 → blob URLs
+    ↓
+Undo/redo → lean snapshot restored, assets rehydrated from live project
+    ↓
+Export → rehydrateForSave() → blob URLs → base64 → ZIP download
+    ↓
+Project closed → revokeAllBlobUrls() → all blob URLs invalidated
+</pre>
+
+</div>
+</body>
+</html>

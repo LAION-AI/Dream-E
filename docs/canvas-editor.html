@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canvas Editor — Dream-E Docs</title>
+<style>
+  :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; --red: #f85149; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; line-height: 1.6; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  a { color: var(--accent); }
+  h1 { font-size: 2rem; margin-bottom: 8px; }
+  .back { color: var(--muted); text-decoration: none; font-size: 0.9rem; display: inline-block; margin-bottom: 16px; }
+  h2 { font-size: 1.3rem; margin: 32px 0 12px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { font-size: 1.1rem; margin: 20px 0 8px; color: var(--green); }
+  h4 { font-size: 1rem; margin: 16px 0 6px; color: var(--yellow); }
+  p, li { margin-bottom: 8px; }
+  ul, ol { padding-left: 20px; }
+  code { background: #1c2128; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: #1c2128; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+  .note { background: #1f6feb15; border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 0.9rem; }
+  .warn { background: #d2992215; border-left: 3px solid var(--yellow); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a class="back" href="index.html">&larr; Back to Index</a>
+<h1>Canvas Editor (Standard Mode)</h1>
+
+<h2>Layout</h2>
+<pre>
++-------+-----------------------------------+----------+
+| &lt;Back |   Project Title   [Undo][Redo]   | [Save]   |  Top Bar
+|       | [Var] [Play] [World] [Chat]       | [Export] |
+|       |             [Notes] [AI] [Help]   | [Import] |
++-------+-----------------------------------+----------+
+|       |                                   |          |
+| TOOL  |        React Flow Canvas          | INSPEC-  |
+| BAR   |     (infinite pan/zoom grid)      | TOR      |
+|       |     Drag nodes from toolbar       | PANEL    |
+| Scene |     Connect via handles           |          |
+| Choice|     Box-select with left-drag     | (context |
+| Mod.  |                                   |  depends |
+| Comm. |        [Auto-Layout]              |  on node |
+|       |                  [MiniMap]        |  type)   |
++-------+-----------------------------------+----------+
+</pre>
+
+<h2>Node Types</h2>
+
+<h3>Scene Node (Blue)</h3>
+<p>The primary content node. Displays story text to the player during gameplay.</p>
+<table>
+  <tr><th>Aspect</th><th>Detail</th></tr>
+  <tr><td>Color</td><td>Blue (<code>node-scene</code> token)</td></tr>
+  <tr><td>Size</td><td>200px min-width, 280px max-width</td></tr>
+  <tr><td>Input handle</td><td>Top center (target)</td></tr>
+  <tr><td>Output handles</td><td>One per choice, right side (source)</td></tr>
+  <tr><td>Header</td><td>Film icon + label. Green dot if start node.</td></tr>
+  <tr><td>Body</td><td>Thumbnail (lazy-loaded via IntersectionObserver) + story text preview (80 chars max)</td></tr>
+  <tr><td>Footer</td><td>Choice labels with output handles</td></tr>
+</table>
+
+<h4>Scene Node Data Fields</h4>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Purpose</th></tr>
+  <tr><td><code>label</code></td><td>string</td><td>Display name in canvas and inspector</td></tr>
+  <tr><td><code>storyText</code></td><td>string</td><td>Narrative text shown to player. Supports <code>{{variableName}}</code> interpolation.</td></tr>
+  <tr><td><code>speakerName</code></td><td>string?</td><td>Character name displayed above dialogue</td></tr>
+  <tr><td><code>backgroundImage</code></td><td>string?</td><td>Base64 data URL or blob URL</td></tr>
+  <tr><td><code>backgroundMusic</code></td><td>string?</td><td>Base64 audio data URL or blob URL</td></tr>
+  <tr><td><code>musicKeepPlaying</code></td><td>boolean</td><td>Continue current music into next scene (no crossfade)</td></tr>
+  <tr><td><code>voiceoverAudio</code></td><td>string?</td><td>TTS or uploaded narration audio</td></tr>
+  <tr><td><code>voiceoverAutoplay</code></td><td>boolean</td><td>Auto-play voiceover when scene loads</td></tr>
+  <tr><td><code>choices</code></td><td>SceneChoice[]</td><td>Array of {id, label, condition?, tooltip?}</td></tr>
+  <tr><td><code>linkedCharacters</code></td><td>string[]</td><td>Entity IDs of characters in this scene</td></tr>
+  <tr><td><code>linkedLocations</code></td><td>string[]</td><td>Entity IDs of locations in this scene</td></tr>
+  <tr><td><code>linkedObjects</code></td><td>string[]</td><td>Entity IDs of objects in this scene</td></tr>
+  <tr><td><code>linkedConcepts</code></td><td>string[]</td><td>Entity IDs of concepts in this scene</td></tr>
+  <tr><td><code>entityStates</code></td><td>Record&lt;string, string&gt;?</td><td>Per-entity situational state notes for this scene</td></tr>
+  <tr><td><code>aiResponse</code></td><td>string?</td><td>Raw AI JSON response (OW mode). Editable in inspector.</td></tr>
+  <tr><td><code>playerAction</code></td><td>string?</td><td>The player action that triggered this scene (OW mode)</td></tr>
+  <tr><td><code>constructedContext</code></td><td>string?</td><td>Full context sent to AI for this scene (viewable in play mode)</td></tr>
+  <tr><td><code>constructedSystemPrompt</code></td><td>string?</td><td>System prompt used for this scene's generation</td></tr>
+</table>
+
+<h3>Choice Node (Yellow)</h3>
+<p>Conditional branching. Routes the player based on a variable condition.</p>
+<table>
+  <tr><th>Aspect</th><th>Detail</th></tr>
+  <tr><td>Color</td><td>Yellow (<code>node-choice</code>)</td></tr>
+  <tr><td>Input handle</td><td>Top center</td></tr>
+  <tr><td>Output handles</td><td>Bottom-left "True" (green), bottom-right "False" (red)</td></tr>
+  <tr><td>Display</td><td>Condition expression in monospace (e.g., <code>HP &gt;= 50</code>)</td></tr>
+</table>
+
+<h4>Choice Node Data</h4>
+<ul>
+  <li><code>condition.variableA</code> — Variable name to check</li>
+  <li><code>condition.operator</code> — One of: <code>&gt;</code>, <code>&lt;</code>, <code>=</code>, <code>!=</code>, <code>&gt;=</code>, <code>&lt;=</code>, <code>contains</code></li>
+  <li><code>condition.valueB</code> — Comparison value (number or string)</li>
+  <li><code>condition.useVariable</code> — If true, valueB references another variable</li>
+</ul>
+
+<h3>Modifier Node (Green)</h3>
+<p>Changes a variable's value when the player passes through it.</p>
+<table>
+  <tr><th>Aspect</th><th>Detail</th></tr>
+  <tr><td>Color</td><td>Green (<code>node-modifier</code>)</td></tr>
+  <tr><td>Input/Output</td><td>Top center / bottom center (single path)</td></tr>
+  <tr><td>Modes</td><td>Math (add/sub/mul/div), Set (direct assign), Random (range)</td></tr>
+  <tr><td>Display</td><td>Operation preview in monospace (e.g., <code>HP = HP + 5</code>)</td></tr>
+</table>
+
+<h3>Comment Node (Gray, Dashed)</h3>
+<p>Designer annotation. Not connected to flow, not executed. Color-customizable.</p>
+<table>
+  <tr><th>Aspect</th><th>Detail</th></tr>
+  <tr><td>Border</td><td>Dashed, gray (or custom color from 8 presets)</td></tr>
+  <tr><td>Handles</td><td>None (not part of story flow)</td></tr>
+  <tr><td>Display</td><td>Text preview (150 chars max)</td></tr>
+</table>
+
+<h2>Inspector Panel (Right Sidebar)</h2>
+<p>Context-sensitive property editor. Width: <code>25vw</code> (min 380px, max 600px). Glassmorphism design with color-coded left border.</p>
+
+<h3>Scene Inspector — 4 Tabs</h3>
+
+<h4>Media Tab</h4>
+<ul>
+  <li>Background Image — upload or drag-drop, displays thumbnail</li>
+  <li>Background Music — upload audio file, "Keep playing in next scene" checkbox</li>
+  <li>Voiceover — upload audio or click "Generate Voiceover" (Gemini TTS), "Auto-play on enter" checkbox</li>
+</ul>
+
+<h4>Content Tab</h4>
+<ul>
+  <li>Speaker Name — optional character name (e.g., "Narrator", "Guard")</li>
+  <li>Story Text — large textarea, supports <code>{{variableName}}</code> substitution</li>
+  <li>View AI Response — opens modal to view/edit raw AI JSON (OW-generated scenes only)</li>
+</ul>
+
+<h4>Outputs Tab</h4>
+<ul>
+  <li>Choices list — add, edit labels, reorder, delete choices</li>
+  <li>Each choice creates an output handle on the node</li>
+  <li>Connect choice handles to target nodes by dragging</li>
+  <li>Conditions can be set per choice (variable-based visibility)</li>
+</ul>
+
+<h4>World Tab</h4>
+<ul>
+  <li>Entity linkers for 4 categories (Characters, Locations, Objects, Concepts)</li>
+  <li>Linked entities shown as chips with amber dot if they have situational state text</li>
+  <li>Click entity to open SceneEntityOverlay — per-entity text area for situational attributes</li>
+  <li>Add entities from dropdown list</li>
+</ul>
+
+<h4>Top Section (Above Tabs)</h4>
+<ul>
+  <li>Node label input</li>
+  <li>Start Node indicator (green pulsing dot) + "Set as Start Node" button (only one allowed)</li>
+  <li>"Play from Here" — starts game at this scene with fresh variables</li>
+  <li>"Continue from Here" — starts game at this scene with autosaved variables</li>
+  <li>Open World Mode toggle (checkbox)</li>
+</ul>
+
+<h3>Choice Inspector</h3>
+<ul>
+  <li>Node label input</li>
+  <li>Variable selector dropdown (or quick-create inline)</li>
+  <li>Operator dropdown (<code>&gt;</code>, <code>&lt;</code>, <code>=</code>, <code>!=</code>, <code>&gt;=</code>, <code>&lt;=</code>, <code>contains</code>)</li>
+  <li>Value input (number or string)</li>
+</ul>
+
+<h3>Modifier Inspector</h3>
+<ul>
+  <li>Node label input</li>
+  <li>Target variable dropdown (or quick-create inline)</li>
+  <li>Mode tabs: Math (4 operation buttons + value), Set (text input), Random (min/max)</li>
+  <li>Logic preview in monospace box</li>
+</ul>
+
+<h3>Comment Inspector</h3>
+<ul>
+  <li>Label input</li>
+  <li>Note textarea (resizable, 150px min-height)</li>
+  <li>Color picker: 8 preset squares (gray, red, orange, yellow, green, blue, purple, pink)</li>
+</ul>
+
+<h2>Toolbar (Left Sidebar)</h2>
+
+<h3>Node Creation</h3>
+<p>Drag nodes from toolbar to canvas. Uses <code>dataTransfer</code> API with type <code>application/dream-e-node</code>.</p>
+<ul>
+  <li>Scene Node (blue, film icon)</li>
+  <li>Choice Node (yellow, git-branch icon)</li>
+  <li>Modifier Node (green, calculator icon)</li>
+  <li>Comment Box (gray, message-square icon)</li>
+</ul>
+
+<h3>Edit Actions (context-sensitive)</h3>
+<table>
+  <tr><th>Action</th><th>Shortcut</th><th>Visible When</th></tr>
+  <tr><td>Cut</td><td>Ctrl+X</td><td>Node selected</td></tr>
+  <tr><td>Copy</td><td>Ctrl+C</td><td>Node selected</td></tr>
+  <tr><td>Paste</td><td>Ctrl+V</td><td>Clipboard has content</td></tr>
+  <tr><td>Delete Selected</td><td>Delete</td><td>Node(s) selected</td></tr>
+  <tr><td>Delete All After</td><td>—</td><td>Single node selected</td></tr>
+  <tr><td>Delete Edge</td><td>—</td><td>Edge selected</td></tr>
+</table>
+
+<h2>Top Bar Actions</h2>
+<table>
+  <tr><th>Button</th><th>Action</th></tr>
+  <tr><td>&larr; Back</td><td>Return to Dashboard</td></tr>
+  <tr><td>Undo / Redo</td><td>Navigate history (max 8 lean snapshots)</td></tr>
+  <tr><td>Variables</td><td>Open VariableManager modal</td></tr>
+  <tr><td>Play</td><td>Start game from start node</td></tr>
+  <tr><td>World</td><td>Dropdown: Characters / Locations / Objects / Concepts</td></tr>
+  <tr><td>Chat</td><td>Open AI ChatWindow (Ctrl+Shift+C)</td></tr>
+  <tr><td>Notes</td><td>Open NotesEditor modal</td></tr>
+  <tr><td>AI</td><td>Open AISettingsModal</td></tr>
+  <tr><td>Help</td><td>Open HelpModal</td></tr>
+  <tr><td>Save</td><td>Save to IndexedDB</td></tr>
+  <tr><td>Export</td><td>Download as <code>.dream-e.zip</code></td></tr>
+  <tr><td>Import</td><td>Load from <code>.zip</code> file</td></tr>
+</table>
+
+<h2>Canvas Interactions</h2>
+<table>
+  <tr><th>Action</th><th>Behavior</th></tr>
+  <tr><td>Left-drag on node</td><td>Move node</td></tr>
+  <tr><td>Left-drag on empty canvas</td><td>Box-select (partial intersection)</td></tr>
+  <tr><td>Middle/Right-drag</td><td>Pan canvas</td></tr>
+  <tr><td>Scroll wheel</td><td>Zoom (0.05x – 4x)</td></tr>
+  <tr><td>Click node</td><td>Select, open inspector</td></tr>
+  <tr><td>Click edge</td><td>Select edge (highlighted red)</td></tr>
+  <tr><td>Click empty canvas</td><td>Deselect all, close inspector</td></tr>
+  <tr><td>Drag from handle</td><td>Create connection (edge)</td></tr>
+  <tr><td>Escape</td><td>Deselect all</td></tr>
+</table>
+
+<h2>Entity System</h2>
+
+<h3>Categories</h3>
+<ul>
+  <li><strong>Characters</strong> — NPCs, party members, antagonists</li>
+  <li><strong>Locations</strong> — Places, buildings, regions</li>
+  <li><strong>Objects</strong> — Items, artifacts, weapons</li>
+  <li><strong>Concepts</strong> — Factions, magic systems, lore</li>
+</ul>
+
+<h3>Entity Fields</h3>
+<table>
+  <tr><th>Field</th><th>Purpose</th></tr>
+  <tr><td><code>name</code></td><td>Display name</td></tr>
+  <tr><td><code>description</code></td><td>Detailed text (used in AI context)</td></tr>
+  <tr><td><code>summary</code></td><td>Brief 1-2 sentence overview</td></tr>
+  <tr><td><code>profile</code></td><td>Structured key-value data (appearance, personality, stats, etc.). Inline-editable.</td></tr>
+  <tr><td><code>referenceImage</code></td><td>Portrait/visual reference. Sent to Gemini for image gen consistency.</td></tr>
+  <tr><td><code>stateHistory</code></td><td>Chronological log of state changes across scenes (magical effects, injuries, relationship shifts)</td></tr>
+</table>
+
+<h3>State Change History</h3>
+<p>Each <code>EntityStateChangeEvent</code> records:</p>
+<ul>
+  <li><code>sceneId</code> + <code>sceneLabel</code> — Which scene the change occurred in</li>
+  <li><code>sceneSummary</code> — What happened in that scene</li>
+  <li><code>timestamp</code> — When it occurred</li>
+  <li><code>playerAction</code> — What the player did to trigger it</li>
+  <li><code>stateChanges</code> — Array of specific change descriptions (verbatim, detailed)</li>
+</ul>
+
+<h3>Entity Linking</h3>
+<p>Entities are linked to scenes via the World tab in SceneInspector. Linked entity IDs are stored in <code>linkedCharacters</code>, <code>linkedLocations</code>, <code>linkedObjects</code>, <code>linkedConcepts</code> arrays on the scene node data. These determine which entities appear in the AI context and which reference images are sent for image generation.</p>
+
+<h2>Variable System</h2>
+
+<h3>Variable Types</h3>
+<ul>
+  <li><code>integer</code> — Whole numbers (HP, gold)</li>
+  <li><code>float</code> — Decimal numbers (multipliers)</li>
+  <li><code>boolean</code> — True/false flags</li>
+  <li><code>string</code> — Text values (status effects)</li>
+  <li><code>collection</code> — String arrays (inventory)</li>
+</ul>
+
+<h3>HUD Display</h3>
+<p>Variables with <code>showInHUD: true</code> appear as progress bars in the top-left HUD during gameplay. Configurable: icon, color, min/max values.</p>
+
+<h3>Templates</h3>
+<p>Pre-defined variable sets: RPG Basic Stats (HP, MP, Strength, etc.), Currency (Gold), Inventory.</p>
+
+<h2>Import / Export</h2>
+
+<h3>Export</h3>
+<ol>
+  <li>Rehydrates blob URLs back to base64 (<code>rehydrateForSave()</code>)</li>
+  <li>Serializes project as JSON</li>
+  <li>Wraps in ZIP file (<code>.dream-e.zip</code>)</li>
+  <li>Downloads via File System Access API or classic download</li>
+</ol>
+
+<h3>Import</h3>
+<ol>
+  <li>User selects <code>.zip</code> file</li>
+  <li><code>projectsDB.importProject(file)</code> extracts JSON</li>
+  <li>Saves to IndexedDB with new ID</li>
+  <li>Navigates to imported project</li>
+</ol>
+
+<h2>Undo / Redo</h2>
+
+<table>
+  <tr><th>Aspect</th><th>Detail</th></tr>
+  <tr><td>Max history</td><td>8 snapshots (reduced from 50 for memory)</td></tr>
+  <tr><td>Debounce</td><td>500ms for text changes, immediate for structural (add/delete node/edge)</td></tr>
+  <tr><td>Lean snapshots</td><td>Binary assets stripped (<code>backgroundImage</code>, <code>backgroundMusic</code>, <code>voiceoverAudio</code>, <code>referenceImage</code>, <code>aiResponse</code>, <code>constructedContext</code>) &rarr; replaced with <code>'__asset_stripped__'</code></td></tr>
+  <tr><td>Rehydration</td><td>On undo/redo, assets copied from current live project back into restored snapshot</td></tr>
+  <tr><td>Suppression</td><td>Batch operations (OW scene creation) use <code>suppressHistoryRecording()</code> to avoid recording intermediate states</td></tr>
+</table>
+
+<h2>Auto-Layout</h2>
+<p>Bottom-left button arranges all nodes by BFS depth from start node. Column spacing: 400px, row spacing: 250px. All connections preserved.</p>
+
+<h2>Focus-on-Return</h2>
+<p>When returning from play mode to editor, <code>useEditorStore.focusNodeId</code> is set to the last played scene. Editor uses <code>useReactFlow().setCenter()</code> to pan/zoom to that node. Falls back to <code>findDeepestSceneNode()</code> (BFS from start node).</p>
+
+</div>
+</body>
+</html>

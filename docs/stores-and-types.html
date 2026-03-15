@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stores &amp; Type Definitions — Dream-E Docs</title>
+<style>
+  :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; line-height: 1.6; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  a { color: var(--accent); }
+  h1 { font-size: 2rem; margin-bottom: 8px; }
+  .back { color: var(--muted); text-decoration: none; font-size: 0.9rem; display: inline-block; margin-bottom: 16px; }
+  h2 { font-size: 1.3rem; margin: 32px 0 12px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { font-size: 1.1rem; margin: 20px 0 8px; color: var(--green); }
+  h4 { font-size: 1rem; margin: 16px 0 6px; color: var(--yellow); }
+  p, li { margin-bottom: 8px; }
+  ul { padding-left: 20px; }
+  code { background: #1c2128; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: #1c2128; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+  .note { background: #1f6feb15; border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a class="back" href="index.html">&larr; Back to Index</a>
+<h1>Stores &amp; Type Definitions</h1>
+
+<h2>useProjectStore (Main Project Store)</h2>
+<p>File: <code>src/stores/useProjectStore.ts</code> (~1,282 lines)</p>
+<p>Manages the currently loaded project and all editing operations. Uses Zustand with Immer middleware for immutable state updates.</p>
+
+<h3>State</h3>
+<pre>
+{
+  currentProject: Project | null     // The open project
+  isDirty: boolean                   // Unsaved changes flag
+  selectedNodeId: string | null      // Currently selected node
+  selectedEdgeId: string | null      // Currently selected edge
+  isLoading: boolean                 // Loading from IndexedDB
+  isSaving: boolean                  // Saving to IndexedDB
+  error: string | null               // Error state
+  history: Project[]                 // Undo/redo stack (MAX=8, lean snapshots)
+  historyIndex: number               // Current position in history
+}
+</pre>
+
+<h3>Key Actions</h3>
+<table>
+  <tr><th>Action</th><th>Description</th></tr>
+  <tr><td><code>loadProject(id)</code></td><td>Load from IndexedDB, initialize optional fields (entities, notes, assetNames, etc.)</td></tr>
+  <tr><td><code>saveProject()</code></td><td>Rehydrate blob URLs → base64, save to IndexedDB</td></tr>
+  <tr><td><code>saveAndOffloadAssets()</code></td><td>Save, then convert base64 → blob URLs for memory optimization</td></tr>
+  <tr><td><code>closeProject()</code></td><td>Revoke all blob URLs, clear state</td></tr>
+  <tr><td><code>addNode(node)</code></td><td>Add node to graph (immediate history)</td></tr>
+  <tr><td><code>updateNode(id, updates)</code></td><td>Update node data (debounced history)</td></tr>
+  <tr><td><code>deleteNode(id)</code></td><td>Delete node + connected edges (immediate history)</td></tr>
+  <tr><td><code>deleteNodes(ids)</code></td><td>Batch delete (single history entry)</td></tr>
+  <tr><td><code>addEdge(edge)</code></td><td>Create connection</td></tr>
+  <tr><td><code>deleteEdge(id)</code></td><td>Remove connection</td></tr>
+  <tr><td><code>addEntity(entity)</code></td><td>Create entity (character/location/object/concept)</td></tr>
+  <tr><td><code>updateEntity(id, updates)</code></td><td>Update entity (Immer Object.assign)</td></tr>
+  <tr><td><code>deleteEntity(id)</code></td><td>Remove entity + unlink from all scenes</td></tr>
+  <tr><td><code>updateEntityState(nodeId, entityId, text)</code></td><td>Set per-scene entity state note on node.data.entityStates</td></tr>
+  <tr><td><code>addVariable() / updateVariable() / deleteVariable()</code></td><td>Variable CRUD</td></tr>
+  <tr><td><code>updateNotes(text)</code></td><td>Update project notes (debounced)</td></tr>
+  <tr><td><code>undo() / redo()</code></td><td>Navigate history with asset rehydration</td></tr>
+  <tr><td><code>addChatMessage() / clearChatMessages()</code></td><td>AI chat history management</td></tr>
+</table>
+
+<h3>History System Details</h3>
+<ul>
+  <li><strong>MAX_HISTORY = 8</strong> — Reduced from 50 for memory (combined with lean snapshots)</li>
+  <li><strong>HISTORY_DEBOUNCE_DELAY = 500ms</strong> — Text changes are debounced</li>
+  <li><strong>Immediate recording</strong> — Structural changes (add/delete node/edge) record immediately</li>
+  <li><strong>Lean snapshots</strong> — Binary assets + aiResponse + constructedContext stripped</li>
+  <li><strong>Rehydration on undo/redo</strong> — Assets copied from live project to restored snapshot</li>
+  <li><strong>suppressHistoryRecording()</strong> — Returns unsuppress function. Used for batch OW operations.</li>
+</ul>
+
+<h2>useEditorStore (Canvas UI State)</h2>
+<p>File: <code>src/stores/useEditorStore.ts</code></p>
+
+<h3>State</h3>
+<pre>
+{
+  viewport: { x: number, y: number, zoom: number }
+  activeTool: 'select' | 'pan' | 'connect'
+  draggingNodeType: string | null
+  panels: {
+    toolbar: boolean     // Left sidebar
+    inspector: boolean   // Right panel
+    minimap: boolean     // Bottom-right minimap
+  }
+  preferences: {
+    showGrid: boolean
+    snapToGrid: boolean
+    gridSize: number          // Default 20
+    showLabels: boolean
+    animateEdges: boolean
+    autoSaveInterval: number  // Seconds
+  }
+  clipboard: { nodes: StoryNode[], edges: StoryEdge[] } | null
+  contextMenuOpen: boolean
+  contextMenuPosition: { x: number, y: number }
+  lastMousePosition: { x: number, y: number }
+  pendingUploads: number      // File uploads in progress
+  focusNodeId: string | null  // Node to center on when entering editor
+}
+</pre>
+
+<h3>Persistence</h3>
+<p>Only <code>preferences</code> and <code>panels</code> persist to localStorage. Viewport, clipboard, and transient UI state are session-only.</p>
+
+<h2>usePlayerStore (Game Runtime State)</h2>
+<p>File: <code>src/stores/usePlayerStore.ts</code></p>
+
+<h3>State</h3>
+<pre>
+{
+  project: Project | null           // Loaded for playing (snapshot from editor)
+  session: GameSession | null       // Current playthrough
+  currentScene: SceneDisplayData | null  // What to render
+  isMenuOpen: boolean               // Pause menu
+  isSaveLoadOpen: boolean           // Save/load dialog
+  isSettingsOpen: boolean           // Settings dialog
+  isTyping: boolean                 // Typewriter effect active
+  pendingAnimations: VariableChangeAnimation[]  // Float text
+  preferences: PlayerPreferences    // Volume, text speed, TTS, voice
+  saveSlots: SaveSlot[]            // Game saves
+}
+</pre>
+
+<h3>Key Actions</h3>
+<table>
+  <tr><th>Action</th><th>Description</th></tr>
+  <tr><td><code>startGame(project)</code></td><td>Begin at project.settings.startNodeId with fresh variables</td></tr>
+  <tr><td><code>startGameFromNode(project, nodeId)</code></td><td>Begin at specific node with fresh variables</td></tr>
+  <tr><td><code>continueFromNode(project, nodeId)</code></td><td>Begin at node with autosaved variables</td></tr>
+  <tr><td><code>makeChoice(choiceId)</code></td><td>Record choice, update history, set pending changes</td></tr>
+  <tr><td><code>setCurrentScene(scene)</code></td><td>Update display data (uses getBlobUrl for assets)</td></tr>
+  <tr><td><code>updateVariable(name, value)</code></td><td>Change variable during gameplay</td></tr>
+  <tr><td><code>saveGame(slotId, name)</code></td><td>Save to numbered slot</td></tr>
+  <tr><td><code>loadGame(saveSlot)</code></td><td>Restore from save</td></tr>
+  <tr><td><code>setOpenWorldMode(enabled)</code></td><td>Toggle OW mode flag</td></tr>
+</table>
+
+<h2>useImageGenStore (AI Settings)</h2>
+<p>File: <code>src/stores/useImageGenStore.ts</code></p>
+
+<h3>State</h3>
+<pre>
+{
+  // Image Generation
+  provider: 'bfl' | 'openai-compatible' | 'gemini'
+  apiKey: string              // BFL or OpenAI key
+  model: string               // Provider-specific model name
+  endpoint: string            // API base URL (OpenAI-compatible)
+  defaultImageStyle: string   // Appended to all image prompts
+
+  // Google (shared)
+  googleApiKey: string        // Used by Gemini image, TTS, and writer
+  geminiImageModel: string    // Gemini image generation model
+
+  // TTS
+  tts: {
+    enabled: boolean
+    model: string             // e.g., 'gemini-2.5-flash-preview-tts'
+    voice: string             // e.g., 'Zephyr'
+    instruction: string       // Narration style direction
+  }
+
+  // Story Writer (Open World)
+  writer: {
+    provider: 'gemini' | 'openai-compatible'
+    model: string             // e.g., 'gemini-3-flash-preview'
+    endpoint: string
+    apiKey: string
+    systemPrompt: string      // Editable, resettable to DEFAULT_WRITER_SYSTEM_PROMPT
+    instruction: string       // Editable, resettable to DEFAULT_WRITER_INSTRUCTION
+    maxContextTokens: number  // Default 500,000
+  }
+
+  // ASR (Speech-to-Text)
+  asr: {
+    enabled: boolean
+    model: string
+    deviceId: string
+  }
+}
+</pre>
+
+<h3>Persistence</h3>
+<p>All settings persist to localStorage. Store version: 4. Migration from v3 adds <code>maxContextTokens</code> to writer settings.</p>
+
+<h2>Core Type Definitions</h2>
+
+<h3>Project (types/project.ts)</h3>
+<pre>
+interface Project {
+  id: string;
+  info: ProjectInfo;              // title, author, description, cover, theme, dates
+  settings: ProjectSettings;      // startNodeId, HUD config, audio, text speed, save slots
+  nodes: StoryNode[];             // All editor nodes (union type)
+  edges: StoryEdge[];             // All connections
+  globalVariables: Variable[];    // Game stats and flags
+  entities: Entity[];             // Characters, locations, objects, concepts
+  notes: string;                  // Project-wide notes (freeform text)
+  assetNames: string[];           // Named media references
+  chatMessages: ChatMessage[];    // AI chat history
+}
+</pre>
+
+<h3>Entity (types/project.ts)</h3>
+<pre>
+interface Entity {
+  id: string;                                    // "entity_{uuid}"
+  category: 'character' | 'location' | 'object' | 'concept';
+  name: string;
+  description: string;
+  summary?: string;                              // Brief 1-2 sentence overview
+  profile: Record&lt;string, unknown&gt;;              // Structured key-value data (editable)
+  referenceImage?: string;                       // Base64 or blob URL (portrait/visual)
+  referenceVoice?: string;                       // Voice sample
+  defaultMusic?: string;                         // Default music track
+  stateHistory?: EntityStateChangeEvent[];       // Chronological state changes
+  linkedCharacters?: string[];                   // Related character IDs
+  linkedLocations?: string[];                    // Related location IDs
+  linkedObjects?: string[];                      // Related object IDs
+  linkedConcepts?: string[];                     // Related concept IDs
+  createdAt?: number;
+  updatedAt?: number;
+}
+</pre>
+
+<h3>EntityStateChangeEvent (types/project.ts)</h3>
+<pre>
+interface EntityStateChangeEvent {
+  sceneId: string;               // Which scene the change occurred in
+  sceneLabel?: string;           // Human-readable scene name
+  sceneSummary: string;          // What happened in that scene
+  timestamp?: number;            // When it occurred (Date.now())
+  playerAction?: string;         // What the player did to trigger it
+  stateChanges: string[];        // Array of specific change descriptions (verbatim)
+}
+</pre>
+
+<h3>StoryNode (types/nodes.ts)</h3>
+<pre>
+type StoryNode = SceneNode | ChoiceNode | ModifierNode | CommentNode;
+
+// Each has: id, type, position: {x, y}, label, data: { ... type-specific fields }
+// Discriminated union on `type` field: 'scene' | 'choice' | 'modifier' | 'comment'
+</pre>
+
+<h3>Variable (types/variables.ts)</h3>
+<pre>
+interface Variable {
+  id: string;
+  name: string;
+  type: 'integer' | 'float' | 'boolean' | 'string' | 'collection';
+  defaultValue: VariableValue;     // number | boolean | string | string[]
+  description?: string;
+  category?: string;
+  showInHUD: boolean;              // Display in player HUD
+  hudIcon?: string;                // Lucide icon name
+  hudColor?: string;               // Hex color for HUD bar
+  maxValue?: number;               // For progress bar display
+  minValue?: number;
+}
+</pre>
+
+<h3>GameSession (types/gamestate.ts)</h3>
+<pre>
+interface GameSession {
+  projectId: string;
+  currentNodeId: string;           // Active scene
+  variables: Record&lt;string, VariableValue&gt;;
+  inventory: string[];
+  history: string[];               // Ordered list of visited node IDs
+  flags: Record&lt;string, boolean&gt;;
+  playtime: number;                // Seconds
+  isPaused: boolean;
+  isMenuOpen: boolean;
+  isTyping: boolean;
+  pendingChanges: VariableChange[];
+}
+</pre>
+
+<h3>SceneDisplayData (types/gamestate.ts)</h3>
+<pre>
+interface SceneDisplayData {
+  nodeId: string;
+  label: string;
+  speakerName?: string;
+  text: string;                    // Interpolated story text
+  choices: PlayerChoice[];         // Resolved choices with conditions
+  backgroundImage?: string;       // Base64 or blob URL
+  backgroundMusic?: string;       // Base64 or blob URL
+  voiceover?: string;             // Note: field is 'voiceover', not 'voiceoverAudio'
+  theme?: ThemeConfig;
+}
+</pre>
+
+<div class="note">
+  <strong>Naming inconsistency:</strong> SceneNode data uses <code>voiceoverAudio</code> but SceneDisplayData (runtime) uses <code>voiceover</code>. These are the same concept with different field names.
+</div>
+
+<h3>OpenWorldResult (services/openWorldService.ts)</h3>
+<pre>
+interface OpenWorldResult {
+  sceneText: string;
+  speakerName?: string;
+  choices: string[];                                    // Exactly 3
+  imageDataUrl?: string;
+  variableChanges?: Record&lt;string, unknown&gt;;
+  playerAction?: string;
+  presentEntityIds?: string[];
+  newEntities?: Array&lt;{ category, name, description, summary?, profile? }&gt;;
+  removeEntities?: string[];
+  entityLinks?: string[];
+  newVariables?: Array&lt;{ name, type, defaultValue?, description? }&gt;;
+  generateEntityImages?: Record&lt;string, string&gt;;
+  generateVoiceover?: boolean;
+  entityUpdates?: Record&lt;string, EntityUpdate&gt;;
+  sceneSummary?: string;
+  musicDataUrl?: string;
+  musicMetadata?: { row_id: number; title: string; duration?: number };
+  rawAiResponse?: string;
+  constructedContext?: string;
+  constructedSystemPrompt?: string;
+}
+</pre>
+
+<h3>EntityUpdate (services/openWorldService.ts)</h3>
+<pre>
+interface EntityUpdate {
+  stateNote?: string;                          // Brief state change (stored on scene node)
+  profilePatch?: Record&lt;string, unknown&gt;;      // Permanent profile changes
+  stateChanges?: string[];                     // Detailed change descriptions for history
+}
+</pre>
+
+<h2>Data Flow: Store Interactions</h2>
+
+<pre>
+Editor Mode:
+  User → Inspector UI → useProjectStore.updateNode() → Zustand/Immer → React Flow re-render
+
+Play Mode (Standard):
+  usePlayerStore.startGame(project)
+    → Snapshot project into player store
+    → Initialize session with variables from project.globalVariables
+    → Navigate to startNodeId
+    → setCurrentScene() with getBlobUrl() for assets
+
+Play Mode (Open World):
+  Player action
+    → useProjectStore.getState().currentProject (FRESH, not player store snapshot)
+    → buildOpenWorldContext(project, session, action)
+    → POST /api/open-world → streaming AI response
+    → parseOpenWorldResponse() → OpenWorldResult
+    → onComplete callback updates UI with pending result
+    → handleAdvanceToOwScene():
+      → useProjectStore.addNode() + addEdge()
+      → Deferred: useProjectStore.updateEntity() for each entityUpdate
+      → Deferred: saveAndOffloadAssets()
+</pre>
+
+</div>
+</body>
+</html>

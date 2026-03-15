@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dream-E — Open World Context Engineering Manual</title>
+<style>
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1b2e; color: #d4d6e0; max-width: 900px; margin: 0 auto; padding: 24px; line-height: 1.6; }
+  h1 { color: #6c8aff; border-bottom: 2px solid #2d3148; padding-bottom: 8px; font-size: 1.6em; }
+  h2 { color: #8ba0ff; margin-top: 32px; font-size: 1.25em; }
+  h3 { color: #a5b4fc; font-size: 1.05em; }
+  code { background: #0f1117; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: #c4b5fd; }
+  pre { background: #0f1117; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.85em; border: 1px solid #2d3148; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+  th, td { border: 1px solid #2d3148; padding: 8px 12px; text-align: left; font-size: 0.9em; }
+  th { background: #1e1f36; color: #8ba0ff; }
+  .note { background: #1e2a1e; border-left: 3px solid #4ade80; padding: 8px 16px; margin: 12px 0; font-size: 0.9em; }
+  .warn { background: #2a1e1e; border-left: 3px solid #f87171; padding: 8px 16px; margin: 12px 0; font-size: 0.9em; }
+  .section { background: #13142a; border: 1px solid #2d3148; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  a { color: #6c8aff; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<h1>Open World Context Engineering Manual</h1>
+<p>This document explains how Dream-E's Open World mode constructs the AI context, what the scene-writing API returns, how validation works, and the rules governing each step.</p>
+
+<h2>1. Architecture Overview</h2>
+
+<div class="section">
+<p>The pipeline has 4 stages:</p>
+<ol>
+  <li><strong>Context Construction</strong> (<code>openWorldContext.ts</code>) — Assembles system prompt + user message from game state</li>
+  <li><strong>API Call</strong> (<code>vite.config.ts /api/open-world</code>) — Sends to Gemini or OpenAI-compatible API with streaming</li>
+  <li><strong>Response Parsing</strong> (<code>openWorldService.ts</code>) — Parses structured JSON, validates fields, enforces assertions</li>
+  <li><strong>Scene Creation</strong> (<code>AdventureEngine.tsx</code>) — Creates persistent SceneNode + StoryEdge, triggers image/music/TTS</li>
+</ol>
+</div>
+
+<h2>2. Provider Configuration</h2>
+
+<table>
+<tr><th>Setting</th><th>Gemini (default)</th><th>OpenAI-Compatible</th></tr>
+<tr><td>Default model</td><td><code>gemini-3-flash-preview</code></td><td>User-defined</td></tr>
+<tr><td>API key</td><td>Shared <code>googleApiKey</code> (or override)</td><td>Separate key required</td></tr>
+<tr><td>Endpoint</td><td>Auto: <code>generativelanguage.googleapis.com</code></td><td>User-defined base URL</td></tr>
+<tr><td>JSON enforcement</td><td><code>responseMimeType: "application/json"</code> + <code>responseSchema</code></td><td><code>response_format: { type: "json_object" }</code></td></tr>
+<tr><td>Streaming</td><td>SSE via <code>?alt=sse</code></td><td>Standard SSE (<code>stream: true</code>)</td></tr>
+</table>
+
+<h2>3. Context Construction Rules</h2>
+
+<p>The context is split into two API message roles:</p>
+<ul>
+  <li><strong>System prompt</strong> — From <code>WriterSettings.systemPrompt</code> (user-editable in AI Settings). Defines narrator personality, writing style, output format, and rules.</li>
+  <li><strong>User message</strong> — Assembled procedurally from game state. Contains all context the model needs.</li>
+</ul>
+
+<h3>3.1 Token Budget</h3>
+
+<table>
+<tr><th>Parameter</th><th>Value</th></tr>
+<tr><td>Max context tokens (user message)</td><td>250,000</td></tr>
+<tr><td>Compression threshold</td><td>200,000 — when exceeded, older scenes are aggressively summarized (only last 3 in full)</td></tr>
+<tr><td>Max story path tokens</td><td>100,000</td></tr>
+<tr><td>Max project notes tokens</td><td>10,000</td></tr>
+<tr><td>Token estimation</td><td>1 token ≈ 4 characters</td></tr>
+<tr><td>Safety limit (hard cap)</td><td>1,000,000 characters</td></tr>
+</table>
+
+<h3>3.2 User Message Assembly Order</h3>
+
+<p>Sections are assembled in this order (top = earliest in message):</p>
+
+<table>
+<tr><th>#</th><th>Section</th><th>Priority</th><th>Always Included?</th><th>Content</th></tr>
+<tr><td>1</td><td><code>[STORY DESIGNER NOTES]</code></td><td>0 (must)</td><td>Yes (if notes exist)</td><td>Full project notes, truncated at 10K tokens</td></tr>
+<tr><td>2</td><td><code>[ALL ENTITY SUMMARIES]</code></td><td>0</td><td>Yes</td><td>One line per entity: ID, category, name, summary</td></tr>
+<tr><td>3</td><td><code>[CURRENT VARIABLES]</code></td><td>0</td><td>Yes</td><td>All variable name=value pairs</td></tr>
+<tr><td>4</td><td><code>[ART STYLE]</code></td><td>0</td><td>If detected</td><td>Auto-detected from entity profiles/notes</td></tr>
+<tr><td>5</td><td><code>[DETAILED ENTITY — CURRENTLY IN SCENE]</code></td><td>1 (high)</td><td>If budget allows</td><td>Full profile for each entity linked to current scene</td></tr>
+<tr><td>6</td><td><code>[STORY TIMELINE]</code></td><td>1</td><td>Yes (may be compressed)</td><td>Chronological scene path from start to current</td></tr>
+<tr><td>7</td><td><code>[CURRENT SCENE]</code></td><td>0</td><td>Yes</td><td>Current scene text, entity states, linked entities</td></tr>
+<tr><td>8</td><td><code>[DETAILED ENTITY]</code></td><td>2 (low)</td><td>If budget allows</td><td>Full profiles of entities NOT in current scene</td></tr>
+<tr><td>9</td><td><code>[PREVIOUS SCENE AI ANALYSIS]</code></td><td>1</td><td>If available</td><td>5 flow analysis fields from previous scene's AI response</td></tr>
+<tr><td>10</td><td><code>[PLAYER ACTION]</code></td><td>0</td><td>Yes</td><td>The user's free-form action text</td></tr>
+<tr><td>11</td><td><code>[INSTRUCTION]</code></td><td>0</td><td>Yes</td><td>From <code>WriterSettings.instruction</code> — tells model what to do</td></tr>
+</table>
+
+<h3>3.3 Compression Rules (Procedural)</h3>
+
+<div class="section">
+<ol>
+  <li><strong>Below 200K tokens:</strong> Include everything. All scenes in full, all entity profiles.</li>
+  <li><strong>200K–250K tokens:</strong> High-compression mode activates:
+    <ul>
+      <li>Story timeline: only last 3 scenes in full detail; older scenes use summary (1-2 lines each)</li>
+      <li>Low-priority entity profiles (not in current scene) are dropped — summaries remain</li>
+    </ul>
+  </li>
+  <li><strong>Above 250K tokens:</strong> Further truncation:
+    <ul>
+      <li>Timeline keeps shrinking (minimum 2 full scenes)</li>
+      <li>All non-scene entity profiles dropped</li>
+      <li>Hard character limit applied (1M chars) with truncation warning appended</li>
+    </ul>
+  </li>
+</ol>
+<p><strong>Never dropped:</strong> Project notes, entity summaries, current scene, variables, player action, instruction.</p>
+</div>
+
+<h3>3.4 Story Timeline Construction</h3>
+
+<p>The timeline follows session history (array of visited node IDs). For each scene:</p>
+<ul>
+  <li><strong>Full detail:</strong> Scene label, speaker name, full story text, choice made</li>
+  <li><strong>Compressed:</strong> Scene label, summary (if available), choice made (1 line)</li>
+</ul>
+<p>Scenes are always in chronological order. The "choice made" shows which option the player picked to reach the next scene.</p>
+
+<h3>3.5 Entity Categorization</h3>
+
+<p>Entities are split into two groups based on the current scene's linked fields:</p>
+<ul>
+  <li><strong>Current-scene entities</strong> (from <code>linkedCharacters</code>, <code>linkedLocations</code>, <code>linkedObjects</code>, <code>linkedConcepts</code>) — get full profiles at HIGH priority</li>
+  <li><strong>Other entities</strong> — get full profiles at LOW priority (dropped first under budget pressure)</li>
+</ul>
+<p>ALL entities always get a one-line summary in the <code>[ALL ENTITY SUMMARIES]</code> section.</p>
+
+<h2>4. Structured JSON Output (Schema)</h2>
+
+<p>The API enforces structured JSON output. The model MUST return a JSON object. <strong>The flow analysis fields come FIRST</strong> — the model must reason about player engagement and narrative strategy before writing any scene content. This is enforced by schema ordering and the system prompt.</p>
+
+<h3>4.1 Flow Analysis Fields (filled FIRST — drive the scene)</h3>
+
+<p>These 5 fields are <strong>required</strong> and placed at the top of the schema. The model commits to a plan before writing.</p>
+
+<table>
+<tr><th>Field</th><th>Type</th><th>Required?</th><th>Description</th></tr>
+<tr><td><code>playerGoalHypothesis</code></td><td>string</td><td>Yes</td><td>One sentence: what does the PLAYER (not the character) want to experience? Action, puzzles, social drama, atmosphere, plot density? What topics and tone?</td></tr>
+<tr><td><code>sceneIntentHypothesis</code></td><td>string</td><td>Yes</td><td>One sentence: what is the player trying to achieve with THIS specific action? What direction are they pushing the story?</td></tr>
+<tr><td><code>lastSatisfactionEstimate</code></td><td>string</td><td>Yes</td><td>One sentence: how many scenes ago did the player last get what they wanted — a moment of success, fun, or the experience they seek? Reference the scene if possible.</td></tr>
+<tr><td><code>engagementStrategy</code></td><td>string</td><td>Yes</td><td>One sentence decision: should this scene SATISFY the player (reward, progress, fun) or CHALLENGE them (complication, conflict, uncertainty requiring active decision-making)? If not satisfied recently → lean toward satisfaction. If too easy → introduce challenge.</td></tr>
+<tr><td><code>plannedStateChanges</code></td><td>string</td><td>Yes</td><td>One detailed sentence: which specific entities should change state, and how, to realize the engagement strategy? Changes must be plausible, emotionally intelligent, not cliche.</td></tr>
+</table>
+
+<div class="note">
+<strong>Chain-of-thought by design:</strong> These fields force the model to reason about player psychology and narrative strategy <em>before</em> generating the scene text. The schema places them first in the output, so the model must commit to a plan before writing. This improves scene quality, pacing, and responsiveness to player intent.
+</div>
+
+<h3>4.2 Scene Content Fields (written AFTER analysis)</h3>
+
+<p>These fields are driven by the flow analysis above. The <code>sceneText</code> realizes the engagement strategy; entity updates reflect the planned state changes.</p>
+
+<table>
+<tr><th>Field</th><th>Type</th><th>Required?</th><th>Description</th></tr>
+<tr><td><code>sceneText</code></td><td>string</td><td>Yes</td><td>Narrative continuation, 100-300 words, screenplay-inspired style. Driven by the analysis above.</td></tr>
+<tr><td><code>speakerName</code></td><td>string</td><td>Yes</td><td>Main narrator/speaker name (default "Narrator")</td></tr>
+<tr><td><code>choices</code></td><td>string[]</td><td>Yes</td><td>3-4 meaningful player choices. Minimum 3 enforced by validation.</td></tr>
+<tr><td><code>imagePrompt</code></td><td>string</td><td>Yes</td><td>Detailed image generation prompt (see §5)</td></tr>
+<tr><td><code>reuseImage</code></td><td>boolean</td><td>Yes</td><td><code>false</code> by default. <code>true</code> only if visual setting is identical.</td></tr>
+<tr><td><code>presentEntityIds</code></td><td>string[]</td><td>Yes</td><td>Entity IDs present/relevant in the scene</td></tr>
+<tr><td><code>sceneSummary</code></td><td>string</td><td>Yes</td><td>1-3 sentence summary for future context compression</td></tr>
+<tr><td><code>entityUpdates</code></td><td>object</td><td>No</td><td>Keyed by entity ID: <code>{ stateNote, profilePatch }</code>. Must reflect plannedStateChanges.</td></tr>
+<tr><td><code>variableChanges</code></td><td>object</td><td>No</td><td>Variable name → new value pairs</td></tr>
+<tr><td><code>musicQuery</code></td><td>string</td><td>No</td><td>BM25 search keywords (3-8 words) when mood changes</td></tr>
+</table>
+
+<h3>4.3 Cross-Scene Analysis Propagation</h3>
+
+<p>The previous scene's flow analysis is passed forward into the next scene's context via the <code>[PREVIOUS SCENE AI ANALYSIS]</code> section in the user message. This creates a feedback loop:</p>
+
+<ol>
+  <li>Scene N generates flow analysis fields alongside its content</li>
+  <li>The raw AI response JSON is stored on the scene node as <code>aiResponse</code></li>
+  <li>When building context for Scene N+1, the system extracts the 5 analysis fields from Scene N's <code>aiResponse</code></li>
+  <li>These are included as <code>[PREVIOUS SCENE AI ANALYSIS]</code> in the user message, right before the player action</li>
+  <li>This lets the model build on its prior reasoning — e.g. if satisfaction was low, it can course-correct</li>
+</ol>
+
+<div class="warn">
+<strong>Storage:</strong> The complete raw JSON response (including flow analysis) is stored on each scene node's <code>aiResponse</code> field. This can be viewed and edited via the "View AI Response" button in the Scene Inspector (Content tab) or the brain icon debug button in play mode.
+</div>
+
+<div class="note">
+<strong>Schema enforcement:</strong> Gemini uses <code>responseMimeType: "application/json"</code> + <code>responseSchema</code> which guarantees valid JSON conforming to the schema — all 5 analysis fields + all scene content fields are enforced. OpenAI-compatible uses <code>response_format: { type: "json_object" }</code> which guarantees valid JSON but doesn't enforce the schema — field validation happens client-side.
+</div>
+
+<h2>5. Image Prompt Requirements</h2>
+
+<p>The <code>imagePrompt</code> field drives AI image generation. The system prompt instructs the model to:</p>
+
+<ul>
+  <li>Include the project's <strong>art style</strong> (from <code>[ART STYLE]</code> section)</li>
+  <li>Describe characters by <strong>physical appearance</strong> from their entity profiles (hair, clothing, build)</li>
+  <li>Include <strong>entity IDs in brackets</strong>, e.g. <code>"a tall woman with silver hair [entity_abc123]"</code></li>
+  <li>Describe environment, lighting, mood, cinematic composition</li>
+</ul>
+
+<h3>5.1 Reference Image Collection</h3>
+
+<p>Before calling the image generation API, the system collects <strong>entity reference images</strong> for visual consistency:</p>
+
+<ol>
+  <li>Gather entity IDs from the <strong>current scene's</strong> linked fields (<code>linkedCharacters</code>, <code>linkedLocations</code>, <code>linkedObjects</code>, <code>linkedConcepts</code>)</li>
+  <li>Gather entity IDs from the <strong>new scene's</strong> <code>presentEntityIds</code> (returned by the model)</li>
+  <li>For each entity ID, check if the entity has a <code>referenceImage</code> property</li>
+  <li>Deduplicate (each entity's image is sent only once)</li>
+  <li>Send all collected reference images to the image generation API</li>
+</ol>
+
+<div class="warn">
+<strong>Assertion:</strong> If no reference images are found, a warning is logged listing each checked entity and whether it has a reference image. This helps diagnose missing reference images.
+</div>
+
+<p>Additionally, a user-configured <strong>default image style</strong> (from AI Settings) is appended to every image prompt as a <code>Style:</code> suffix.</p>
+
+<h2>6. Validation &amp; Assertions</h2>
+
+<div class="section">
+<h3>6.1 Choice Validation</h3>
+<ul>
+  <li>Minimum 3 choices enforced</li>
+  <li>If the model returns fewer than 3, generic fallback choices are appended: "Look around carefully", "Continue forward", "Consider your options"</li>
+  <li>Warning logged when padding occurs</li>
+</ul>
+
+<h3>6.2 Entity Tracking Validation</h3>
+<ul>
+  <li>If <code>presentEntityIds</code> is empty or missing, a warning is logged</li>
+  <li>Present entity IDs are logged for debugging</li>
+  <li>Entities are categorized into <code>linkedCharacters</code>, <code>linkedLocations</code>, <code>linkedObjects</code>, <code>linkedConcepts</code> on the new scene node</li>
+</ul>
+
+<h3>6.3 JSON Parse Robustness</h3>
+<p>3-stage parsing pipeline:</p>
+<ol>
+  <li><strong>Direct parse:</strong> <code>JSON.parse(response)</code></li>
+  <li><strong>Sanitized parse:</strong> Strip trailing commas and comments, then <code>JSON.parse</code></li>
+  <li><strong>Regex fallback:</strong> Extract individual fields via regex patterns (last resort)</li>
+</ol>
+<p>Additionally, legacy marker format (<code>[SCENE_TEXT]</code> + <code>&lt;&lt;&lt;OW_META&gt;&gt;&gt;</code>) is still supported for backward compatibility.</p>
+
+<h3>6.4 Image Generation</h3>
+<ul>
+  <li><code>imagePrompt</code> is required in the schema</li>
+  <li>If missing (parse failure), a fallback prompt is constructed from scene text + entity names</li>
+  <li><code>reuseImage</code> must be explicitly <code>true</code> AND a current scene image must exist; otherwise, a new image is generated</li>
+  <li>Image generation has 3 retries with exponential backoff and prompt simplification</li>
+</ul>
+</div>
+
+<h2>7. Data Flow Diagram</h2>
+
+<pre>
+Player Action
+    │
+    ▼
+┌──────────────────────────────────┐
+│  buildOpenWorldContext()          │
+│  ┌─ notes                        │
+│  ├─ entity summaries (ALL)       │
+│  ├─ variables                    │
+│  ├─ art style                    │
+│  ├─ current-scene entity profiles│  ← HIGH priority
+│  ├─ story timeline               │  ← compressed if >200K tokens
+│  ├─ current scene                │
+│  ├─ other entity profiles        │  ← LOW priority (dropped first)
+│  ├─ prev scene AI analysis       │  ← flow analysis from scene N-1
+│  ├─ player action                │
+│  └─ instruction                  │
+│  ═══════════════                 │
+│  Output: { systemPrompt,         │
+│            userMessage }          │
+└──────────────────────────────────┘
+    │
+    ▼
+┌──────────────────────────────────┐
+│  /api/open-world (Vite server)   │
+│  ├─ Gemini: streamGenerateContent│
+│  │   + responseSchema (JSON)     │
+│  └─ OpenAI: /chat/completions   │
+│       + response_format: json    │
+│  ═══════════════                 │
+│  Streams SSE events:             │
+│    data: { type: "text", text }  │
+│    data: { type: "done" }        │
+└──────────────────────────────────┘
+    │
+    ▼
+┌──────────────────────────────────┐
+│  parseOpenWorldResponse()        │
+│  ├─ JSON.parse (primary)         │
+│  ├─ sanitize + parse (fallback)  │
+│  └─ regex extraction (last resort│)
+│  ═══════════════                 │
+│  Validates: choices ≥3,          │
+│  presentEntityIds logged,        │
+│  imagePrompt fallback            │
+└──────────────────────────────────┘
+    │
+    ▼
+┌──────────────────────────────────┐
+│  Scene Creation (parallel)       │
+│  ├─ Create SceneNode + StoryEdge │
+│  ├─ Entity linking (categorize)  │
+│  ├─ Entity state updates         │
+│  ├─ Variable changes             │
+│  ├─ Image generation (background)│
+│  │   └─ Ref images from entities │
+│  ├─ Music search (background)    │
+│  └─ TTS generation (early start) │
+└──────────────────────────────────┘
+</pre>
+
+<h2>8. System Prompt &amp; Instruction</h2>
+
+<h3>8.1 System Prompt</h3>
+<p>Stored in <code>WriterSettings.systemPrompt</code>. Editable in AI Settings → Story Writer section. Defines:</p>
+<ul>
+  <li>Narrator role and personality</li>
+  <li>Writing style (screenplay-inspired)</li>
+  <li>Content guidelines</li>
+  <li>Output format (JSON fields and their requirements)</li>
+  <li>Rules for choices, entities, images, music</li>
+</ul>
+<p>Click <strong>"Reset to Default"</strong> in AI Settings to restore the built-in system prompt.</p>
+
+<h3>8.2 Instruction</h3>
+<p>Stored in <code>WriterSettings.instruction</code>. Inserted at the END of the user message, right after the player's action. Tells the model:</p>
+<blockquote>Continue the story for another 100-300 words based on the player's action above. Consider all events, character states, variable conditions, and entity backgrounds from the scene timeline. Be emotionally intelligent, plausible, and interesting.</blockquote>
+<p>Also editable and resettable in AI Settings.</p>
+
+<h2>9. File Reference</h2>
+
+<table>
+<tr><th>File</th><th>Role</th></tr>
+<tr><td><code>src/stores/useImageGenStore.ts</code></td><td>WriterSettings interface, defaults, system prompt constant</td></tr>
+<tr><td><code>src/services/openWorldContext.ts</code></td><td>Context builder: assembles systemPrompt + userMessage from game state</td></tr>
+<tr><td><code>src/services/openWorldService.ts</code></td><td>Pipeline orchestrator: API call, parsing, validation, image/music triggers</td></tr>
+<tr><td><code>vite.config.ts</code> (POST /api/open-world)</td><td>Server endpoint: proxies to Gemini/OpenAI API with structured output</td></tr>
+<tr><td><code>src/components/player/AdventureEngine.tsx</code></td><td>UI: handles OW flow, scene creation, TTS, display</td></tr>
+<tr><td><code>src/components/settings/AISettingsModal.tsx</code></td><td>UI: writer model/prompt configuration</td></tr>
+</table>
+
+<h2>10. Troubleshooting</h2>
+
+<table>
+<tr><th>Issue</th><th>Check</th></tr>
+<tr><td>No choices generated</td><td>Check console for parse warnings. Gemini structured output should enforce choices. OpenAI json_object is less strict — may need schema in system prompt.</td></tr>
+<tr><td>No image generated</td><td>Check: (1) API key set? (2) imagePrompt present? (3) reuseImage not stuck on true? Console shows <code>[OpenWorld] Image gen starting</code> if triggered.</td></tr>
+<tr><td>No reference images sent</td><td>Console shows <code>[Ref check]</code> lines. Entities need <code>referenceImage</code> property set. Check Entity Manager.</td></tr>
+<tr><td>Context too large / slow</td><td>Console shows token count. If >200K, compression activates. Reduce project notes or trim entity descriptions.</td></tr>
+<tr><td>"No API key" error</td><td>For Gemini writer: set Google AI API Key in AI Settings. For OpenAI: set writer-specific API key.</td></tr>
+<tr><td>Choices/entities missing after parse</td><td>Check console for "Fallback field extraction" — means JSON was malformed. Switch to Gemini for schema enforcement.</td></tr>
+</table>
+
+</body>
+</html>

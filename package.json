@@ -1,0 +1,61 @@
+{
+  "name": "dream-e",
+  "version": "1.0.0",
+  "description": "A visual node editor for creating interactive text adventures and RPGs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "@xyflow/react": "^12.0.0",
+    "zustand": "^4.4.7",
+    "dexie": "^3.2.4",
+    "dexie-react-hooks": "^1.1.6",
+    "howler": "^2.2.4",
+    "jszip": "^3.10.1",
+    "file-saver": "^2.0.5",
+    "lucide-react": "^0.294.0",
+    "@dnd-kit/core": "^6.1.0",
+    "@dnd-kit/sortable": "^8.0.0",
+    "uuid": "^9.0.1",
+    "immer": "^10.0.3",
+    "@anthropic-ai/sdk": "^0.78.0"
+  },
+  "devDependencies": {
+    "@types/prop-types": "^15.7.11",
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@types/howler": "^2.2.11",
+    "@types/file-saver": "^2.0.7",
+    "@types/uuid": "^9.0.7",
+    "@typescript-eslint/eslint-plugin": "^6.10.0",
+    "@typescript-eslint/parser": "^6.10.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.53.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.4",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.0",
+    "vitest": "^1.0.0"
+  },
+  "keywords": [
+    "dream-e",
+    "text-adventure",
+    "rpg",
+    "node-editor",
+    "visual-novel",
+    "game-engine"
+  ],
+  "author": "Dream-E Team",
+  "license": "MIT"
+}

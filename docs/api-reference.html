@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game State API Reference — Dream-E Docs</title>
+<style>
+  :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; line-height: 1.6; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  a { color: var(--accent); }
+  h1 { font-size: 2rem; margin-bottom: 8px; }
+  .back { color: var(--muted); text-decoration: none; font-size: 0.9rem; display: inline-block; margin-bottom: 16px; }
+  h2 { font-size: 1.3rem; margin: 32px 0 12px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { font-size: 1.1rem; margin: 20px 0 8px; color: var(--green); }
+  p, li { margin-bottom: 8px; }
+  ul { padding-left: 20px; }
+  code { background: #1c2128; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: #1c2128; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+  .note { background: #1f6feb15; border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 0.9rem; }
+  .group-header { background: var(--surface); padding: 8px 12px; border-radius: 6px; margin: 16px 0 8px; font-weight: 600; font-size: 0.95rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a class="back" href="index.html">&larr; Back to Index</a>
+<h1>Game State API Reference</h1>
+<p style="color: var(--muted); margin-bottom: 24px;">56+ commands for complete control of Dream-E game state. Used by the AI chat agent and exposed on <code>window.storyAPI</code> for console testing.</p>
+
+<h2>Architecture</h2>
+<pre>
+Files:
+  gameStateAPI.ts         — Command handlers (executeCommand entry point)
+  gameStateAPI.registry.ts — Declarative command metadata (auto-generates system prompt)
+  gameStateAPI.context.ts  — Serializes game state for AI context
+  gameStateAPI.types.ts    — APIResult, ValidationError, CommandMeta types
+
+Invocation:
+  AI chat agent emits:  &lt;&lt;&lt;SW_CMD&gt;&gt;&gt; command_name { "param": "value" }
+  aiChatService.ts parses and calls:  executeCommand("command_name", { param: "value" })
+  Handler validates, executes, returns:  { success: true, ...data } | { success: false, error, suggestion }
+
+Error handling:
+  Every validation error includes a `suggestion` field with available IDs/values.
+  Example: "Entity not found: entity_xyz. Available entities: entity_abc (Elena), entity_def (Forest)"
+</pre>
+
+<h2>Command Groups</h2>
+
+<div class="group-header">Scenes (8 commands)</div>
+<table>
+  <tr><th>Command</th><th>Parameters</th><th>Description</th></tr>
+  <tr><td><code>create_scene</code></td><td><code>label</code>, <code>storyText?</code>, <code>speakerName?</code>, <code>x?</code>, <code>y?</code></td><td>Create a new scene node at specified position</td></tr>
+  <tr><td><code>update_scene</code></td><td><code>sceneId</code>, <code>label?</code>, <code>storyText?</code>, <code>speakerName?</code></td><td>Update scene properties</td></tr>
+  <tr><td><code>delete_scene</code></td><td><code>sceneId</code></td><td>Delete scene and all connected edges</td></tr>
+  <tr><td><code>add_choice</code></td><td><code>sceneId</code>, <code>label</code></td><td>Add a choice button to a scene</td></tr>
+  <tr><td><code>update_choice</code></td><td><code>sceneId</code>, <code>choiceId</code>, <code>label</code></td><td>Change a choice's label text</td></tr>
+  <tr><td><code>delete_choice</code></td><td><code>sceneId</code>, <code>choiceId</code></td><td>Remove a choice and its outgoing edge</td></tr>
+  <tr><td><code>set_choice_condition</code></td><td><code>sceneId</code>, <code>choiceId</code>, <code>variableA</code>, <code>operator</code>, <code>valueB</code></td><td>Add visibility condition to choice</td></tr>
+  <tr><td><code>remove_choice_condition</code></td><td><code>sceneId</code>, <code>choiceId</code></td><td>Make choice always visible</td></tr>
+</table>
+
+<div class="group-header">Connections (3 commands)</div>
+<table>
+  <tr><th>Command</th><th>Parameters</th><th>Description</th></tr>
+  <tr><td><code>connect_nodes</code></td><td><code>sourceId</code>, <code>targetId</code>, <code>sourceHandle?</code></td><td>Create edge between nodes</td></tr>
+  <tr><td><code>disconnect_nodes</code></td><td><code>sourceId</code>, <code>targetId</code></td><td>Remove edge between nodes</td></tr>
+  <tr><td><code>reconnect_edge</code></td><td><code>edgeId</code>, <code>newTargetId</code></td><td>Change an edge's target node</td></tr>
+</table>
+
+<div class="group-header">Entities (9 commands)</div>
+<table>
+  <tr><th>Command</th><th>Parameters</th><th>Description</th></tr>
+  <tr><td><code>create_entity</code></td><td><code>category</code>, <code>name</code>, <code>description?</code>, <code>summary?</code>, <code>profile?</code></td><td>Create character/location/object/concept</td></tr>
+  <tr><td><code>update_entity</code></td><td><code>entityId</code>, <code>name?</code>, <code>description?</code>, <code>summary?</code>, <code>profile?</code></td><td>Update entity properties</td></tr>
+  <tr><td><code>delete_entity</code></td><td><code>entityId</code></td><td>Permanently remove entity</td></tr>
+  <tr><td><code>get_entity_details</code></td><td><code>entityId</code></td><td>Return full entity with profile and state history</td></tr>
+  <tr><td><code>list_entities</code></td><td><code>category?</code></td><td>List all entities (optionally filtered by category)</td></tr>
+  <tr><td><code>link_entity</code></td><td><code>sceneId</code>, <code>entityId</code></td><td>Attach entity to scene</td></tr>
+  <tr><td><code>unlink_entity</code></td><td><code>sceneId</code>, <code>entityId</code></td><td>Detach entity from scene</td></tr>
+  <tr><td><code>search_entities</code></td><td><code>query</code></td><td>Full-text search by name/description</td></tr>
+  <tr><td><code>update_entity_state</code></td><td><code>sceneId</code>, <code>entityId</code>, <code>stateText</code></td><td>Record situational state note on scene</td></tr>
+</table>
+
+<div class="group-header">Variables (3 commands)</div>
+<table>
+  <tr><th>Command</th><th>Parameters</th><th>Description</th></tr>
+  <tr><td><code>create_variable</code></td><td><code>name</code>, <code>type</code>, <code>defaultValue?</code>, <code>description?</code></td><td>Create new variable (integer/float/boolean/string/collection)</td></tr>
+  <tr><td><code>update_variable</code></td><td><code>variableId</code>, <code>name?</code>, <code>type?</code>, <code>defaultValue?</code></td><td>Update variable properties</td></tr>
+  <tr><td><code>delete_variable</code></td><td><code>variableId</code></td><td>Remove variable</td></tr>
+</table>
+
+<div class="group-header">Media (5 commands)</div>
+<table>
+  <tr><th>Command</th><th>Parameters</th><th>Description</th></tr>
+  <tr><td><code>assign_background_image</code></td><td><code>sceneId</code>, <code>imageUrl</code></td><td>Set scene background image</td></tr>
+  <tr><td><code>assign_background_music</code></td><td><code>sceneId</code>, <code>audioUrl</code></td><td>Set scene background music</td></tr>
+  <tr><td><code>assign_voiceover</code></td><td><code>sceneId</code>, <code>audioUrl</code></td><td>Set scene voiceover audio</td></tr>
+  <tr><td><code>generate_scene_image</code></td><td><code>sceneId</code>, <code>prompt</code>, <code>width?</code>, <code>height?</code></td><td>AI-generate and assign scene background</td></tr>
+  <tr><td><code>generate_scene_voiceover</code></td><td><code>sceneId</code></td><td>Generate TTS voiceover from scene text (Gemini TTS)</td></tr>
+</table>
+
+<div class="group-header">Modifiers (3 commands)</div>
+<table>
+  <tr><th>Command</th><th>Parameters</th><th>Description</th></tr>
+  <tr><td><code>create_modifier</code></td><td><code>label</code>, <code>targetVariable</code>, <code>mode</code>, <code>value?</code>, <code>x?</code>, <code>y?</code></td><td>Create variable modifier node</td></tr>
+  <tr><td><code>update_modifier</code></td><td><code>modifierId</code>, <code>label?</code>, <code>targetVariable?</code>, <code>mode?</code>, <code>value?</code></td><td>Update modifier properties</td></tr>
+  <tr><td><code>delete_modifier</code></td><td><code>modifierId</code></td><td>Remove modifier node</td></tr>
+</table>
+
+<div class="group-header">Branches (3 commands)</div>
+<table>
+  <tr><th>Command</th><th>Parameters</th><th>Description</th></tr>
+  <tr><td><code>create_choice_node</code></td><td><code>label</code>, <code>variableA</code>, <code>operator</code>, <code>valueB</code>, <code>x?</code>, <code>y?</code></td><td>Create conditional branch node</td></tr>
+  <tr><td><code>update_choice_node</code></td><td><code>nodeId</code>, <code>label?</code>, <code>variableA?</code>, <code>operator?</code>, <code>valueB?</code></td><td>Update branch condition</td></tr>
+  <tr><td><code>delete_choice_node</code></td><td><code>nodeId</code></td><td>Remove branch node</td></tr>
+</table>
+
+<div class="group-header">Comments (3 commands)</div>
+<table>
+  <tr><th>Command</th><th>Parameters</th><th>Description</th></tr>
+  <tr><td><code>create_comment</code></td><td><code>label</code>, <code>text</code>, <code>color?</code>, <code>x?</code>, <code>y?</code></td><td>Create comment node</td></tr>
+  <tr><td><code>update_comment</code></td><td><code>nodeId</code>, <code>label?</code>, <code>text?</code>, <code>color?</code></td><td>Update comment text/color</td></tr>
+  <tr><td><code>delete_comment</code></td><td><code>nodeId</code></td><td>Remove comment node</td></tr>
+</table>
+
+<div class="group-header">Project (3 commands)</div>
+<table>
+  <tr><th>Command</th><th>Parameters</th><th>Description</th></tr>
+  <tr><td><code>get_project_info</code></td><td>(none)</td><td>Return project title, author, description</td></tr>
+  <tr><td><code>update_project_info</code></td><td><code>title?</code>, <code>author?</code>, <code>description?</code></td><td>Update project metadata</td></tr>
+  <tr><td><code>update_settings</code></td><td><code>startNodeId?</code>, <code>theme?</code>, ...</td><td>Update project settings</td></tr>
+</table>
+
+<div class="group-header">Query (5 commands)</div>
+<table>
+  <tr><th>Command</th><th>Parameters</th><th>Description</th></tr>
+  <tr><td><code>list_scenes</code></td><td>(none)</td><td>List all scenes with IDs, labels, and summaries</td></tr>
+  <tr><td><code>get_scene_details</code></td><td><code>sceneId</code></td><td>Full scene data including text, choices, links</td></tr>
+  <tr><td><code>list_entities</code></td><td><code>category?</code></td><td>All entities (optionally filtered)</td></tr>
+  <tr><td><code>search_entities</code></td><td><code>query</code></td><td>Full-text search entities</td></tr>
+  <tr><td><code>list_variables</code></td><td>(none)</td><td>All variables with current values</td></tr>
+</table>
+
+<div class="group-header">Music (4 commands)</div>
+<table>
+  <tr><th>Command</th><th>Parameters</th><th>Description</th></tr>
+  <tr><td><code>search_music</code></td><td><code>query</code>, <code>searchField?</code>, <code>topK?</code></td><td>Search BM25 music database</td></tr>
+  <tr><td><code>get_music_track</code></td><td><code>rowId</code></td><td>Get track metadata by ID</td></tr>
+  <tr><td><code>assign_music_to_scene</code></td><td><code>sceneId</code>, <code>rowId</code></td><td>Download and assign music to scene</td></tr>
+  <tr><td><code>list_music_genres</code></td><td>(none)</td><td>List available music genres</td></tr>
+</table>
+
+<h2>Server-Side API Endpoints</h2>
+<p>Defined in <code>vite.config.ts</code> as Vite dev server middleware.</p>
+
+<table>
+  <tr><th>Endpoint</th><th>Method</th><th>Purpose</th></tr>
+  <tr><td><code>/api/open-world</code></td><td>POST</td><td>Stream AI scene generation (Gemini / OpenAI-compatible). SSE response.</td></tr>
+  <tr><td><code>/api/generate-image</code></td><td>POST</td><td>Image generation (BFL / OpenAI / Gemini). Returns base64 data URL.</td></tr>
+  <tr><td><code>/api/generate-tts</code></td><td>POST</td><td>TTS chunk generation (Gemini). Returns MP3 data URL.</td></tr>
+  <tr><td><code>/api/chat</code></td><td>POST</td><td>AI chat via Claude Code subprocess. Streaming response.</td></tr>
+  <tr><td><code>/api/chat-reset</code></td><td>POST</td><td>Clear server-side chat history.</td></tr>
+  <tr><td><code>/api/music/*</code></td><td>*</td><td>Proxy to BM25 music server (localhost:7862).</td></tr>
+</table>
+
+<h2>AI Chat Agentic Loop</h2>
+<p>File: <code>aiChatService.ts</code></p>
+<pre>
+User sends message
+  → buildUserMessage(text) — wraps with game state context
+  → POST /api/chat (Claude Code subprocess)
+  → Parse response for &lt;&lt;&lt;SW_CMD&gt;&gt;&gt; blocks
+  → executeCommand() for each command
+  → buildResultsMessage(results) — full JSON for data commands, status for others
+  → Feed results back to agent
+  → Loop until no commands or MAX_ITERATIONS (10)
+  → Return final text response
+</pre>
+
+<div class="note">
+  <strong>System prompt auto-generation:</strong> The AI chat system prompt is auto-generated from the command registry metadata (<code>gameStateAPI.registry.ts</code>). This means the system prompt always matches the available commands with zero drift.
+</div>
+
+<h2>Console Access</h2>
+<p>All commands are exposed on <code>window.storyAPI</code> in the browser console:</p>
+<pre>
+// Example console usage:
+window.storyAPI.executeCommand('list_scenes', {})
+window.storyAPI.executeCommand('create_entity', { category: 'character', name: 'Elena' })
+window.storyAPI.executeCommand('search_music', { query: 'tavern cozy medieval' })
+</pre>
+
+</div>
+</body>
+</html>

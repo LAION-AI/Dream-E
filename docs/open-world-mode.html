@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Open World Mode — Dream-E Docs</title>
+<style>
+  :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; --red: #f85149; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; line-height: 1.6; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  a { color: var(--accent); }
+  h1 { font-size: 2rem; margin-bottom: 8px; }
+  .back { color: var(--muted); text-decoration: none; font-size: 0.9rem; display: inline-block; margin-bottom: 16px; }
+  h2 { font-size: 1.3rem; margin: 32px 0 12px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { font-size: 1.1rem; margin: 20px 0 8px; color: var(--green); }
+  h4 { font-size: 1rem; margin: 16px 0 6px; color: var(--yellow); }
+  p, li { margin-bottom: 8px; }
+  ul, ol { padding-left: 20px; }
+  code { background: #1c2128; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: #1c2128; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 12px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+  .note { background: #1f6feb15; border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 0.9rem; }
+  .warn { background: #d2992215; border-left: 3px solid var(--yellow); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 0.9rem; }
+  .critical { background: #f8514915; border-left: 3px solid var(--red); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a class="back" href="index.html">&larr; Back to Index</a>
+<h1>Open World Mode</h1>
+<p style="color: var(--muted); margin-bottom: 24px;">AI-powered dynamic scene generation. Each player action generates a new scene with narrative text, choices, background image, and music.</p>
+
+<h2>Pipeline Overview</h2>
+<pre>
+Player types action (or clicks generated choice)
+    |
+    v
+1. Build Context (openWorldContext.ts)
+   - Full story path from start node to current node
+   - All entity profiles + state histories (untruncated)
+   - All player actions / choices made
+   - Per-scene entity state notes
+   - Variables, art style, project notes
+   - Previous AI analysis (chain-of-thought)
+   - Writer instruction
+    |
+    v
+2. Stream AI Response (vite.config.ts /api/open-world)
+   - Gemini: structured JSON via responseSchema
+   - OpenAI-compatible: json_object response_format
+   - SSE streaming to browser
+    |
+    v
+3. Parse Response (openWorldService.ts)
+   - 3-stage JSON parse (direct → sanitized → regex fallback)
+   - Extract: sceneText, choices, imagePrompt, entityUpdates, etc.
+    |
+    v
+4. Display Pending Result
+   - Scene text + choices shown immediately
+   - Player sees "Continue to Next Scene" button
+    |
+    v
+5. Background Tasks (non-blocking)
+   ├── Image Generation (Gemini w/ entity reference images)
+   └── Music Search (BM25 server, 3-8 keyword query)
+    |
+    v
+6. Player clicks "Continue to Next Scene"
+   → handleAdvanceToOwScene()
+   → Creates new scene node + edge in graph
+   → Applies entity updates (deferred, non-blocking):
+     - stateNote on scene node
+     - profilePatch on entity profile
+     - stateChanges appended to entity.stateHistory
+   → Applies variable changes
+   → saveAndOffloadAssets() (base64 → blob URLs)
+</pre>
+
+<h2>Context Construction</h2>
+<p>File: <code>src/services/openWorldContext.ts</code></p>
+
+<h3>Philosophy</h3>
+<p>Include EVERYTHING in full detail by default. Only compress when the user-configurable token budget is exceeded. The AI sees all entity profiles, all state change histories, all player actions, all scene text — verbatim, never truncated — unless the context exceeds the budget.</p>
+
+<h3>Context Sections (Build Order)</h3>
+<table>
+  <tr><th>Order</th><th>Section</th><th>Content</th><th>Compressible</th></tr>
+  <tr><td>0</td><td>Project Notes</td><td>Full project notes text from NotesEditor</td><td>Never</td></tr>
+  <tr><td>1</td><td>Entity Summaries</td><td>Compact 1-line summary per entity (all entities)</td><td>Never</td></tr>
+  <tr><td>2</td><td>Variables</td><td>Current variable name=value pairs</td><td>Never</td></tr>
+  <tr><td>3</td><td>Art Style</td><td>User-configured style or auto-detected from entities</td><td>Never</td></tr>
+  <tr><td>5</td><td>Full Entity Profiles (current scene)</td><td>Summary + description + full profile key-values + complete state change history</td><td>Never</td></tr>
+  <tr><td>6</td><td>Full Entity Profiles (other)</td><td>Same as above but for entities not in current scene</td><td>Yes (dropped first)</td></tr>
+  <tr><td>10</td><td>Story Timeline</td><td>All scenes from start→current: full text, speaker, player action, per-scene entity states</td><td>Yes (oldest compressed to summaries)</td></tr>
+  <tr><td>20</td><td>Current Scene</td><td>Current scene text + entity states + linked entities</td><td>Never</td></tr>
+  <tr><td>85</td><td>Previous AI Analysis</td><td>Chain-of-thought fields from previous scene's AI response</td><td>Never</td></tr>
+  <tr><td>90</td><td>Player Action</td><td>"The player wants to: [action text]"</td><td>Never</td></tr>
+  <tr><td>91</td><td>Writer Instruction</td><td>User-configurable instruction for the AI</td><td>Never</td></tr>
+</table>
+
+<h3>Story Path Construction</h3>
+<p>The story path is built from the directed graph, not session history:</p>
+<ol>
+  <li>Find <code>project.settings.startNodeId</code> (the designated start node)</li>
+  <li>Run BFS shortest path (<code>computeShortestScenePath()</code>) from start to current node</li>
+  <li>For each scene on the path, extract: storyText, speakerName, choiceMade (player action), entityStates, summary</li>
+  <li>Player actions are resolved from: (a) <code>playerAction</code> field on next node, (b) edge choice label, (c) intermediate node tracing</li>
+</ol>
+
+<p>Fallback: If no start node is set or current node is unreachable from start, falls back to <code>session.history</code> (ordered list of visited node IDs).</p>
+
+<h3>Entity Profile Format in Context</h3>
+<pre>
+### CHARACTER: Elena Brightforge [entity_abc123]
+Summary: A veteran knight haunted by past failures...
+Description: Elena is a tall woman with silver hair...
+Profile:
+  appearance: Tall, silver-haired, scarred left cheek...
+  personality: Stoic exterior, secretly compassionate...
+  skills: Master swordsman, tactical genius
+  activeEffects: Under Morgana's Charm (purple glow, weakening will)
+
+State Change History (chronological — oldest first):
+  Step 1 ["The Tavern Encounter"] (Player action: "Buy Elena a drink"):
+    Scene summary here...
+    → Elena opened up about her past — trust increased
+    → Revealed scar on left cheek comes from Battle of Ashford
+  Step 2 ["The Dark Forest"] (Player action: "Shield Elena from the spell"):
+    Scene summary here...
+    → Hit by Morgana's Charm — compelled to follow commands
+    → Eyes now glow purple, willpower diminishing
+</pre>
+
+<h3>Per-Scene Entity States in Timeline</h3>
+<p>Each scene in the story timeline now includes entity state notes (short annotations stored on <code>SceneNode.data.entityStates</code>). In full mode:</p>
+<pre>
+--- Scene 5: "The Dark Forest" ---
+Speaker: Narrator
+The trees close in around you...
+
+[Entity State Changes in this scene]
+  Elena Brightforge [entity_abc123]: Hit by charm spell, eyes glow purple
+  Forest of Shadows [entity_xyz789]: Corruption spreading from central clearing
+
+>> PLAYER ACTION: "Shield Elena from the spell"
+</pre>
+
+<p>In compressed mode (over budget):</p>
+<pre>
+  5. [The Dark Forest] Brief summary → Player action: "Shield Elena" | Entity states: Elena: charmed; Forest: corruption spreading
+</pre>
+
+<h3>Token Budget &amp; Compression</h3>
+<ul>
+  <li>Default budget: 500,000 tokens (configurable in AI Settings)</li>
+  <li>Estimation: 1 token ≈ 4 characters</li>
+  <li>Hard character limit: 6,000,000 chars (~1.5M tokens) safety valve</li>
+</ul>
+
+<p>Compression only triggers when Phase 1 (full fidelity) exceeds the budget:</p>
+<ol>
+  <li><strong>Step 1:</strong> Drop full profiles of entities NOT in current scene (keep summaries)</li>
+  <li><strong>Step 2:</strong> Compress oldest story path scenes to summaries (keep at least 5 most recent in full)</li>
+</ol>
+
+<div class="note">
+  <strong>Never compressed:</strong> Entity state histories, player actions, entity profiles (current scene), current scene text, AI analysis, notes, variables, art style, writer instruction.
+</div>
+
+<h2>AI Response Schema</h2>
+<p>Gemini uses <code>responseMimeType: "application/json"</code> with <code>responseSchema</code>. OpenAI-compatible uses <code>response_format: { type: "json_object" }</code>.</p>
+
+<h3>Required Fields</h3>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Purpose</th></tr>
+  <tr><td><code>relevantEntityTraits</code></td><td>STRING</td><td>Chain-of-thought: which entity traits/profiles/state changes are relevant to this scene</td></tr>
+  <tr><td><code>playerGoalHypothesis</code></td><td>STRING</td><td>What does the PLAYER want to experience (action, puzzles, drama, etc.)</td></tr>
+  <tr><td><code>sceneIntentHypothesis</code></td><td>STRING</td><td>What is the player trying to achieve with THIS specific action</td></tr>
+  <tr><td><code>lastSatisfactionEstimate</code></td><td>STRING</td><td>How many scenes ago did the player last get what they wanted</td></tr>
+  <tr><td><code>engagementStrategy</code></td><td>STRING</td><td>Should this scene SATISFY or CHALLENGE the player</td></tr>
+  <tr><td><code>plannedStateChanges</code></td><td>STRING</td><td>Which entities will change state and how. Must have corresponding <code>entityUpdates</code>.</td></tr>
+  <tr><td><code>sceneText</code></td><td>STRING</td><td>Narrative continuation (100-300 words). Screenplay-inspired.</td></tr>
+  <tr><td><code>speakerName</code></td><td>STRING</td><td>Narrator or main speaking character name</td></tr>
+  <tr><td><code>choices</code></td><td>ARRAY&lt;STRING&gt;</td><td>Exactly 3 meaningful player choices</td></tr>
+  <tr><td><code>imagePrompt</code></td><td>STRING</td><td>Detailed image gen prompt with entity IDs in brackets</td></tr>
+  <tr><td><code>sceneSummary</code></td><td>STRING</td><td>1-3 sentence summary of key events</td></tr>
+  <tr><td><code>presentEntityIds</code></td><td>ARRAY&lt;STRING&gt;</td><td>Entity IDs present/relevant in this scene</td></tr>
+  <tr><td><code>reuseImage</code></td><td>BOOLEAN</td><td>true only if visual setting is identical to previous scene</td></tr>
+</table>
+
+<h3>Optional Fields</h3>
+<table>
+  <tr><th>Field</th><th>Type</th><th>Purpose</th></tr>
+  <tr><td><code>entityUpdates</code></td><td>OBJECT</td><td>Keys: entity IDs. Values: <code>{stateNote, profilePatch, stateChanges}</code>. Required when entities change state.</td></tr>
+  <tr><td><code>variableChanges</code></td><td>OBJECT</td><td>Variable name → new value pairs</td></tr>
+  <tr><td><code>newEntities</code></td><td>ARRAY</td><td>New entities to create: <code>{category, name, description, summary?, profile?}</code></td></tr>
+  <tr><td><code>removeEntities</code></td><td>ARRAY&lt;STRING&gt;</td><td>Entity IDs to permanently delete (death, destruction)</td></tr>
+  <tr><td><code>entityLinks</code></td><td>ARRAY&lt;STRING&gt;</td><td>Entity IDs to link to scene (referenced but not physically present)</td></tr>
+  <tr><td><code>newVariables</code></td><td>ARRAY</td><td>New tracking variables: <code>{name, type, defaultValue?, description?}</code></td></tr>
+  <tr><td><code>generateEntityImages</code></td><td>OBJECT</td><td>Entity ID → image prompt. Generate reference images for entities.</td></tr>
+  <tr><td><code>generateVoiceover</code></td><td>BOOLEAN</td><td>Auto-generate TTS for this scene</td></tr>
+  <tr><td><code>musicQuery</code></td><td>STRING</td><td>3-8 keywords for BM25 music search. Required for first scene and mood changes.</td></tr>
+</table>
+
+<h3>Analysis Fields (Chain-of-Thought)</h3>
+<p>The 6 analysis fields (<code>relevantEntityTraits</code> through <code>plannedStateChanges</code>) are placed BEFORE scene content in the schema. This forces the model to reason about entities, player goals, and engagement strategy before writing the scene text. The previous scene's analysis is propagated as <code>[PREVIOUS SCENE AI ANALYSIS]</code> in the next context.</p>
+
+<h2>Entity State Updates</h2>
+
+<h3>EntityUpdate Structure</h3>
+<pre>
+{
+  "entityUpdates": {
+    "entity_abc123": {
+      "stateNote": "Elena charmed by Morgana — eyes glowing purple",
+      "profilePatch": {
+        "activeEffects": "Under Morgana's Charm of Obedience",
+        "eyeColor": "purple (glowing)"
+      },
+      "stateChanges": [
+        "Elena was hit by Morgana's Charm of Obedience spell",
+        "Her eyes now glow purple, indicating magical compulsion",
+        "Willpower is diminishing — she may follow commands against her will"
+      ]
+    }
+  }
+}
+</pre>
+
+<h3>Application Flow</h3>
+<ol>
+  <li><code>updateEntityState(newNodeId, entityId, stateNote)</code> — Writes brief note to <code>SceneNode.data.entityStates[entityId]</code> (per-scene annotation)</li>
+  <li><code>updateEntity(entityId, { profile })</code> — Merges <code>profilePatch</code> into entity's permanent profile</li>
+  <li><code>updateEntity(entityId, { stateHistory })</code> — Appends new <code>EntityStateChangeEvent</code> with scene label, timestamp, player action, and detailed change descriptions</li>
+</ol>
+
+<div class="warn">
+  <strong>freshProject reference:</strong> The deferred entity update block captures <code>useProjectStore.getState()</code> once. Since each entity update modifies a different entity, there are no stale-read conflicts within the loop. The store uses Immer, so each <code>updateEntity()</code> call operates on the latest Zustand state.
+</div>
+
+<h2>Image Generation</h2>
+
+<h3>Scene Image Generation</h3>
+<ol>
+  <li>Collect entity IDs from current scene's linked entities (all 4 categories)</li>
+  <li>Collect entity IDs from AI's <code>presentEntityIds</code> (new scene)</li>
+  <li>For each entity with a <code>referenceImage</code>, collect it</li>
+  <li><strong>Resolve blob URLs to base64:</strong> After asset offloading, <code>referenceImage</code> may be a blob URL. Use <code>blobUrlToBase64()</code> to convert back before sending to API.</li>
+  <li>Send reference images to Gemini with prompt: "Using the reference images above for visual consistency, generate a new image: [prompt]"</li>
+</ol>
+
+<h3>Entity Portrait Generation (with Scene Reference)</h3>
+<p>When new entities are introduced or existing entities lack a reference image, a 512x512 portrait is generated automatically. The scene's background image is passed as a reference to the image generation API (Gemini only) so the portrait matches the art style and visual context of the introduction scene.</p>
+
+<h4>Sources</h4>
+<ol>
+  <li><strong>AI-requested:</strong> The <code>generateEntityImages</code> field in the AI response explicitly requests images for specific entities with custom prompts.</li>
+  <li><strong>Auto-fallback:</strong> For any linked entity (character, location, object, concept) that lacks a <code>referenceImage</code>, a portrait is generated automatically using the entity's profile data (appearance, description).</li>
+</ol>
+
+<h4>Scene Image as Reference</h4>
+<ul>
+  <li>The scene's background image is converted from blob URL to base64 via <code>blobUrlToBase64()</code>.</li>
+  <li>Passed in the <code>referenceImages</code> array to <code>/api/generate-image</code>.</li>
+  <li>Gemini uses this for visual/style consistency — the entity portrait matches the scene's art style.</li>
+  <li>For non-Gemini providers, only the text prompt is used (no reference image support).</li>
+</ul>
+
+<h4>Category-Specific Prompts</h4>
+<table>
+  <tr><th>Category</th><th>Prompt Template</th></tr>
+  <tr><td>Character</td><td>"Portrait of [name]. [appearance]. Detailed character portrait, centered composition, 512x512 pixels. Focus on this specific character — isolate them from the scene."</td></tr>
+  <tr><td>Location</td><td>"[name]. [description]. Establishing shot, detailed environment, wide angle, 512x512 pixels."</td></tr>
+  <tr><td>Object</td><td>"[name]. [description]. Detailed close-up of this object, centered composition, 512x512 pixels."</td></tr>
+  <tr><td>Concept</td><td>"Visual representation of [name]. [description]. Abstract or symbolic illustration, 512x512 pixels."</td></tr>
+</table>
+
+<h3>Image Gen with Retry</h3>
+<ul>
+  <li>Up to 3 attempts with progressive prompt simplification</li>
+  <li>Attempt 1: full prompt</li>
+  <li>Attempt 2: remove violence/weapons keywords</li>
+  <li>Attempt 3: keep only setting + mood</li>
+</ul>
+
+<h3>reuseImage Flag</h3>
+<p>AI sets <code>reuseImage: true</code> when the visual setting is identical to the previous scene (e.g., same room, no new characters). Skips image generation entirely — previous scene's image is reused.</p>
+
+<h2>Scene Transition Crossfade</h2>
+<p>When a scene's background image changes, a 2-second crossfade smoothly transitions from the old image to the new one.</p>
+<ul>
+  <li><strong>Duration:</strong> 2 seconds (<code>FADE_DURATION = 2000</code>)</li>
+  <li><strong>CSS:</strong> <code>transition: opacity 2s ease-in-out</code> on the current image layer</li>
+  <li><strong>Layers:</strong> Two overlapping <code>&lt;img&gt;</code> elements — previous image at full opacity underneath, new image fading from 0 to 1 on top</li>
+  <li><strong>First image:</strong> If no previous image exists, the new image fades in from 0 to 1</li>
+  <li><strong>Image removed:</strong> Previous image stays visible (never goes to blank)</li>
+  <li><strong>Cleanup:</strong> Previous image DOM element removed 2.2 seconds after transition starts</li>
+</ul>
+
+<h2>Music Integration</h2>
+
+<h3>BM25 Music Server</h3>
+<ul>
+  <li>FastAPI on port 7862 (<code>rpg-music-server/bm25_server.py</code>)</li>
+  <li>2,580 tracks, 18 RPG genres</li>
+  <li>3 search fields: situations, emotions, captions</li>
+  <li>Vite proxy: <code>/api/music/*</code> → <code>localhost:7862/api/*</code></li>
+</ul>
+
+<h3>Search Flow</h3>
+<ol>
+  <li>AI provides <code>musicQuery</code> (3-8 keywords, e.g., "dark forest, mysterious, tense")</li>
+  <li><code>POST /api/music/search</code> with <code>search_field: 'situations'</code>, <code>top_k: 3</code>, <code>singing_filter: 'no_singing'</code></li>
+  <li>Fetch top result metadata: <code>GET /api/music/track/{rowId}</code></li>
+  <li>Download audio, convert to base64 data URL</li>
+  <li>Return to player for crossfade playback</li>
+</ol>
+
+<h2>TTS (Text-to-Speech)</h2>
+<p>File: <code>src/services/ttsService.ts</code></p>
+
+<h3>Chunked Streaming</h3>
+<ol>
+  <li>Split scene text into growing chunks: ~100 chars (chunk 1), ~200 (chunk 2), ~400+ (subsequent)</li>
+  <li>Split on sentence boundaries (<code>[.!?]\s+</code> or <code>\n\n</code>)</li>
+  <li>Send all chunks to <code>POST /api/generate-tts</code> in parallel</li>
+  <li>Deliver results in order (not FIFO) using indexed array + delivery pointer</li>
+  <li>Concatenate all chunks into single audio data URL for storage on scene node</li>
+</ol>
+
+<h3>API Endpoint</h3>
+<ul>
+  <li>Model: <code>gemini-2.5-flash-preview-tts</code> (configurable)</li>
+  <li>Voice: configurable (e.g., "Zephyr")</li>
+  <li>Instruction: configurable (e.g., "Read aloud in a natural audiobook narrator style")</li>
+  <li>Returns: MP3 data URL per chunk</li>
+</ul>
+
+<h2>Context Viewer (Play Mode UI)</h2>
+<p>Bottom-left of play mode, next to the brain icon (AI Response viewer). Click the FileText icon to open a modal showing:</p>
+<ul>
+  <li><strong>User Message tab:</strong> The full assembled context sent as the user message to the AI</li>
+  <li><strong>System Prompt tab:</strong> The system prompt (from writer settings)</li>
+</ul>
+<p>This data is stored on each scene node as <code>constructedContext</code> and <code>constructedSystemPrompt</code>, so it can be reviewed later in the editor.</p>
+
+<h2>Entering Open World Mode</h2>
+
+<h3>Entry Points</h3>
+<table>
+  <tr><th>Location</th><th>Button</th><th>Action</th></tr>
+  <tr><td>Dashboard (project card hover)</td><td>Pink sparkles icon</td><td>Navigates to <code>/play/:id?openWorld=1</code></td></tr>
+  <tr><td>Editor toolbar</td><td>Pink "Open World" button</td><td>Auto-saves project, then navigates to <code>/play/:id?openWorld=1</code></td></tr>
+  <tr><td>URL query param</td><td>N/A</td><td>Append <code>?openWorld=1</code> to any play URL</td></tr>
+</table>
+
+<h3>Auto-Resume from Save</h3>
+<p>When entering Open World mode without explicit <code>startNode</code>/<code>mode</code> URL params:</p>
+<ol>
+  <li>Check all save slots for saves matching this project ID</li>
+  <li>If saves exist: <strong>continue from the most recent save's node</strong> (preserving variables, inventory, flags, history)</li>
+  <li>If the saved node no longer exists in the project: fall back to start node</li>
+  <li>If no saves at all: <strong>start from the start node</strong> (fresh game)</li>
+</ol>
+
+<h3>Default Dream Room</h3>
+<p>Every new adventure is created with a default "Dream Room" start node — a white holodeck-like simulation room with introductory narration. This ensures players can immediately click the pink Open World button and start playing without any setup.</p>
+<ul>
+  <li>Background image: <code>/dreamroom.jpg</code> (served from <code>public/</code>)</li>
+  <li>Node label: "The Dream Room"</li>
+  <li>Story text: ~400 words introducing the player to the concept of an infinite simulation</li>
+  <li>Default choice: "Begin the adventure"</li>
+</ul>
+
+<h2>Start Node</h2>
+<ul>
+  <li>Designated via "Set as Start Node" button in SceneInspector</li>
+  <li>Only one start node per project (<code>project.settings.startNodeId</code>)</li>
+  <li>Indicated by green ring + green dot on SceneNode canvas visual</li>
+  <li>Used as the root for BFS story path computation</li>
+  <li>Used as the starting scene for "Play from Start"</li>
+  <li>Used for auto-layout depth computation</li>
+  <li>Every new project automatically creates a start node ("The Dream Room") with a default background image and introductory text</li>
+</ul>
+
+<h2>Critical Implementation Details</h2>
+
+<div class="critical">
+  <strong>Stale Project Bug (Fixed):</strong> <code>generateOpenWorldScene()</code> was previously called with the player store's <code>project</code> — a stale snapshot from game start that didn't include newly created OW nodes/edges. Fixed by using <code>useProjectStore.getState().currentProject</code> (fresh project store).
+</div>
+
+<div class="critical">
+  <strong>Blob URL Reference Images (Fixed):</strong> After asset offloading, <code>entity.referenceImage</code> holds blob URLs (~50 bytes) instead of base64 data URLs. The image gen API at <code>/api/generate-image</code> silently skipped blob URLs (checking <code>startsWith('data:')</code>). Fixed by resolving blob URLs back to base64 via <code>blobUrlToBase64()</code> before sending.
+</div>
+
+<div class="warn">
+  <strong>JSON not streamable:</strong> Since the AI outputs structured JSON (not free text), text streaming to the UI is not possible. The player sees a loading state during generation, then the full scene text appears at once with "Continue to Next Scene".
+</div>
+
+<div class="note">
+  <strong>History suppression:</strong> All OW scene creation work (node creation, entity updates, variable changes) is wrapped in <code>suppressHistoryRecording()</code> to avoid recording intermediate states in undo history. Only the final state is captured.
+</div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Settings &amp; Configuration — Dream-E Docs</title>
+<style>
+  :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --yellow: #d29922; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; line-height: 1.6; }
+  .container { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  a { color: var(--accent); }
+  h1 { font-size: 2rem; margin-bottom: 8px; }
+  .back { color: var(--muted); text-decoration: none; font-size: 0.9rem; display: inline-block; margin-bottom: 16px; }
+  h2 { font-size: 1.3rem; margin: 32px 0 12px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  h3 { font-size: 1.1rem; margin: 20px 0 8px; color: var(--green); }
+  p, li { margin-bottom: 8px; }
+  ul { padding-left: 20px; }
+  code { background: #1c2128; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: #1c2128; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 12px 0; white-space: pre-wrap; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+  .note { background: #1f6feb15; border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 12px 0; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a class="back" href="index.html">&larr; Back to Index</a>
+<h1>AI Settings &amp; Configuration</h1>
+<p style="color: var(--muted); margin-bottom: 24px;">Store: <code>useImageGenStore.ts</code> | UI: <code>AISettingsModal.tsx</code></p>
+
+<h2>Overview</h2>
+<p>The AI Settings modal (gear icon in editor toolbar) configures three AI subsystems:</p>
+<ol>
+  <li><strong>Image Generation</strong> — Scene backgrounds, entity portraits</li>
+  <li><strong>Text-to-Speech (TTS)</strong> — Voiceover narration</li>
+  <li><strong>Story Writer</strong> — Open World mode AI scene generation</li>
+</ol>
+<p>All settings persist to localStorage via Zustand's <code>persist</code> middleware (store version 4).</p>
+
+<h2>Google API Key</h2>
+<p>A single Google API key is shared by three services when their provider is set to Gemini:</p>
+<ul>
+  <li>Gemini image generation</li>
+  <li>Gemini TTS</li>
+  <li>Gemini story writer (Open World mode)</li>
+</ul>
+<p>Field: <code>googleApiKey</code>. Entered once in the AI Settings modal.</p>
+
+<h2>Image Generation</h2>
+
+<h3>Providers</h3>
+<table>
+  <tr><th>Provider</th><th>API</th><th>Config Fields</th></tr>
+  <tr><td>BFL (FLUX)</td><td><code>api.bfl.ai/v1</code></td><td><code>apiKey</code>, <code>model</code> (flux-ultra, flux-pro-1.1, flux-2-pro-preview, etc.)</td></tr>
+  <tr><td>OpenAI-compatible</td><td>Configurable endpoint</td><td><code>apiKey</code>, <code>model</code>, <code>endpoint</code> (default: <code>https://api.openai.com/v1</code>)</td></tr>
+  <tr><td>Gemini</td><td>Google AI Studio</td><td><code>googleApiKey</code>, <code>geminiImageModel</code> (default: <code>gemini-3.1-flash-image-preview</code>)</td></tr>
+</table>
+
+<h3>Default Image Style</h3>
+<p>Field: <code>defaultImageStyle</code>. A text string appended to ALL image generation prompts. Example: "digital fantasy art, vibrant colors, dramatic lighting". Overrides auto-detected art style.</p>
+
+<h3>Reference Images</h3>
+<p>For Gemini provider only: entity reference images are sent alongside the image prompt as <code>inlineData</code> with the instruction "Using the reference images above for visual consistency, generate a new image: [prompt]". This provides visual consistency for character appearances across scenes.</p>
+
+<h3>Image Gen API Flow</h3>
+<table>
+  <tr><th>Provider</th><th>Mechanism</th></tr>
+  <tr><td>BFL</td><td>Async polling: POST submit → poll status → download result</td></tr>
+  <tr><td>OpenAI-compatible</td><td>Single POST → response with b64_json or URL</td></tr>
+  <tr><td>Gemini</td><td>Single POST with multimodal content (reference images + text prompt)</td></tr>
+</table>
+
+<h2>Text-to-Speech (TTS)</h2>
+
+<h3>Configuration</h3>
+<table>
+  <tr><th>Field</th><th>Default</th><th>Purpose</th></tr>
+  <tr><td><code>enabled</code></td><td>false</td><td>Enable/disable TTS globally</td></tr>
+  <tr><td><code>model</code></td><td><code>gemini-2.5-flash-preview-tts</code></td><td>Gemini TTS model name</td></tr>
+  <tr><td><code>voice</code></td><td>"Zephyr"</td><td>Voice name for narration</td></tr>
+  <tr><td><code>instruction</code></td><td>"Read aloud in a very natural fluid audiobook narrator style, very genuine:"</td><td>Style direction for the TTS model</td></tr>
+</table>
+
+<h3>Chunked Streaming</h3>
+<p>TTS uses chunked pseudo-streaming for low latency:</p>
+<ul>
+  <li>Chunk 1: ~100 characters (arrives fast)</li>
+  <li>Chunk 2: ~200 characters</li>
+  <li>Chunk 3+: ~400 characters each</li>
+  <li>All chunks sent in parallel to <code>POST /api/generate-tts</code></li>
+  <li>Delivered in order as they complete (not FIFO)</li>
+  <li>Concatenated into single audio file for storage</li>
+</ul>
+
+<h3>Generate Voiceover Button</h3>
+<p>In SceneInspector Media tab: "Generate Voiceover" button. Disabled if no story text or voiceover already attached. Uses the scene's <code>storyText</code> as input to the TTS model.</p>
+
+<h2>Story Writer (Open World Mode)</h2>
+
+<h3>Configuration</h3>
+<table>
+  <tr><th>Field</th><th>Default</th><th>Purpose</th></tr>
+  <tr><td><code>provider</code></td><td>"gemini"</td><td>AI provider for scene generation</td></tr>
+  <tr><td><code>model</code></td><td>"gemini-3-flash-preview"</td><td>Model for scene generation</td></tr>
+  <tr><td><code>endpoint</code></td><td>""</td><td>Only for openai-compatible provider</td></tr>
+  <tr><td><code>apiKey</code></td><td>""</td><td>Only for openai-compatible. Gemini uses googleApiKey.</td></tr>
+  <tr><td><code>systemPrompt</code></td><td>DEFAULT_WRITER_SYSTEM_PROMPT</td><td>Full system prompt sent to the AI. Editable + resettable.</td></tr>
+  <tr><td><code>instruction</code></td><td>DEFAULT_WRITER_INSTRUCTION</td><td>Instruction appended to user message. Editable + resettable.</td></tr>
+  <tr><td><code>maxContextTokens</code></td><td>500,000</td><td>Maximum tokens for user message. Context compressed only when exceeded.</td></tr>
+</table>
+
+<h3>System Prompt (Editable)</h3>
+<p>The default system prompt defines the AI's role, output format, and behavioral constraints. Key sections:</p>
+<ul>
+  <li><strong>Role:</strong> Game master/narrator for open world interactive fiction</li>
+  <li><strong>Writing style:</strong> Screenplay-inspired, punchy prose, vivid descriptions, natural dialogue</li>
+  <li><strong>Analysis protocol:</strong> Fill analysis fields (playerGoalHypothesis, etc.) BEFORE writing scene</li>
+  <li><strong>Entity update protocol:</strong> MANDATORY profilePatch + stateChanges for any entity state change</li>
+  <li><strong>State change detail:</strong> Use specific, vivid descriptions (not generic "affected by magic")</li>
+  <li><strong>Output format:</strong> Structured JSON with all required fields</li>
+</ul>
+
+<h3>Writer Instruction (Editable)</h3>
+<p>Appended to the end of the user message (after all context sections). Reinforces key requirements:</p>
+<ul>
+  <li>100-300 word continuation based on player action</li>
+  <li>Analysis fields filled first (drive the scene)</li>
+  <li>Entity profile updates MANDATORY for persistent changes</li>
+  <li>Specific wording for effects (exact terms, how manifested)</li>
+</ul>
+
+<h3>Max Context Tokens</h3>
+<p>Configurable in AI Settings. Controls when context compression kicks in. For Gemini models with 1M+ context windows, 500K is a reasonable default. Compression strategy:</p>
+<ol>
+  <li>Drop full profiles of non-scene entities</li>
+  <li>Compress oldest story scenes to summaries (keep at least 5 recent in full)</li>
+</ol>
+
+<h2>Settings Persistence</h2>
+<table>
+  <tr><th>Store</th><th>Where</th><th>What</th></tr>
+  <tr><td>useImageGenStore</td><td>localStorage</td><td>All AI settings (image gen, TTS, writer, API keys, prompts)</td></tr>
+  <tr><td>Migration</td><td>Version 4</td><td>Added <code>maxContextTokens</code> to writer settings</td></tr>
+</table>
+
+<div class="note">
+  <strong>API keys are stored in localStorage.</strong> They are never sent to any server other than the configured AI provider endpoints. The Vite dev server acts as a proxy but the API keys are sent from the browser directly in the request body.
+</div>
+
+<h2>Exported Defaults</h2>
+<p>For programmatic access or reset functionality:</p>
+<ul>
+  <li><code>DEFAULT_WRITER_SYSTEM_PROMPT</code> — exported from <code>useImageGenStore.ts</code></li>
+  <li><code>DEFAULT_WRITER_INSTRUCTION</code> — exported from <code>useImageGenStore.ts</code></li>
+  <li>Reset buttons in AI Settings modal restore these defaults</li>
+</ul>
+
+</div>
+</body>
+</html>

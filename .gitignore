@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Archives (large binary files)
+*.zip
+Build_Output*.zip
+
+# Base64 text dumps
+*_b64.txt
+
+# Legacy lockfiles (project uses npm)
+pnpm-lock.yaml
+pnpm-workspace.yaml
+
+# Internal investigation/debug reports
+PERFORMANCE_OPTIMIZATION_REPORT.txt
+PERFORMANCE_INVESTIGATION.txt
+OOM_INVESTIGATION_2.txt
+OW_MEMORY_INVESTIGATION_REPORT.txt
+AGENT_INTEGRATION_REPORT.txt
+FEATURE_UPDATE_REPORT.txt
+INSTRUCTIONS.txt
+handoff.md
+
+# RPG Music Server — large data files
+# Download from: https://huggingface.co/datasets/laion/laion-tunes-rpg-music
+rpg-music-server/tars/
+rpg-music-server/indices/
+rpg-music-server/rpg_annotated.parquet
+rpg-music-server/annotations_full_progress.json
+rpg-music-server/api_costs.json
+rpg-music-server/.git/
+rpg-music-server/.gitattributes
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo

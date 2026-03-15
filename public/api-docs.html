@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dream-E — Game State API Reference</title>
+<style>
+  /* ================================================================
+     GLOBAL RESET & VARIABLES
+     ================================================================ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117; --bg2: #171923; --bg3: #1e2130;
+    --border: #2d3148; --text: #e2e4ea; --muted: #8b8fa4;
+    --accent: #6c8aff; --accent2: #4ecdc4; --accent3: #ff6b9d;
+    --green: #4ecdc4; --yellow: #ffd93d; --red: #ff6b6b;
+    --orange: #ff9f43; --purple: #a78bfa;
+    --sidebar-w: 280px; --radius: 8px;
+    --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font); background: var(--bg); color: var(--text);
+    line-height: 1.65; font-size: 15px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: var(--mono); font-size: 0.9em;
+    background: var(--bg3); padding: 2px 6px; border-radius: 4px;
+  }
+  pre {
+    font-family: var(--mono); font-size: 0.85em; line-height: 1.5;
+    background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 20px; overflow-x: auto; margin: 12px 0;
+  }
+  pre code { background: transparent; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; }
+  th {
+    text-align: left; padding: 10px 14px; font-weight: 600; font-size: 0.8em;
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);
+    border-bottom: 2px solid var(--border); background: var(--bg);
+  }
+  td {
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    vertical-align: top; font-size: 0.92em;
+  }
+  tr:hover td { background: rgba(108, 138, 255, 0.04); }
+
+  /* ================================================================
+     LAYOUT
+     ================================================================ */
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar {
+    width: var(--sidebar-w); flex-shrink: 0; position: fixed; top: 0; left: 0;
+    height: 100vh; overflow-y: auto; background: var(--bg2);
+    border-right: 1px solid var(--border); padding: 24px 0;
+    z-index: 100;
+  }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .sidebar h1 {
+    font-size: 1.1em; padding: 0 20px 16px; border-bottom: 1px solid var(--border);
+    margin-bottom: 12px; color: var(--accent);
+  }
+  .sidebar h1 span { display: block; font-size: 0.7em; color: var(--muted); font-weight: 400; margin-top: 2px; }
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-title {
+    display: block; padding: 8px 20px 4px; font-size: 0.7em; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  }
+  .nav-link {
+    display: block; padding: 5px 20px 5px 28px; font-size: 0.87em;
+    color: var(--text); opacity: 0.7; transition: all 0.15s;
+  }
+  .nav-link:hover { opacity: 1; background: rgba(108,138,255,0.08); text-decoration: none; }
+  .nav-link.active { opacity: 1; color: var(--accent); border-right: 2px solid var(--accent); }
+
+  /* Main content */
+  .main { margin-left: var(--sidebar-w); flex: 1; padding: 40px 48px 80px; max-width: 960px; }
+
+  /* ================================================================
+     HERO
+     ================================================================ */
+  .hero { margin-bottom: 48px; }
+  .hero h1 { font-size: 2em; margin-bottom: 8px; }
+  .hero p { color: var(--muted); font-size: 1.05em; max-width: 640px; }
+  .stats {
+    display: flex; gap: 24px; margin-top: 20px; flex-wrap: wrap;
+  }
+  .stat {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 20px; min-width: 120px;
+  }
+  .stat-num { font-size: 1.8em; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 0.8em; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* ================================================================
+     SECTIONS & COMMANDS
+     ================================================================ */
+  .section { margin-bottom: 48px; scroll-margin-top: 24px; }
+  .section > h2 {
+    font-size: 1.4em; padding-bottom: 10px; border-bottom: 2px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .section > h2 .badge {
+    font-size: 0.5em; vertical-align: middle; margin-left: 8px;
+    background: var(--accent); color: #fff; padding: 2px 8px;
+    border-radius: 10px; font-weight: 600;
+  }
+
+  .cmd {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    margin-bottom: 20px; scroll-margin-top: 24px; overflow: hidden;
+  }
+  .cmd-header {
+    display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+    background: var(--bg3); border-bottom: 1px solid var(--border);
+    cursor: pointer; user-select: none;
+  }
+  .cmd-header:hover { background: rgba(108,138,255,0.06); }
+  .cmd-name { font-family: var(--mono); font-size: 1em; font-weight: 700; color: var(--accent); }
+  .cmd-desc { color: var(--muted); font-size: 0.9em; flex: 1; }
+  .cmd-tag {
+    font-size: 0.7em; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .tag-write { background: rgba(78, 205, 196, 0.15); color: var(--green); }
+  .tag-read { background: rgba(167, 139, 250, 0.15); color: var(--purple); }
+  .tag-delete { background: rgba(255, 107, 107, 0.15); color: var(--red); }
+  .tag-gen { background: rgba(255, 159, 67, 0.15); color: var(--orange); }
+
+  .cmd-body { padding: 16px 20px; }
+  .cmd-body h4 { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 16px 0 8px; }
+  .cmd-body h4:first-child { margin-top: 0; }
+  .param-req { color: var(--accent3); font-weight: 600; font-size: 0.8em; }
+  .param-opt { color: var(--muted); font-style: italic; font-size: 0.8em; }
+  .valid-values { font-size: 0.85em; color: var(--yellow); }
+  .default-val { font-size: 0.85em; color: var(--green); }
+  .assertion {
+    margin: 12px 0; padding: 10px 14px; border-left: 3px solid var(--yellow);
+    background: rgba(255, 217, 61, 0.06); border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.9em;
+  }
+  .assertion strong { color: var(--yellow); }
+  .note {
+    margin: 12px 0; padding: 10px 14px; border-left: 3px solid var(--accent);
+    background: rgba(108, 138, 255, 0.06); border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.9em;
+  }
+  .ret { color: var(--green); font-family: var(--mono); font-size: 0.9em; }
+
+  /* ================================================================
+     OVERVIEW SECTION
+     ================================================================ */
+  .overview-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0;
+  }
+  .overview-card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px 20px;
+  }
+  .overview-card h3 { font-size: 1em; margin-bottom: 6px; }
+  .overview-card p { font-size: 0.88em; color: var(--muted); }
+  .overview-card ul { list-style: none; margin-top: 8px; }
+  .overview-card li { font-size: 0.88em; padding: 2px 0; }
+  .overview-card li code { color: var(--accent); }
+
+  /* ================================================================
+     MISC
+     ================================================================ */
+  .toc-sep { border: 0; border-top: 1px solid var(--border); margin: 12px 20px; }
+
+  @media (max-width: 900px) {
+    .sidebar { display: none; }
+    .main { margin-left: 0; padding: 24px 20px 60px; }
+    .overview-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- SIDEBAR NAV                                                    -->
+<!-- ============================================================ -->
+<div class="layout">
+<nav class="sidebar">
+  <h1>Dream-E API <span>Game State Command Reference</span></h1>
+
+  <div class="nav-group">
+    <span class="nav-group-title">Getting Started</span>
+    <a class="nav-link" href="#overview">Overview</a>
+    <a class="nav-link" href="#data-model">Data Model</a>
+    <a class="nav-link" href="#command-format">Command Format</a>
+    <a class="nav-link" href="#error-handling">Error Handling</a>
+    <a class="nav-link" href="#console-api">Console API</a>
+  </div>
+
+  <hr class="toc-sep">
+
+  <div class="nav-group">
+    <span class="nav-group-title">Scenes (8)</span>
+    <a class="nav-link" href="#create_scene">create_scene</a>
+    <a class="nav-link" href="#update_scene">update_scene</a>
+    <a class="nav-link" href="#delete_scene">delete_scene</a>
+    <a class="nav-link" href="#add_choice">add_choice</a>
+    <a class="nav-link" href="#update_choice">update_choice</a>
+    <a class="nav-link" href="#delete_choice">delete_choice</a>
+    <a class="nav-link" href="#set_choice_condition">set_choice_condition</a>
+    <a class="nav-link" href="#remove_choice_condition">remove_choice_condition</a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-title">Connections (3)</span>
+    <a class="nav-link" href="#connect_nodes">connect_nodes</a>
+    <a class="nav-link" href="#disconnect_nodes">disconnect_nodes</a>
+    <a class="nav-link" href="#reconnect_edge">reconnect_edge</a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-title">Entities (9)</span>
+    <a class="nav-link" href="#create_entity">create_entity</a>
+    <a class="nav-link" href="#update_entity">update_entity</a>
+    <a class="nav-link" href="#delete_entity">delete_entity</a>
+    <a class="nav-link" href="#link_entity_to_scene">link_entity_to_scene</a>
+    <a class="nav-link" href="#unlink_entity_from_scene">unlink_entity_from_scene</a>
+    <a class="nav-link" href="#update_entity_state">update_entity_state</a>
+    <a class="nav-link" href="#set_entity_profile">set_entity_profile</a>
+    <a class="nav-link" href="#get_entity_profile">get_entity_profile</a>
+    <a class="nav-link" href="#patch_entity_profile">patch_entity_profile</a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-title">Variables (3)</span>
+    <a class="nav-link" href="#create_variable">create_variable</a>
+    <a class="nav-link" href="#update_variable">update_variable</a>
+    <a class="nav-link" href="#delete_variable">delete_variable</a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-title">Media (14)</span>
+    <a class="nav-link" href="#generate_scene_image">generate_scene_image</a>
+    <a class="nav-link" href="#generate_entity_image">generate_entity_image</a>
+    <a class="nav-link" href="#set_scene_image">set_scene_image</a>
+    <a class="nav-link" href="#remove_scene_image">remove_scene_image</a>
+    <a class="nav-link" href="#set_entity_image">set_entity_image</a>
+    <a class="nav-link" href="#remove_entity_image">remove_entity_image</a>
+    <a class="nav-link" href="#set_scene_music">set_scene_music</a>
+    <a class="nav-link" href="#remove_scene_music">remove_scene_music</a>
+    <a class="nav-link" href="#set_scene_voiceover">set_scene_voiceover</a>
+    <a class="nav-link" href="#remove_scene_voiceover">remove_scene_voiceover</a>
+    <a class="nav-link" href="#set_entity_voice">set_entity_voice</a>
+    <a class="nav-link" href="#remove_entity_voice">remove_entity_voice</a>
+    <a class="nav-link" href="#set_entity_music">set_entity_music</a>
+    <a class="nav-link" href="#remove_entity_music">remove_entity_music</a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-title">Modifiers (3)</span>
+    <a class="nav-link" href="#create_modifier">create_modifier</a>
+    <a class="nav-link" href="#update_modifier">update_modifier</a>
+    <a class="nav-link" href="#delete_modifier">delete_modifier</a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-title">Branches (3)</span>
+    <a class="nav-link" href="#create_branch">create_branch</a>
+    <a class="nav-link" href="#update_branch">update_branch</a>
+    <a class="nav-link" href="#delete_branch">delete_branch</a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-title">Comments (3)</span>
+    <a class="nav-link" href="#create_comment">create_comment</a>
+    <a class="nav-link" href="#update_comment">update_comment</a>
+    <a class="nav-link" href="#delete_comment">delete_comment</a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-title">Project (3)</span>
+    <a class="nav-link" href="#set_start_node">set_start_node</a>
+    <a class="nav-link" href="#update_project_info">update_project_info</a>
+    <a class="nav-link" href="#update_notes">update_notes</a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-title">Query (5)</span>
+    <a class="nav-link" href="#get_scene_details">get_scene_details</a>
+    <a class="nav-link" href="#get_entity_details">get_entity_details</a>
+    <a class="nav-link" href="#list_scenes">list_scenes</a>
+    <a class="nav-link" href="#list_entities">list_entities</a>
+    <a class="nav-link" href="#list_variables">list_variables</a>
+  </div>
+
+  <div class="nav-group">
+    <span class="nav-group-title">Open World</span>
+    <a class="nav-link" href="#open-world-section">Overview</a>
+  </div>
+</nav>
+
+<!-- ============================================================ -->
+<!-- MAIN CONTENT                                                   -->
+<!-- ============================================================ -->
+<main class="main">
+
+<!-- HERO -->
+<div class="hero">
+  <h1>Dream-E Game State API</h1>
+  <p>Complete command reference for the AI agent and <code>window.storyAPI</code> console interface. Every command includes validation, helpful error suggestions, and structured JSON responses.</p>
+  <div class="stats">
+    <div class="stat"><div class="stat-num">51</div><div class="stat-label">Commands</div></div>
+    <div class="stat"><div class="stat-num">10</div><div class="stat-label">Groups</div></div>
+    <div class="stat"><div class="stat-num">4</div><div class="stat-label">Node Types</div></div>
+    <div class="stat"><div class="stat-num">4</div><div class="stat-label">Entity Types</div></div>
+  </div>
+</div>
+
+<!-- OVERVIEW -->
+<div class="section" id="overview">
+  <h2>Overview</h2>
+  <p>The Game State API is the bridge between the AI chat agent and the Dream-E editor. Every modification to the project — creating scenes, connecting nodes, generating images, managing entities — goes through this API.</p>
+
+  <div class="overview-grid">
+    <div class="overview-card">
+      <h3>Scene Nodes (Blue)</h3>
+      <p>Display story content and wait for player input. Each scene has text, choices, media, and entity links.</p>
+      <ul>
+        <li><code>backgroundImage</code> — scene backdrop</li>
+        <li><code>backgroundMusic</code> — audio track</li>
+        <li><code>musicKeepPlaying</code> — continue to next scene</li>
+        <li><code>voiceoverAudio</code> — one-shot narration</li>
+        <li><code>voiceoverAutoplay</code> — auto-play on load</li>
+        <li><code>speakerName</code> — who is speaking</li>
+        <li><code>storyText</code> — the narrative text</li>
+        <li><code>choices[]</code> — player choice buttons</li>
+        <li><code>linkedCharacters/Locations/Objects/Concepts</code></li>
+        <li><code>entityStates</code> — per-entity scene context</li>
+      </ul>
+    </div>
+    <div class="overview-card">
+      <h3>Entities</h3>
+      <p>Characters, locations, objects, and concepts. The world-building database.</p>
+      <ul>
+        <li><code>name</code> — display name</li>
+        <li><code>category</code> — character | location | object | concept</li>
+        <li><code>description</code> — full details</li>
+        <li><code>summary</code> — 100-200 word brief</li>
+        <li><code>referenceImage</code> — visual reference</li>
+        <li><code>referenceVoice</code> — voice identity clip</li>
+        <li><code>defaultMusic</code> — auto-play on encounter</li>
+        <li><code>musicFadeIn / musicFadeOut</code> — ms durations</li>
+      </ul>
+    </div>
+    <div class="overview-card">
+      <h3>Modifier Nodes (Green)</h3>
+      <p>Invisible. Change variable values during gameplay. Three modes:</p>
+      <ul>
+        <li><strong>Math</strong> — add, subtract, multiply, divide</li>
+        <li><strong>Set</strong> — assign a value directly</li>
+        <li><strong>Random</strong> — generate random number in range</li>
+      </ul>
+    </div>
+    <div class="overview-card">
+      <h3>Branch Nodes (Yellow)</h3>
+      <p>Invisible. Route the flow based on a condition.</p>
+      <ul>
+        <li>Evaluates: <code>variableA operator valueB</code></li>
+        <li>TRUE → "success" output</li>
+        <li>FALSE → "failure" output</li>
+        <li>Operators: <code>> &lt; = != >= &lt;= contains</code></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- DATA MODEL -->
+<div class="section" id="data-model">
+  <h2>Data Model</h2>
+  <p>Dream-E projects contain:</p>
+  <ul style="margin: 12px 0 12px 24px;">
+    <li><strong>Nodes</strong> — scenes, modifiers, branches, comments (placed on canvas)</li>
+    <li><strong>Edges</strong> — directed connections between nodes (the story flow)</li>
+    <li><strong>Entities</strong> — characters, locations, objects, concepts (world-building)</li>
+    <li><strong>Variables</strong> — game state tracking (HP, gold, flags, inventory)</li>
+  </ul>
+
+  <h3 style="margin-top:24px">ID Formats</h3>
+  <table>
+    <tr><th>Type</th><th>Format</th><th>Example</th></tr>
+    <tr><td>Node</td><td><code>node_{uuid}</code></td><td><code>node_a1b2c3d4</code></td></tr>
+    <tr><td>Edge</td><td><code>edge_{uuid}</code></td><td><code>edge_x9y8z7</code></td></tr>
+    <tr><td>Entity</td><td><code>entity_{uuid}</code></td><td><code>entity_e5f6g7</code></td></tr>
+    <tr><td>Variable</td><td><code>var_{uuid}</code></td><td><code>var_h1i2j3</code></td></tr>
+    <tr><td>Choice</td><td><code>choice_{uuid}</code></td><td><code>choice_k4l5m6</code></td></tr>
+  </table>
+
+  <h3>Variable Types</h3>
+  <table>
+    <tr><th>Type</th><th>Default</th><th>Use Case</th></tr>
+    <tr><td><code>integer</code></td><td>0</td><td>HP, gold, counters</td></tr>
+    <tr><td><code>float</code></td><td>0.0</td><td>Multipliers, percentages</td></tr>
+    <tr><td><code>boolean</code></td><td>false</td><td>Flags (hasKey, isDead)</td></tr>
+    <tr><td><code>string</code></td><td>""</td><td>Names, text states</td></tr>
+    <tr><td><code>collection</code></td><td>[]</td><td>Inventory, discovered items</td></tr>
+  </table>
+</div>
+
+<!-- COMMAND FORMAT -->
+<div class="section" id="command-format">
+  <h2>Command Format</h2>
+  <p>The AI agent embeds commands inline in its response using this block syntax:</p>
+  <pre><code>&lt;&lt;&lt;SW_CMD:action_name&gt;&gt;&gt;
+{"param1": "value1", "param2": 42}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</code></pre>
+  <p>Multiple commands can appear in one response. They execute <strong>sequentially in order</strong>.</p>
+
+  <h3 style="margin-top:20px">Success Response</h3>
+  <pre><code>{ "success": true, "nodeId": "node_abc123", ... }</code></pre>
+
+  <h3 style="margin-top:16px">Error Response</h3>
+  <pre><code>{
+  "success": false,
+  "error": "Scene not found: node_xyz",
+  "suggestion": "Available scenes: node_a1b2 (\"Forest\"), node_c3d4 (\"Cave\")"
+}</code></pre>
+</div>
+
+<!-- ERROR HANDLING -->
+<div class="section" id="error-handling">
+  <h2>Error Handling &amp; Assertions</h2>
+  <p>Every command validates its inputs. When something is wrong, the error includes a <strong>suggestion</strong> so the agent can self-correct.</p>
+
+  <h3 style="margin-top:20px">Common Assertions</h3>
+  <table>
+    <tr><th>Assertion</th><th>Error Message</th><th>Suggestion</th></tr>
+    <tr><td>Scene exists</td><td>Scene not found: {id}</td><td>Lists all available scene IDs and labels</td></tr>
+    <tr><td>Entity exists</td><td>Entity not found: {id}</td><td>Lists all entity IDs, categories, and names</td></tr>
+    <tr><td>Variable exists</td><td>Variable not found: {id}</td><td>Lists all variable IDs and names</td></tr>
+    <tr><td>Choice exists</td><td>Choice not found: {id} in scene {sceneId}</td><td>Lists all choice IDs and labels in that scene</td></tr>
+    <tr><td>Node exists</td><td>Node not found: {id}</td><td>Lists all available node IDs</td></tr>
+    <tr><td>Required param</td><td>Missing required parameter '{name}'</td><td>—</td></tr>
+    <tr><td>Valid category</td><td>Invalid category: {val}</td><td>Valid: character, location, object, concept</td></tr>
+    <tr><td>Valid var type</td><td>Invalid type: {val}</td><td>Valid: integer, float, boolean, string, collection</td></tr>
+    <tr><td>Valid operator</td><td>Invalid operator: {val}</td><td>Valid: &gt;, &lt;, =, !=, &gt;=, &lt;=, contains</td></tr>
+    <tr><td>No duplicate edge</td><td>Already connected: edge {id} goes from ...</td><td>Use reconnect_edge or disconnect_nodes</td></tr>
+    <tr><td>Free choice available</td><td>All choices are already connected</td><td>Use disconnect/reconnect or add_choice</td></tr>
+    <tr><td>Variable name unique</td><td>Variable "{name}" already exists</td><td>Use update_variable or choose different name</td></tr>
+  </table>
+</div>
+
+<!-- CONSOLE API -->
+<div class="section" id="console-api">
+  <h2>Browser Console API</h2>
+  <p>All commands are exposed on <code>window.storyAPI</code> for testing and debugging:</p>
+  <pre><code>// Create a scene
+await storyAPI.create_scene({label: "Forest", storyText: "You enter a dark forest..."})
+// → {success: true, nodeId: "node_abc123", choiceIds: []}
+
+// Try an invalid command — see error + suggestion
+await storyAPI.update_scene({sceneId: "nonexistent"})
+// → {success: false, error: "Scene not found: nonexistent", suggestion: "Available scenes: ..."}
+
+// Generate an image
+await storyAPI.generate_scene_image({sceneId: "node_abc123", prompt: "dark enchanted forest"})
+// → {success: true, sceneId: "node_abc123", message: "Image generated..."}
+
+// List everything
+await storyAPI.list_scenes()
+await storyAPI.list_entities()
+await storyAPI.list_variables()</code></pre>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCENE COMMANDS                                                 -->
+<!-- ============================================================ -->
+<div class="section" id="scenes-section">
+  <h2>Scene Commands <span class="badge">8</span></h2>
+  <p>Create, edit, and delete scene nodes and their choice buttons. Scenes are the main content nodes — they display text and choices to the player.</p>
+
+  <!-- create_scene -->
+  <div class="cmd" id="create_scene">
+    <div class="cmd-header">
+      <span class="cmd-name">create_scene</span>
+      <span class="cmd-desc">Create a new scene node</span>
+      <span class="cmd-tag tag-write">WRITE</span>
+    </div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>label</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene title displayed on the node</td></tr>
+        <tr><td><code>storyText</code></td><td>string</td><td><span class="param-req">required</span></td><td>Main narrative text the player reads</td></tr>
+        <tr><td><code>speakerName</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Name of the character speaking (displayed above text)</td></tr>
+        <tr><td><code>choices</code></td><td>[{label}]</td><td><span class="param-opt">optional</span></td><td>Array of choice buttons to create with the scene</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, nodeId: string, choiceIds: string[]}</p>
+      <h4>Example</h4>
+      <pre><code>&lt;&lt;&lt;SW_CMD:create_scene&gt;&gt;&gt;
+{"label": "Dark Forest", "storyText": "Twisted branches block the moonlight. Something moves in the shadows.", "speakerName": "Narrator", "choices": [{"label": "Draw your sword"}, {"label": "Run away"}, {"label": "Hide behind a tree"}]}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</code></pre>
+      <div class="note">The scene is placed automatically on the canvas. Choice IDs are returned so you can connect them with <code>connect_nodes</code>.</div>
+    </div>
+  </div>
+
+  <!-- update_scene -->
+  <div class="cmd" id="update_scene">
+    <div class="cmd-header">
+      <span class="cmd-name">update_scene</span>
+      <span class="cmd-desc">Update scene text, speaker, or label</span>
+      <span class="cmd-tag tag-write">WRITE</span>
+    </div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>label</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New title</td></tr>
+        <tr><td><code>storyText</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New narrative text</td></tr>
+        <tr><td><code>speakerName</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New speaker name</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, sceneId: string}</p>
+      <div class="assertion"><strong>Asserts:</strong> Scene must exist. To modify choices, use <code>add_choice</code> / <code>update_choice</code> / <code>delete_choice</code>.</div>
+    </div>
+  </div>
+
+  <!-- delete_scene -->
+  <div class="cmd" id="delete_scene">
+    <div class="cmd-header">
+      <span class="cmd-name">delete_scene</span>
+      <span class="cmd-desc">Delete a scene and all connected edges</span>
+      <span class="cmd-tag tag-delete">DELETE</span>
+    </div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, sceneId: string, edgesRemoved: number}</p>
+      <div class="assertion"><strong>Cascade:</strong> All incoming AND outgoing edges are automatically deleted.</div>
+    </div>
+  </div>
+
+  <!-- add_choice -->
+  <div class="cmd" id="add_choice">
+    <div class="cmd-header">
+      <span class="cmd-name">add_choice</span>
+      <span class="cmd-desc">Add a new choice button to a scene</span>
+      <span class="cmd-tag tag-write">WRITE</span>
+    </div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>label</code></td><td>string</td><td><span class="param-req">required</span></td><td>Choice button text</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, sceneId: string, choiceId: string}</p>
+    </div>
+  </div>
+
+  <!-- update_choice -->
+  <div class="cmd" id="update_choice">
+    <div class="cmd-header">
+      <span class="cmd-name">update_choice</span>
+      <span class="cmd-desc">Update a choice's label</span>
+      <span class="cmd-tag tag-write">WRITE</span>
+    </div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>choiceId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Choice ID</td></tr>
+        <tr><td><code>label</code></td><td>string</td><td><span class="param-req">required</span></td><td>New label text</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true}</p>
+      <div class="assertion"><strong>Asserts:</strong> Both scene and choice must exist.</div>
+    </div>
+  </div>
+
+  <!-- delete_choice -->
+  <div class="cmd" id="delete_choice">
+    <div class="cmd-header">
+      <span class="cmd-name">delete_choice</span>
+      <span class="cmd-desc">Delete a choice from a scene</span>
+      <span class="cmd-tag tag-delete">DELETE</span>
+    </div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>choiceId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Choice ID to delete</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, edgeRemoved: boolean}</p>
+      <div class="assertion"><strong>Cascade:</strong> If the choice had a connected edge, it is automatically removed.</div>
+    </div>
+  </div>
+
+  <!-- set_choice_condition -->
+  <div class="cmd" id="set_choice_condition">
+    <div class="cmd-header">
+      <span class="cmd-name">set_choice_condition</span>
+      <span class="cmd-desc">Set a visibility condition on a choice</span>
+      <span class="cmd-tag tag-write">WRITE</span>
+    </div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>choiceId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Choice ID</td></tr>
+        <tr><td><code>variableName</code></td><td>string</td><td><span class="param-req">required</span></td><td>Variable to check</td></tr>
+        <tr><td><code>operator</code></td><td>string</td><td><span class="param-req">required</span></td><td class="valid-values">> | &lt; | = | != | >= | &lt;= | contains</td></tr>
+        <tr><td><code>value</code></td><td>any</td><td><span class="param-req">required</span></td><td>Value to compare against</td></tr>
+        <tr><td><code>showWhenLocked</code></td><td>boolean</td><td><span class="param-opt">optional</span></td><td>Show grayed out instead of hiding</td></tr>
+        <tr><td><code>lockedTooltip</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Tooltip when locked (e.g. "Requires: Key")</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true}</p>
+      <h4>Example</h4>
+      <pre><code>&lt;&lt;&lt;SW_CMD:set_choice_condition&gt;&gt;&gt;
+{"sceneId": "node_abc", "choiceId": "choice_xyz", "variableName": "HasKey", "operator": "=", "value": true, "showWhenLocked": true, "lockedTooltip": "Requires: Rusty Key"}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</code></pre>
+    </div>
+  </div>
+
+  <!-- remove_choice_condition -->
+  <div class="cmd" id="remove_choice_condition">
+    <div class="cmd-header">
+      <span class="cmd-name">remove_choice_condition</span>
+      <span class="cmd-desc">Remove condition — make choice always visible</span>
+      <span class="cmd-tag tag-write">WRITE</span>
+    </div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>choiceId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Choice ID</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true}</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- CONNECTION COMMANDS                                             -->
+<!-- ============================================================ -->
+<div class="section" id="connections-section">
+  <h2>Connection Commands <span class="badge">3</span></h2>
+  <p>Manage directed edges between nodes. Edges define the story flow. Scene node edges use choice IDs as the <code>sourceHandle</code>.</p>
+
+  <!-- connect_nodes -->
+  <div class="cmd" id="connect_nodes">
+    <div class="cmd-header">
+      <span class="cmd-name">connect_nodes</span>
+      <span class="cmd-desc">Create an edge between two nodes</span>
+      <span class="cmd-tag tag-write">WRITE</span>
+    </div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sourceId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Source node ID</td></tr>
+        <tr><td><code>targetId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Target node ID</td></tr>
+        <tr><td><code>sourceHandle</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Choice ID for scene nodes. If omitted, auto-picks first unconnected choice.</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, edgeId: string, sourceHandle: string}</p>
+      <div class="assertion"><strong>Asserts:</strong> Both nodes must exist. Prevents duplicate edges from the same source+handle. For scene nodes, if no <code>sourceHandle</code> is given, auto-resolves to the first free choice.</div>
+      <div class="note"><strong>For branch nodes:</strong> Use <code>sourceHandle: "success"</code> or <code>"failure"</code> to connect the two outputs.</div>
+    </div>
+  </div>
+
+  <!-- disconnect_nodes -->
+  <div class="cmd" id="disconnect_nodes">
+    <div class="cmd-header">
+      <span class="cmd-name">disconnect_nodes</span>
+      <span class="cmd-desc">Remove an edge</span>
+      <span class="cmd-tag tag-delete">DELETE</span>
+    </div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>edgeId</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Edge ID (preferred — exact match)</td></tr>
+        <tr><td><code>sourceId</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Source node ID (with sourceHandle)</td></tr>
+        <tr><td><code>sourceHandle</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Source handle (with sourceId)</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, removedEdgeId: string}</p>
+      <div class="assertion"><strong>Asserts:</strong> Edge must be found. Error lists all available edges with source/target info.</div>
+    </div>
+  </div>
+
+  <!-- reconnect_edge -->
+  <div class="cmd" id="reconnect_edge">
+    <div class="cmd-header">
+      <span class="cmd-name">reconnect_edge</span>
+      <span class="cmd-desc">Change where an edge points (atomic delete + create)</span>
+      <span class="cmd-tag tag-write">WRITE</span>
+    </div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sourceId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Source node ID</td></tr>
+        <tr><td><code>sourceHandle</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Source handle / choice ID</td></tr>
+        <tr><td><code>newTargetId</code></td><td>string</td><td><span class="param-req">required</span></td><td>New target node ID</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, oldEdgeId: string|null, newEdgeId: string, sourceHandle: string}</p>
+      <div class="note">Atomically removes the old edge and creates a new one to the new target. If no existing edge is found, just creates the new one.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ENTITY COMMANDS                                                -->
+<!-- ============================================================ -->
+<div class="section" id="entities-section">
+  <h2>Entity Commands <span class="badge">9</span></h2>
+  <p>Manage world entities — characters, locations, objects, and concepts. Entities can be linked to scenes to track which story elements appear where.</p>
+
+  <div class="cmd" id="create_entity">
+    <div class="cmd-header"><span class="cmd-name">create_entity</span><span class="cmd-desc">Create a new entity</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>category</code></td><td>string</td><td><span class="param-req">required</span></td><td class="valid-values">character | location | object | concept</td></tr>
+        <tr><td><code>name</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity name</td></tr>
+        <tr><td><code>description</code></td><td>string</td><td><span class="param-req">required</span></td><td>Full description</td></tr>
+        <tr><td><code>summary</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Short summary (100-200 words)</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, entityId: string}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="update_entity">
+    <div class="cmd-header"><span class="cmd-name">update_entity</span><span class="cmd-desc">Update entity fields</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+        <tr><td><code>name</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New name</td></tr>
+        <tr><td><code>description</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New description</td></tr>
+        <tr><td><code>summary</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New summary</td></tr>
+        <tr><td><code>category</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Change category</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, entityId: string}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="delete_entity">
+    <div class="cmd-header"><span class="cmd-name">delete_entity</span><span class="cmd-desc">Delete entity and unlink from all scenes</span><span class="cmd-tag tag-delete">DELETE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, entityId: string, scenesUnlinked: number}</p>
+      <div class="assertion"><strong>Cascade:</strong> Automatically unlinks the entity from every scene where it appears.</div>
+    </div>
+  </div>
+
+  <div class="cmd" id="link_entity_to_scene">
+    <div class="cmd-header"><span class="cmd-name">link_entity_to_scene</span><span class="cmd-desc">Link an entity to a scene</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, alreadyLinked: boolean}</p>
+      <div class="note">Safe to call multiple times — if already linked, returns <code>alreadyLinked: true</code> without error.</div>
+    </div>
+  </div>
+
+  <div class="cmd" id="unlink_entity_from_scene">
+    <div class="cmd-header"><span class="cmd-name">unlink_entity_from_scene</span><span class="cmd-desc">Remove entity link from a scene</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="update_entity_state">
+    <div class="cmd-header"><span class="cmd-name">update_entity_state</span><span class="cmd-desc">Set situational state text for entity in a scene</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+        <tr><td><code>stateText</code></td><td>string</td><td><span class="param-req">required</span></td><td>Freeform state description for this scene</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true}</p>
+      <h4>Example</h4>
+      <pre><code>&lt;&lt;&lt;SW_CMD:update_entity_state&gt;&gt;&gt;
+{"sceneId": "node_abc", "entityId": "entity_guard", "stateText": "Wounded and suspicious, carrying a hidden dagger"}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</code></pre>
+    </div>
+  </div>
+
+  <!-- ── Entity Profile Commands ── -->
+
+  <div class="cmd" id="set_entity_profile">
+    <div class="cmd-header"><span class="cmd-name">set_entity_profile</span><span class="cmd-desc">Replace the entire structured profile for an entity</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <p>Sets the entity's <code>profile</code> field to a JSON dictionary. Use this when creating a new entity's profile from scratch or doing a full overwrite. For partial updates, prefer <code>patch_entity_profile</code>.</p>
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+        <tr><td><code>profile</code></td><td>object</td><td><span class="param-req">required</span></td><td>Full profile dictionary. Keys are flexible — define whatever is relevant to the entity category.</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, keys: string[]}</p>
+      <div class="assertion"><strong>Asserts:</strong> Entity must exist. <code>profile</code> must be a non-null object.</div>
+      <h4>Recommended Profile Keys by Category</h4>
+      <table>
+        <tr><th>Category</th><th>Suggested Keys</th></tr>
+        <tr><td>Character</td><td><code>appearance</code>, <code>personality</code>, <code>background</code>, <code>relationships</code>, <code>abilities</code>, <code>goals</code>, <code>flaws</code>, <code>speechStyle</code></td></tr>
+        <tr><td>Location</td><td><code>atmosphere</code>, <code>features</code>, <code>inhabitants</code>, <code>dangers</code>, <code>history</code>, <code>connections</code></td></tr>
+        <tr><td>Object</td><td><code>appearance</code>, <code>properties</code>, <code>uses</code>, <code>history</code>, <code>value</code></td></tr>
+        <tr><td>Concept</td><td><code>definition</code>, <code>rules</code>, <code>implications</code>, <code>examples</code>, <code>limitations</code></td></tr>
+      </table>
+      <h4>Example</h4>
+      <pre><code>&lt;&lt;&lt;SW_CMD:set_entity_profile&gt;&gt;&gt;
+{
+  "entityId": "entity_blackbeard",
+  "profile": {
+    "appearance": "Tall and broad-shouldered, with a wild black beard braided with red ribbons. Missing left eye, replaced with a glass orb.",
+    "personality": "Cunning, charismatic, ruthless in battle but surprisingly kind to children",
+    "background": "Former Royal Navy officer who turned pirate after being court-martialed for insubordination",
+    "relationships": {
+      "firstMate": "Iron Mary — loyal, the only person he trusts completely",
+      "rival": "Captain Whitmore — their feud spans 10 years",
+      "mentor": "Old Gregor — the fisherman who taught him to sail"
+    },
+    "abilities": ["Expert swordsman", "Navigation by stars", "Intimidation"],
+    "goals": "Find the legendary Sunken Crown before Whitmore does",
+    "flaws": "Trusts too easily when drunk, haunted by nightmares of the court-martial",
+    "speechStyle": "Formal vocabulary mixed with sailor slang. Never uses contractions."
+  }
+}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</code></pre>
+    </div>
+  </div>
+
+  <div class="cmd" id="get_entity_profile">
+    <div class="cmd-header"><span class="cmd-name">get_entity_profile</span><span class="cmd-desc">Retrieve the full structured profile for an entity</span><span class="cmd-tag tag-read">READ</span></div>
+    <div class="cmd-body">
+      <p>Returns the entity's complete profile dictionary. Use this before issuing patches to inspect current state.</p>
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, entityId: string, name: string, category: string, profile: object | null}</p>
+      <div class="assertion"><strong>Asserts:</strong> Entity must exist. Returns <code>null</code> for profile if not yet set.</div>
+      <h4>Example</h4>
+      <pre><code>&lt;&lt;&lt;SW_CMD:get_entity_profile&gt;&gt;&gt;
+{"entityId": "entity_blackbeard"}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</code></pre>
+    </div>
+  </div>
+
+  <div class="cmd" id="patch_entity_profile">
+    <div class="cmd-header"><span class="cmd-name">patch_entity_profile</span><span class="cmd-desc">Apply JSON Patch operations to an entity's profile</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <p>Applies a list of <strong>JSON Patch (RFC 6902 subset)</strong> operations to the entity's profile dictionary. This allows selective updates without rewriting the entire profile. Supports nested paths with <code>/</code> separators.</p>
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+        <tr><td><code>operations</code></td><td>array</td><td><span class="param-req">required</span></td><td>Array of patch operations (see below)</td></tr>
+      </table>
+
+      <h4>Supported Operations</h4>
+      <table>
+        <tr><th>Op</th><th>Path</th><th>Value</th><th>Description</th></tr>
+        <tr><td><code>add</code></td><td>required</td><td>required</td><td>Add or set a key. Creates intermediate objects automatically. For arrays, use <code>/-</code> to append.</td></tr>
+        <tr><td><code>replace</code></td><td>required</td><td>required</td><td>Replace an existing key's value. Fails if the path doesn't exist.</td></tr>
+        <tr><td><code>remove</code></td><td>required</td><td>—</td><td>Delete a key from the profile. Fails if the path doesn't exist.</td></tr>
+      </table>
+
+      <h4>Path Syntax</h4>
+      <ul style="margin: 8px 0 16px 20px; line-height: 2;">
+        <li><code>/key</code> — top-level field (e.g., <code>/appearance</code>)</li>
+        <li><code>/key/subkey</code> — nested field (e.g., <code>/relationships/rival</code>)</li>
+        <li><code>/key/0</code> — array index (e.g., <code>/abilities/0</code> = first ability)</li>
+        <li><code>/key/-</code> — append to array (e.g., <code>/abilities/-</code>)</li>
+      </ul>
+
+      <h4>Returns</h4>
+      <p class="ret">{success: true, appliedOps: number, profile: object}</p>
+      <div class="assertion"><strong>Asserts:</strong> Entity must exist. Profile must already exist (use <code>set_entity_profile</code> first). Each operation must have a valid <code>op</code>, <code>path</code>, and (for add/replace) <code>value</code>. The <code>replace</code> and <code>remove</code> ops fail if the target path doesn't exist.</div>
+
+      <h4>Example — Update Relationships and Add an Ability</h4>
+      <pre><code>&lt;&lt;&lt;SW_CMD:patch_entity_profile&gt;&gt;&gt;
+{
+  "entityId": "entity_blackbeard",
+  "operations": [
+    {"op": "replace", "path": "/relationships/rival", "value": "Captain Whitmore — now allied after the Battle of Coral Bay"},
+    {"op": "add", "path": "/relationships/newAlly", "value": "The Siren Queen — uneasy alliance"},
+    {"op": "add", "path": "/abilities/-", "value": "Gunpowder alchemy"},
+    {"op": "replace", "path": "/goals", "value": "Defend Coral Bay from the Imperial fleet"},
+    {"op": "remove", "path": "/flaws"}
+  ]
+}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</code></pre>
+
+      <h4>Example — Add a New Nested Section</h4>
+      <pre><code>&lt;&lt;&lt;SW_CMD:patch_entity_profile&gt;&gt;&gt;
+{
+  "entityId": "entity_blackbeard",
+  "operations": [
+    {"op": "add", "path": "/inventory", "value": {"weapons": ["Cutlass", "Flintlock"], "treasures": ["Ruby pendant"]}}
+  ]
+}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</code></pre>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- VARIABLE COMMANDS                                              -->
+<!-- ============================================================ -->
+<div class="section" id="variables-section">
+  <h2>Variable Commands <span class="badge">3</span></h2>
+  <p>Create, update, and delete game variables. Variables track game state — HP, gold, flags, inventory, etc.</p>
+
+  <div class="cmd" id="create_variable">
+    <div class="cmd-header"><span class="cmd-name">create_variable</span><span class="cmd-desc">Create a new game variable</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>name</code></td><td>string</td><td><span class="param-req">required</span></td><td>Variable name (must be unique)</td></tr>
+        <tr><td><code>type</code></td><td>string</td><td><span class="param-req">required</span></td><td class="valid-values">integer | float | boolean | string | collection</td></tr>
+        <tr><td><code>defaultValue</code></td><td>any</td><td><span class="param-opt">optional</span></td><td>Initial value (auto-defaults by type: 0, 0.0, false, "", [])</td></tr>
+        <tr><td><code>description</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>What this variable tracks</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, variableId: string}</p>
+      <div class="assertion"><strong>Asserts:</strong> Variable name must be unique. If duplicate, error suggests using <code>update_variable</code>.</div>
+    </div>
+  </div>
+
+  <div class="cmd" id="update_variable">
+    <div class="cmd-header"><span class="cmd-name">update_variable</span><span class="cmd-desc">Update variable properties</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>variableId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Variable ID</td></tr>
+        <tr><td><code>name</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New name</td></tr>
+        <tr><td><code>defaultValue</code></td><td>any</td><td><span class="param-opt">optional</span></td><td>New default value</td></tr>
+        <tr><td><code>description</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New description</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="delete_variable">
+    <div class="cmd-header"><span class="cmd-name">delete_variable</span><span class="cmd-desc">Delete a variable</span><span class="cmd-tag tag-delete">DELETE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>variableId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Variable ID</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, variableId: string}</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MEDIA COMMANDS                                                 -->
+<!-- ============================================================ -->
+<div class="section" id="media-section">
+  <h2>Media Commands <span class="badge">14</span></h2>
+  <p>Manage images, music, voiceover, and audio for scenes and entities. Includes AI image generation via the configured API provider.</p>
+
+  <div class="cmd" id="generate_scene_image">
+    <div class="cmd-header"><span class="cmd-name">generate_scene_image</span><span class="cmd-desc">AI-generate an image and set as scene background</span><span class="cmd-tag tag-gen">GENERATE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>prompt</code></td><td>string</td><td><span class="param-req">required</span></td><td>Image generation prompt — be vivid and detailed!</td></tr>
+        <tr><td><code>width</code></td><td>number</td><td><span class="param-opt">optional</span></td><td class="default-val">Default: 1280</td></tr>
+        <tr><td><code>height</code></td><td>number</td><td><span class="param-opt">optional</span></td><td class="default-val">Default: 720</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, sceneId: string, message: string}</p>
+      <div class="note"><strong>Async:</strong> Takes ~10-30 seconds. The image is downloaded, converted to base64, and stored in the scene's <code>backgroundImage</code> field.</div>
+    </div>
+  </div>
+
+  <div class="cmd" id="generate_entity_image">
+    <div class="cmd-header"><span class="cmd-name">generate_entity_image</span><span class="cmd-desc">AI-generate an image and set as entity reference</span><span class="cmd-tag tag-gen">GENERATE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+        <tr><td><code>prompt</code></td><td>string</td><td><span class="param-req">required</span></td><td>Image generation prompt</td></tr>
+        <tr><td><code>width</code></td><td>number</td><td><span class="param-opt">optional</span></td><td class="default-val">Default: 512</td></tr>
+        <tr><td><code>height</code></td><td>number</td><td><span class="param-opt">optional</span></td><td class="default-val">Default: 512</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, entityId: string, message: string}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="set_scene_image"><div class="cmd-header"><span class="cmd-name">set_scene_image</span><span class="cmd-desc">Set scene background from URL</span><span class="cmd-tag tag-write">WRITE</span></div><div class="cmd-body"><table><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr><tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr><tr><td><code>imageUrl</code></td><td>string</td><td><span class="param-req">required</span></td><td>Image URL or data URL</td></tr></table><p class="ret" style="margin-top:12px">{success: true, sceneId}</p></div></div>
+
+  <div class="cmd" id="remove_scene_image"><div class="cmd-header"><span class="cmd-name">remove_scene_image</span><span class="cmd-desc">Remove scene background image</span><span class="cmd-tag tag-delete">DELETE</span></div><div class="cmd-body"><table><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr><tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr></table><p class="ret" style="margin-top:12px">{success: true, sceneId, hadImage: boolean}</p></div></div>
+
+  <div class="cmd" id="set_entity_image"><div class="cmd-header"><span class="cmd-name">set_entity_image</span><span class="cmd-desc">Set entity reference image from URL</span><span class="cmd-tag tag-write">WRITE</span></div><div class="cmd-body"><table><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr><tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr><tr><td><code>imageUrl</code></td><td>string</td><td><span class="param-req">required</span></td><td>Image URL or data URL</td></tr></table><p class="ret" style="margin-top:12px">{success: true, entityId}</p></div></div>
+
+  <div class="cmd" id="remove_entity_image"><div class="cmd-header"><span class="cmd-name">remove_entity_image</span><span class="cmd-desc">Remove entity reference image</span><span class="cmd-tag tag-delete">DELETE</span></div><div class="cmd-body"><table><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr><tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr></table><p class="ret" style="margin-top:12px">{success: true, entityId, hadImage: boolean}</p></div></div>
+
+  <div class="cmd" id="set_scene_music">
+    <div class="cmd-header"><span class="cmd-name">set_scene_music</span><span class="cmd-desc">Set background music for a scene</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>musicUrl</code></td><td>string</td><td><span class="param-req">required</span></td><td>Audio data URL</td></tr>
+        <tr><td><code>keepPlaying</code></td><td>boolean</td><td><span class="param-opt">optional</span></td><td>Continue music to next scene (default: preserves current setting)</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, sceneId}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="remove_scene_music"><div class="cmd-header"><span class="cmd-name">remove_scene_music</span><span class="cmd-desc">Remove background music from scene</span><span class="cmd-tag tag-delete">DELETE</span></div><div class="cmd-body"><table><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr><tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr></table><p class="ret" style="margin-top:12px">{success: true, sceneId, hadMusic: boolean}</p></div></div>
+
+  <div class="cmd" id="set_scene_voiceover">
+    <div class="cmd-header"><span class="cmd-name">set_scene_voiceover</span><span class="cmd-desc">Set voiceover/sound effect for a scene</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+        <tr><td><code>audioUrl</code></td><td>string</td><td><span class="param-req">required</span></td><td>Audio data URL</td></tr>
+        <tr><td><code>autoplay</code></td><td>boolean</td><td><span class="param-opt">optional</span></td><td>Auto-play when scene loads</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, sceneId}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="remove_scene_voiceover"><div class="cmd-header"><span class="cmd-name">remove_scene_voiceover</span><span class="cmd-desc">Remove voiceover from scene</span><span class="cmd-tag tag-delete">DELETE</span></div><div class="cmd-body"><table><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr><tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr></table><p class="ret" style="margin-top:12px">{success: true, sceneId, hadVoiceover: boolean}</p></div></div>
+
+  <div class="cmd" id="set_entity_voice">
+    <div class="cmd-header"><span class="cmd-name">set_entity_voice</span><span class="cmd-desc">Set reference voice clip for an entity</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+        <tr><td><code>voiceUrl</code></td><td>string</td><td><span class="param-req">required</span></td><td>Audio data URL for voice identity reference</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, entityId}</p>
+      <div class="note">Typically used for character entities — stores a voice clip that can be used as a TTS voice reference.</div>
+    </div>
+  </div>
+
+  <div class="cmd" id="remove_entity_voice"><div class="cmd-header"><span class="cmd-name">remove_entity_voice</span><span class="cmd-desc">Remove reference voice from entity</span><span class="cmd-tag tag-delete">DELETE</span></div><div class="cmd-body"><table><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr><tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr></table><p class="ret" style="margin-top:12px">{success: true, entityId, hadVoice: boolean}</p></div></div>
+
+  <div class="cmd" id="set_entity_music">
+    <div class="cmd-header"><span class="cmd-name">set_entity_music</span><span class="cmd-desc">Set default music for an entity</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+        <tr><td><code>musicUrl</code></td><td>string</td><td><span class="param-req">required</span></td><td>Audio data URL</td></tr>
+        <tr><td><code>fadeIn</code></td><td>number</td><td><span class="param-opt">optional</span></td><td class="default-val">Default: 1000ms</td></tr>
+        <tr><td><code>fadeOut</code></td><td>number</td><td><span class="param-opt">optional</span></td><td class="default-val">Default: 1000ms</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, entityId}</p>
+      <div class="note">Default music auto-plays when this entity is encountered in a scene, unless the scene has its own music set.</div>
+    </div>
+  </div>
+
+  <div class="cmd" id="remove_entity_music"><div class="cmd-header"><span class="cmd-name">remove_entity_music</span><span class="cmd-desc">Remove default music from entity</span><span class="cmd-tag tag-delete">DELETE</span></div><div class="cmd-body"><table><tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr><tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr></table><p class="ret" style="margin-top:12px">{success: true, entityId, hadMusic: boolean}</p></div></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODIFIER COMMANDS                                              -->
+<!-- ============================================================ -->
+<div class="section" id="modifiers-section">
+  <h2>Modifier Node Commands <span class="badge">3</span></h2>
+  <p>Modifier nodes are invisible to players. They change variable values when the game flow passes through them. Three modes: Math, Set, Random.</p>
+
+  <div class="cmd" id="create_modifier">
+    <div class="cmd-header"><span class="cmd-name">create_modifier</span><span class="cmd-desc">Create a modifier node</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>label</code></td><td>string</td><td><span class="param-req">required</span></td><td>Node label (e.g. "Apply Damage")</td></tr>
+        <tr><td><code>mode</code></td><td>string</td><td><span class="param-req">required</span></td><td class="valid-values">math | set | random</td></tr>
+        <tr><td><code>targetVariable</code></td><td>string</td><td><span class="param-req">required</span></td><td>Variable name to modify</td></tr>
+        <tr><td><code>mathOperation</code></td><td>string</td><td><span class="param-opt">optional</span></td><td class="valid-values">add | subtract | multiply | divide <span class="default-val">(default: add)</span></td></tr>
+        <tr><td><code>mathValue</code></td><td>number|string</td><td><span class="param-opt">optional</span></td><td>Operand value or variable name</td></tr>
+        <tr><td><code>mathValueIsVariable</code></td><td>boolean</td><td><span class="param-opt">optional</span></td><td>If true, mathValue is a variable name</td></tr>
+        <tr><td><code>setValue</code></td><td>any</td><td><span class="param-opt">optional</span></td><td>Direct assignment value</td></tr>
+        <tr><td><code>setValueIsVariable</code></td><td>boolean</td><td><span class="param-opt">optional</span></td><td>If true, setValue is a variable name</td></tr>
+        <tr><td><code>randomMin</code></td><td>number</td><td><span class="param-opt">optional</span></td><td class="default-val">Default: 1</td></tr>
+        <tr><td><code>randomMax</code></td><td>number</td><td><span class="param-opt">optional</span></td><td class="default-val">Default: 100</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, nodeId: string}</p>
+      <h4>Examples</h4>
+      <pre><code>// Math mode: HP = HP - 20
+&lt;&lt;&lt;SW_CMD:create_modifier&gt;&gt;&gt;
+{"label": "Take Damage", "mode": "math", "targetVariable": "HP", "mathOperation": "subtract", "mathValue": 20}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;
+
+// Set mode: HasKey = true
+&lt;&lt;&lt;SW_CMD:create_modifier&gt;&gt;&gt;
+{"label": "Pick Up Key", "mode": "set", "targetVariable": "HasKey", "setValue": true}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;
+
+// Random mode: DiceRoll = Random(1, 20)
+&lt;&lt;&lt;SW_CMD:create_modifier&gt;&gt;&gt;
+{"label": "Roll D20", "mode": "random", "targetVariable": "DiceRoll", "randomMin": 1, "randomMax": 20}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</code></pre>
+    </div>
+  </div>
+
+  <div class="cmd" id="update_modifier">
+    <div class="cmd-header"><span class="cmd-name">update_modifier</span><span class="cmd-desc">Update a modifier node</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>modifierId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Modifier node ID</td></tr>
+        <tr><td><code>label</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New label</td></tr>
+        <tr><td><code>mode</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New mode</td></tr>
+        <tr><td><code>targetVariable</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New target variable</td></tr>
+        <tr><td colspan="4">... plus all mode-specific parameters (mathOperation, mathValue, setValue, randomMin, randomMax)</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, modifierId}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="delete_modifier">
+    <div class="cmd-header"><span class="cmd-name">delete_modifier</span><span class="cmd-desc">Delete a modifier and its edges</span><span class="cmd-tag tag-delete">DELETE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>modifierId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Modifier node ID</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, modifierId, edgesRemoved: number}</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- BRANCH COMMANDS                                                -->
+<!-- ============================================================ -->
+<div class="section" id="branches-section">
+  <h2>Branch Node Commands <span class="badge">3</span></h2>
+  <p>Branch (choice) nodes are invisible conditional routing points. They evaluate a condition and route to "success" or "failure" output.</p>
+
+  <div class="cmd" id="create_branch">
+    <div class="cmd-header"><span class="cmd-name">create_branch</span><span class="cmd-desc">Create a conditional branch node</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <h4>Parameters</h4>
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>label</code></td><td>string</td><td><span class="param-req">required</span></td><td>Node label (e.g. "Check HP")</td></tr>
+        <tr><td><code>variableName</code></td><td>string</td><td><span class="param-req">required</span></td><td>Variable to check</td></tr>
+        <tr><td><code>operator</code></td><td>string</td><td><span class="param-req">required</span></td><td class="valid-values">> | &lt; | = | != | >= | &lt;= | contains</td></tr>
+        <tr><td><code>value</code></td><td>any</td><td><span class="param-req">required</span></td><td>Value to compare against</td></tr>
+        <tr><td><code>useVariable</code></td><td>boolean</td><td><span class="param-opt">optional</span></td><td>If true, value is treated as a variable name</td></tr>
+      </table>
+      <h4>Returns</h4>
+      <p class="ret">{success: true, nodeId: string, outputs: ["success", "failure"]}</p>
+      <h4>Example</h4>
+      <pre><code>// Check if player has enough HP
+&lt;&lt;&lt;SW_CMD:create_branch&gt;&gt;&gt;
+{"label": "HP Check", "variableName": "HP", "operator": ">", "value": 0}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;
+
+// Then connect outputs:
+&lt;&lt;&lt;SW_CMD:connect_nodes&gt;&gt;&gt;
+{"sourceId": "node_branch1", "targetId": "node_alive", "sourceHandle": "success"}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;
+&lt;&lt;&lt;SW_CMD:connect_nodes&gt;&gt;&gt;
+{"sourceId": "node_branch1", "targetId": "node_dead", "sourceHandle": "failure"}
+&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</code></pre>
+    </div>
+  </div>
+
+  <div class="cmd" id="update_branch">
+    <div class="cmd-header"><span class="cmd-name">update_branch</span><span class="cmd-desc">Update branch condition</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>branchId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Branch node ID</td></tr>
+        <tr><td><code>label</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New label</td></tr>
+        <tr><td><code>variableName</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New variable</td></tr>
+        <tr><td><code>operator</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New operator</td></tr>
+        <tr><td><code>value</code></td><td>any</td><td><span class="param-opt">optional</span></td><td>New comparison value</td></tr>
+        <tr><td><code>useVariable</code></td><td>boolean</td><td><span class="param-opt">optional</span></td><td>If true, value is a variable name</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, branchId}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="delete_branch">
+    <div class="cmd-header"><span class="cmd-name">delete_branch</span><span class="cmd-desc">Delete a branch node and its edges</span><span class="cmd-tag tag-delete">DELETE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>branchId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Branch node ID</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, branchId, edgesRemoved: number}</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- COMMENT COMMANDS                                               -->
+<!-- ============================================================ -->
+<div class="section" id="comments-section">
+  <h2>Comment Node Commands <span class="badge">3</span></h2>
+  <p>Comment nodes are for designer notes only — they don't affect gameplay. Players never see them.</p>
+
+  <div class="cmd" id="create_comment">
+    <div class="cmd-header"><span class="cmd-name">create_comment</span><span class="cmd-desc">Create a comment note</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>label</code></td><td>string</td><td><span class="param-req">required</span></td><td>Node label</td></tr>
+        <tr><td><code>text</code></td><td>string</td><td><span class="param-req">required</span></td><td>Comment text</td></tr>
+        <tr><td><code>color</code></td><td>string</td><td><span class="param-opt">optional</span></td><td class="default-val">Default: #ffeb3b (yellow)</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, nodeId: string}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="update_comment">
+    <div class="cmd-header"><span class="cmd-name">update_comment</span><span class="cmd-desc">Update a comment node</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>commentId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Comment node ID</td></tr>
+        <tr><td><code>label</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New label</td></tr>
+        <tr><td><code>text</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New text</td></tr>
+        <tr><td><code>color</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>New color (hex)</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, commentId}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="delete_comment">
+    <div class="cmd-header"><span class="cmd-name">delete_comment</span><span class="cmd-desc">Delete a comment node</span><span class="cmd-tag tag-delete">DELETE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>commentId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Comment node ID</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, commentId}</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PROJECT COMMANDS                                                -->
+<!-- ============================================================ -->
+<div class="section" id="project-section">
+  <h2>Project Commands <span class="badge">3</span></h2>
+
+  <div class="cmd" id="set_start_node">
+    <div class="cmd-header"><span class="cmd-name">set_start_node</span><span class="cmd-desc">Set which scene the game starts at</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>nodeId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true, startNodeId}</p>
+      <div class="assertion"><strong>Asserts:</strong> Node must exist and must be a scene (not modifier/branch/comment).</div>
+    </div>
+  </div>
+
+  <div class="cmd" id="update_project_info">
+    <div class="cmd-header"><span class="cmd-name">update_project_info</span><span class="cmd-desc">Update project metadata</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>title</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Project title</td></tr>
+        <tr><td><code>description</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Project description</td></tr>
+        <tr><td><code>author</code></td><td>string</td><td><span class="param-opt">optional</span></td><td>Author name</td></tr>
+        <tr><td><code>theme</code></td><td>string</td><td><span class="param-opt">optional</span></td><td class="valid-values">fantasy | cyberpunk | modern | custom</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true}</p>
+    </div>
+  </div>
+
+  <div class="cmd" id="update_notes">
+    <div class="cmd-header"><span class="cmd-name">update_notes</span><span class="cmd-desc">Update freeform project notes</span><span class="cmd-tag tag-write">WRITE</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>notes</code></td><td>string</td><td><span class="param-req">required</span></td><td>Freeform notes text</td></tr>
+      </table>
+      <p class="ret" style="margin-top:12px">{success: true}</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- QUERY COMMANDS                                                 -->
+<!-- ============================================================ -->
+<div class="section" id="query-section">
+  <h2>Query Commands <span class="badge">5</span></h2>
+  <p>Read-only commands for inspecting game state. No modifications are made.</p>
+
+  <div class="cmd" id="get_scene_details">
+    <div class="cmd-header"><span class="cmd-name">get_scene_details</span><span class="cmd-desc">Full details of a scene</span><span class="cmd-tag tag-read">READ</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>sceneId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Scene node ID</td></tr>
+      </table>
+      <h4 style="margin-top:12px">Returns</h4>
+      <pre><code>{
+  success: true,
+  id, label, storyText, speakerName,
+  choices: [{ id, label, connectedTo: nodeId|null, edgeId: string|null }],
+  hasBackgroundImage, hasBackgroundMusic, hasVoiceover,
+  linkedCharacters: [...entityIds],
+  linkedLocations: [...entityIds],
+  linkedObjects: [...entityIds],
+  linkedConcepts: [...entityIds],
+  incomingEdges: [{ edgeId, from: nodeId, handle: string }]
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="cmd" id="get_entity_details">
+    <div class="cmd-header"><span class="cmd-name">get_entity_details</span><span class="cmd-desc">Full entity details with linked scenes</span><span class="cmd-tag tag-read">READ</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>entityId</code></td><td>string</td><td><span class="param-req">required</span></td><td>Entity ID</td></tr>
+      </table>
+      <h4 style="margin-top:12px">Returns</h4>
+      <pre><code>{
+  success: true,
+  id, category, name, description, summary,
+  hasImage: boolean,
+  linkedScenes: [{ nodeId, label }]
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="cmd" id="list_scenes">
+    <div class="cmd-header"><span class="cmd-name">list_scenes</span><span class="cmd-desc">List all scenes</span><span class="cmd-tag tag-read">READ</span></div>
+    <div class="cmd-body">
+      <p>No parameters required.</p>
+      <h4 style="margin-top:12px">Returns</h4>
+      <pre><code>{
+  success: true,
+  scenes: [{
+    id, label, choiceCount, isStart,
+    hasImage, hasMusic,
+    choices: [{ id, label, connectedTo }]
+  }]
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="cmd" id="list_entities">
+    <div class="cmd-header"><span class="cmd-name">list_entities</span><span class="cmd-desc">List all entities</span><span class="cmd-tag tag-read">READ</span></div>
+    <div class="cmd-body">
+      <table>
+        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+        <tr><td><code>category</code></td><td>string</td><td><span class="param-opt">optional</span></td><td class="valid-values">character | location | object | concept — filter by category</td></tr>
+      </table>
+      <h4 style="margin-top:12px">Returns</h4>
+      <pre><code>{ success: true, entities: [{ id, category, name, hasImage, summary }] }</code></pre>
+    </div>
+  </div>
+
+  <div class="cmd" id="list_variables">
+    <div class="cmd-header"><span class="cmd-name">list_variables</span><span class="cmd-desc">List all variables</span><span class="cmd-tag tag-read">READ</span></div>
+    <div class="cmd-body">
+      <p>No parameters required.</p>
+      <h4 style="margin-top:12px">Returns</h4>
+      <pre><code>{ success: true, variables: [{ id, name, type, defaultValue, description }] }</code></pre>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- IMAGE GEN SETTINGS                                             -->
+<!-- ============================================================ -->
+<div class="section" id="image-gen-settings">
+  <h2>Image Generation Configuration</h2>
+  <p>Image generation uses a server-side API endpoint (<code>POST /api/generate-image</code>). The provider, API key, model, and endpoint are configured in the <strong>AI Settings</strong> panel (gear icon in the toolbar).</p>
+
+  <h3 style="margin-top: 20px">Supported Providers</h3>
+  <div class="overview-grid">
+    <div class="overview-card">
+      <h3>Black Forest Labs (BFL)</h3>
+      <p>FLUX image generation models. Default provider.</p>
+      <ul>
+        <li><strong>Endpoint:</strong> <code>https://api.bfl.ai/v1/{model}</code></li>
+        <li><strong>Auth:</strong> <code>X-Key</code> header</li>
+        <li><strong>Default model:</strong> <code>flux-pro-1.1</code></li>
+        <li><strong>Flow:</strong> Submit → Poll → Download</li>
+        <li><strong>Models:</strong> flux-pro-1.1, flux-dev, flux-schnell, etc.</li>
+      </ul>
+    </div>
+    <div class="overview-card">
+      <h3>OpenAI-Compatible</h3>
+      <p>Any API that implements the OpenAI images endpoint.</p>
+      <ul>
+        <li><strong>Endpoint:</strong> <code>{baseUrl}/images/generations</code></li>
+        <li><strong>Auth:</strong> <code>Bearer</code> token</li>
+        <li><strong>Default model:</strong> <code>dall-e-3</code></li>
+        <li><strong>Flow:</strong> Single POST → Response</li>
+        <li><strong>Providers:</strong> OpenAI, Together, Replicate, etc.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- OPEN WORLD MODE                                                -->
+<!-- ============================================================ -->
+<div class="section" id="open-world-section">
+  <h2>Open World Mode</h2>
+  <p>Open World Mode allows players to type <strong>free-form actions</strong> during gameplay instead of choosing from pre-defined options. The AI generates new scene content, images, and choices on the fly.</p>
+
+  <h3>How It Works</h3>
+  <ol style="margin-left: 20px; line-height: 2;">
+    <li>Player enables "Open World Mode" checkbox in the Scene Inspector</li>
+    <li>Clicks "Start Here" or "Continue Here" to enter the player</li>
+    <li>A text input appears below the dialog box</li>
+    <li>Player types what they want to do and presses Enter</li>
+    <li>The AI generates a continuation, image, and new choices</li>
+    <li>A golden "Continue to Next Scene" button appears when ready</li>
+  </ol>
+
+  <h3>Context Construction (Token Budget System)</h3>
+  <p>The AI receives a carefully constructed context with a priority-based token budget (~80,000 tokens):</p>
+  <table>
+    <tr><th>Priority</th><th>Content</th><th>Max Tokens</th></tr>
+    <tr><td><strong>ALWAYS</strong></td><td>System prompt, project notes, current scene, current variables, player action, ALL entity summaries</td><td>~15,000</td></tr>
+    <tr><td><strong>HIGH</strong></td><td>Full profiles of entities linked to current scene</td><td>~10,000</td></tr>
+    <tr><td><strong>HIGH</strong></td><td>Complete story path (start → current) with text + choices made</td><td>~30,000</td></tr>
+    <tr><td><strong>LOW</strong></td><td>Full profiles of remaining entities (if budget allows)</td><td>remaining</td></tr>
+  </table>
+  <p>If over budget: early scenes in the story path are compressed to label + choice made. Non-current entity full profiles are dropped (summaries always remain).</p>
+
+  <h3>AI Response Format</h3>
+  <pre><code>[SCENE_TEXT]
+Narrative continuation (2-6 paragraphs)...
+[/SCENE_TEXT]
+
+&lt;&lt;&lt;OW_META&gt;&gt;&gt;
+{
+  "speakerName": "Narrator",
+  "choices": ["Choice 1", "Choice 2", "Choice 3"],
+  "imagePrompt": "Detailed art-director-quality description...",
+  "variableChanges": {"hp": 85},
+  "entityNotes": "Guard is now hostile"
+}
+&lt;&lt;&lt;/OW_META&gt;&gt;&gt;</code></pre>
+
+  <h3>Image Generation</h3>
+  <ul style="margin-left: 20px; line-height: 2;">
+    <li>Image prompt is generated by the AI based on entity profiles and scene content</li>
+    <li>Up to 3 retries on failure (content filter, API error)</li>
+    <li>Each retry progressively simplifies the prompt</li>
+    <li>If all retries fail, scene continues without an image</li>
+  </ul>
+
+  <h3>Content Guidelines</h3>
+  <p>The AI follows adult-movie-level content guidelines: violence, romance, and mature themes are acceptable. Extreme content is rephrased to stay appropriate. The AI never breaks character or refuses outright — it finds creative redirections.</p>
+
+  <h3>Server Endpoint</h3>
+  <p><code>POST /api/open-world</code> — Separate session from the editor chat. Body: <code>{"message": "full context prompt"}</code>. Returns SSE stream identical to <code>/api/chat</code>.</p>
+  <p><code>POST /api/open-world-reset</code> — Reset the open-world session.</p>
+</div>
+
+<!-- FOOTER -->
+<div style="margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85em;">
+  <p>Dream-E Game State API v2.0 — 54 commands across 10 groups + Open World Mode</p>
+  <p>Auto-generated documentation. Source: <code>gameStateAPI.registry.ts</code></p>
+</div>
+
+</main>
+</div>
+
+<!-- ============================================================ -->
+<!-- SIDEBAR ACTIVE LINK TRACKING                                   -->
+<!-- ============================================================ -->
+<script>
+  // Highlight the active nav link based on scroll position
+  const links = document.querySelectorAll('.nav-link');
+  const targets = [];
+  links.forEach(link => {
+    const id = link.getAttribute('href')?.slice(1);
+    if (id) {
+      const el = document.getElementById(id);
+      if (el) targets.push({ link, el });
+    }
+  });
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const match = targets.find(t => t.el === entry.target);
+        if (match) match.link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  targets.forEach(t => observer.observe(t.el));
+</script>
+
+</body>
+</html>
