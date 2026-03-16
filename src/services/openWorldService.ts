@@ -183,8 +183,11 @@ function parseOpenWorldResponse(
   }
 
   if (parsed && typeof parsed === 'object' && parsed.sceneText) {
-    // Successfully parsed structured JSON output
-    const sceneText = parsed.sceneText as string;
+    // Successfully parsed structured JSON output.
+    // Strip entity ID brackets (e.g. [entity_abc123]) from the display text.
+    // The LLM uses these internally to reference entities in imagePrompt, but
+    // they should not appear in the narrative text shown to the player.
+    const sceneText = (parsed.sceneText as string).replace(/\s*\[entity_[^\]]+\]/g, '');
     const metadata: OWMetadata = {
       speakerName: parsed.speakerName,
       choices: parsed.choices,
@@ -230,6 +233,9 @@ function parseOpenWorldResponse(
     if (fb.sceneText) sceneText = fb.sceneText;
     metadata = fb;
   }
+
+  // Strip entity ID brackets from legacy-parsed text too
+  sceneText = sceneText.replace(/\s*\[entity_[^\]]+\]/g, '');
 
   return { sceneText, metadata };
 }

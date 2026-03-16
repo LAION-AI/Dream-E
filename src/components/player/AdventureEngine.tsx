@@ -575,16 +575,18 @@ export default function AdventureEngine() {
 
       const retainSet = new Set<string>();
 
-      // Retain current + last 4 visited scenes' assets
-      const recentNodeIds = visitedScenesRef.current.slice(-BLOB_RETAIN_COUNT);
-      for (const nodeId of recentNodeIds) {
-        const node = proj.nodes.find(n => n.id === nodeId);
-        if (node && node.type === 'scene') {
-          const data = node.data as Record<string, unknown>;
-          for (const f of ['backgroundImage', 'backgroundMusic', 'voiceoverAudio']) {
-            const v = data[f];
-            if (typeof v === 'string' && v.startsWith('blob:')) retainSet.add(v);
-          }
+      // Retain ALL scene blob URLs in the project — not just recent ones.
+      // Hard-revoking blob URLs that are still referenced by project nodes
+      // causes permanent image loss: rehydrateForSave() can't convert a
+      // revoked blob URL back to base64, so it writes '' to IndexedDB.
+      // Soft-eviction (removing from blobStore Map) is enough to reduce
+      // JS heap usage; the native blob memory is manageable (~2MB/image).
+      for (const node of proj.nodes) {
+        if (node.type !== 'scene') continue;
+        const data = node.data as Record<string, unknown>;
+        for (const f of ['backgroundImage', 'backgroundMusic', 'voiceoverAudio']) {
+          const v = data[f];
+          if (typeof v === 'string' && v.startsWith('blob:')) retainSet.add(v);
         }
       }
 
@@ -2269,21 +2271,15 @@ export default function AdventureEngine() {
           const proj = useProjectStore.getState().currentProject;
           if (proj) {
             const retainSet = new Set<string>();
-            // Keep current scene's assets
-            const cs = usePlayerStore.getState().currentScene;
-            if (cs?.backgroundImage?.startsWith('blob:')) retainSet.add(cs.backgroundImage);
-            if (cs?.backgroundMusic?.startsWith('blob:')) retainSet.add(cs.backgroundMusic);
-            if (cs?.voiceover?.startsWith('blob:')) retainSet.add(cs.voiceover);
-            // Keep last 3 visited scenes' assets
-            const recentIds = visitedScenesRef.current.slice(-3);
-            for (const nid of recentIds) {
-              const node = proj.nodes.find(n => n.id === nid);
-              if (node?.type === 'scene') {
-                const d = node.data as Record<string, unknown>;
-                for (const f of ['backgroundImage', 'backgroundMusic', 'voiceoverAudio']) {
-                  const v = d[f];
-                  if (typeof v === 'string' && v.startsWith('blob:')) retainSet.add(v);
-                }
+            // Keep ALL project scene blob URLs — revoking any blob URL that
+            // is still referenced by a node causes permanent data loss on
+            // next save (rehydrateForSave can't recover revoked URLs).
+            for (const node of proj.nodes) {
+              if (node.type !== 'scene') continue;
+              const d = node.data as Record<string, unknown>;
+              for (const f of ['backgroundImage', 'backgroundMusic', 'voiceoverAudio']) {
+                const v = d[f];
+                if (typeof v === 'string' && v.startsWith('blob:')) retainSet.add(v);
               }
             }
             // Keep ALL entity assets (needed for image generation reference)
@@ -2293,6 +2289,11 @@ export default function AdventureEngine() {
                 if (typeof v === 'string' && v.startsWith('blob:')) retainSet.add(v);
               }
             }
+            // Also keep current player scene assets (may not be in project nodes yet)
+            const cs = usePlayerStore.getState().currentScene;
+            if (cs?.backgroundImage?.startsWith('blob:')) retainSet.add(cs.backgroundImage);
+            if (cs?.backgroundMusic?.startsWith('blob:')) retainSet.add(cs.backgroundMusic);
+            if (cs?.voiceover?.startsWith('blob:')) retainSet.add(cs.voiceover);
             const evicted = evictBlobsExcept(retainSet);
             if (evicted > 0) {
               logHeap(`After in-play blob eviction (evicted ${evicted}, retained ${retainSet.size})`);
