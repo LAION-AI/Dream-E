@@ -748,7 +748,7 @@ export default defineConfig({
                       model,
                       stream: true,
                       temperature: 0.7,
-                      max_tokens: 4096,
+                      max_tokens: 16384,
                       messages: chatHistory,
                     }),
                     signal: abortController.signal,
@@ -890,6 +890,8 @@ export default defineConfig({
                     },
                     imagePrompt: { type: 'STRING', description: 'Detailed image generation prompt including art style, characters by appearance, environment, lighting, mood. Include entity IDs in brackets for characters/locations present.' },
                     reuseImage: { type: 'BOOLEAN', description: 'true ONLY if visual setting is identical to previous scene' },
+                    musicQuery: { type: 'STRING', description: 'BM25 search keywords (3-8 words) for background music. ALWAYS provide this — it is used to search a local RPG music database and auto-assign fitting background music to the scene. Describe the mood, atmosphere, and setting (e.g. "mysterious dark forest night ambient", "epic battle orchestral drums", "peaceful village morning cheerful").' },
+                    sceneSummary: { type: 'STRING', description: '1-3 sentence summary of key events, decisions, state changes, who was present.' },
                     presentEntityIds: {
                       type: 'ARRAY',
                       items: { type: 'STRING' },
@@ -897,8 +899,6 @@ export default defineConfig({
                     },
                     entityUpdates: { type: 'OBJECT', description: 'REQUIRED when entities change state. Keys are entity IDs, values are objects with: stateNote (string — what changed and why), profilePatch (object — permanent profile updates), and stateChanges (array of strings — list of specific changes, e.g. "Bob changed his hair to pink", "Bob broke up with Alice", to be logged in history protocol).' },
                     variableChanges: { type: 'OBJECT', description: 'Variable name-value pairs to update existing variables' },
-                    musicQuery: { type: 'STRING', description: 'BM25 search keywords (3-8 words) for background music. ALWAYS provide for the first scene and whenever mood/location/atmosphere changes. Only omit when current music still fits.' },
-                    sceneSummary: { type: 'STRING', description: '1-3 sentence summary of key events, decisions, state changes, who was present.' },
                     // ── Initiative A: OW Entity/Variable/Media expansion ──
                     newEntities: {
                       type: 'ARRAY',
@@ -948,7 +948,7 @@ export default defineConfig({
                       description: 'Set true to auto-generate TTS voiceover for this scene. Default false.',
                     },
                   },
-                  required: ['playerGoalHypothesis', 'sceneIntentHypothesis', 'lastSatisfactionEstimate', 'engagementStrategy', 'plannedStateChanges', 'sceneText', 'speakerName', 'choices', 'imagePrompt', 'sceneSummary', 'presentEntityIds', 'reuseImage'],
+                  required: ['playerGoalHypothesis', 'sceneIntentHypothesis', 'lastSatisfactionEstimate', 'engagementStrategy', 'plannedStateChanges', 'sceneText', 'speakerName', 'choices', 'imagePrompt', 'reuseImage', 'musicQuery', 'sceneSummary', 'presentEntityIds'],
                 };
 
                 if (provider === 'gemini') {
@@ -993,7 +993,7 @@ export default defineConfig({
                     ],
                     generationConfig: {
                       temperature: 1.0,
-                      maxOutputTokens: 4096,
+                      maxOutputTokens: 16384,
                       responseMimeType: 'application/json',
                       responseSchema: owResponseSchema,
                     },
@@ -1060,7 +1060,7 @@ export default defineConfig({
                     model,
                     stream: true,
                     temperature: 1.0,
-                    max_tokens: 4096,
+                    max_tokens: 16384,
                     response_format: { type: 'json_object' },
                     messages: [
                       { role: 'system', content: systemPrompt + '\n\nYou MUST respond with a valid JSON object.' },

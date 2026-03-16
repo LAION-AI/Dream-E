@@ -274,28 +274,44 @@ export async function getAllProjects(): Promise<ProjectSummary[]> {
 
     // Process one record at a time via cursor — prevents loading all
     // full project data into memory simultaneously (OOM fix).
+    // Each callback is wrapped in try/catch so a single corrupted record
+    // doesn't abort the cursor and hide ALL projects from the dashboard.
     await db.projects
       .orderBy('updatedAt')
       .reverse()
       .each((record) => {
-        // Skip cover images that are large base64 data URLs — these
-        // should have been offloaded to blob URLs, but if they weren't,
-        // keeping a multi-MB string in the dashboard summary wastes memory.
-        // Small cover images (< 100KB encoded) and blob/http URLs pass through.
-        let coverImage = record.data.info.coverImage;
-        if (coverImage && coverImage.startsWith('data:') && coverImage.length > 100_000) {
-          coverImage = undefined;
-        }
+        try {
+          // Validate minimum required fields before accessing them
+          if (!record?.data?.info || !record?.data?.nodes) {
+            console.warn('[ProjectsDB] Skipping corrupted record (missing data.info or data.nodes):', record?.id);
+            return;
+          }
 
-        summaries.push({
-          id: record.data.id,
-          title: record.data.info.title,
-          author: record.data.info.author,
-          coverImage,
-          updatedAt: record.updatedAt,
-          nodeCount: record.data.nodes.length,
-          theme: record.data.info.theme,
-        });
+          // Skip cover images that are large base64 data URLs — these
+          // should have been offloaded to blob URLs, but if they weren't,
+          // keeping a multi-MB string in the dashboard summary wastes memory.
+          // Small cover images (< 100KB encoded) and blob/http URLs pass through.
+          // Also skip dead blob URLs from previous sessions.
+          let coverImage = record.data.info.coverImage;
+          if (coverImage && coverImage.startsWith('data:') && coverImage.length > 100_000) {
+            coverImage = undefined;
+          }
+          if (coverImage && coverImage.startsWith('blob:')) {
+            coverImage = undefined; // blob URLs don't survive page reloads
+          }
+
+          summaries.push({
+            id: record.data.id,
+            title: record.data.info.title || 'Untitled',
+            author: record.data.info.author || '',
+            coverImage,
+            updatedAt: record.updatedAt,
+            nodeCount: record.data.nodes?.length ?? 0,
+            theme: record.data.info.theme || 'modern',
+          });
+        } catch (err) {
+          console.error('[ProjectsDB] Error reading project record, skipping:', record?.id, err);
+        }
       });
 
     logDB('Got projects', { count: summaries.length });

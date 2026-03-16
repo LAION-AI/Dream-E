@@ -417,6 +417,17 @@ export function cleanStaleBlobUrls(project: Project): number {
     }
   }
 
+  // Clean coverImage — offloadAssetsInPlace() converts this to blob URL,
+  // and if rehydrateForSave() was missing it (now fixed), stale blob URLs
+  // could have been persisted to IndexedDB.
+  if (project.info.coverImage &&
+      project.info.coverImage.startsWith('blob:') &&
+      !blobStore.has(project.info.coverImage)) {
+    console.warn('[BlobCache] Cleaned stale blob URL from project coverImage');
+    project.info.coverImage = '';
+    cleaned++;
+  }
+
   if (cleaned > 0) {
     console.error(`[BlobCache] WARNING: ${cleaned} asset(s) had stale blob URLs from a previous session. ` +
       `This means a save occurred while blob data was evicted. ` +
@@ -616,6 +627,22 @@ export async function rehydrateForSave(project: Project): Promise<Project> {
         });
       }
     }
+  }
+
+  // Rehydrate coverImage on project info — offloadAssetsInPlace() converts
+  // this to a blob URL but the loops above only handle scene/entity fields.
+  // Without this, coverImage gets written to IndexedDB as a dead blob URL
+  // string that won't survive page reloads, causing broken project thumbnails.
+  if (copy.info.coverImage && copy.info.coverImage.startsWith('blob:')) {
+    tasks.push(async () => {
+      const base64 = await blobUrlToBase64(copy.info.coverImage!);
+      if (base64) {
+        copy.info.coverImage = base64;
+      } else {
+        console.error('[BlobCache] Rehydration FAILED for coverImage — blob URL is dead.');
+        copy.info.coverImage = '';
+      }
+    });
   }
 
   if (tasks.length > 0) {
