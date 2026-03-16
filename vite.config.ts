@@ -684,7 +684,7 @@ export default defineConfig({
                     contents,
                     generationConfig: {
                       temperature: 0.7,
-                      maxOutputTokens: 8192,
+                      maxOutputTokens: 16384,
                     },
                   };
 

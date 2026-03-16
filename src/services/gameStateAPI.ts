@@ -1310,24 +1310,25 @@ const handleAssignMusicToScene: CommandHandler = async (params, store, project) 
     const mimeType = blob.type || 'audio/mpeg';
     const dataUrl = `data:${mimeType};base64,${base64}`;
 
-    // Set the music on the scene
+    // Set the music on the scene — build a fresh data object to avoid
+    // mutating the Immer-frozen project state (which throws TypeError).
     const node = project.nodes.find((n) => n.id === sceneId)!;
     const data = node.data as Record<string, unknown>;
-    data.backgroundMusic = dataUrl;
-    data.musicKeepPlaying = keepPlaying;
 
-    // Store music metadata on the scene for future reference
-    data.musicMetadata = {
-      row_id,
-      title: trackMeta.title,
-      duration: trackMeta.duration,
-      has_singing: trackMeta.has_singing,
-      evoked_emotions: trackMeta.evoked_emotions,
-      source: trackMeta.source,
-      genre_situations: trackMeta.genre_situations,
-    };
-
-    store.updateNode(sceneId, { data: { ...data } } as any);
+    store.updateNode(sceneId, { data: {
+      ...data,
+      backgroundMusic: dataUrl,
+      musicKeepPlaying: keepPlaying,
+      musicMetadata: {
+        row_id,
+        title: trackMeta.title,
+        duration: trackMeta.duration,
+        has_singing: trackMeta.has_singing,
+        evoked_emotions: trackMeta.evoked_emotions,
+        source: trackMeta.source,
+        genre_situations: trackMeta.genre_situations,
+      },
+    } } as any);
 
     return {
       success: true,
