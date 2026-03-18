@@ -216,20 +216,50 @@ export async function initializeDatabase(): Promise<void> {
     // Dexie creates tables if they don't exist
     await db.open();
 
-    // Log success
-    if (import.meta.env.DEV) {
-      console.log('[Database] Connection opened successfully');
+    // ALWAYS log project count (not just in DEV) — critical for debugging
+    // "my projects are gone" issues. This is the first thing to check.
+    const projectCount = await db.projects.count();
+    const assetCount = await db.assets.count();
+    const saveCount = await db.saves.count();
 
-      // Log table counts for debugging
-      const projectCount = await db.projects.count();
-      const assetCount = await db.assets.count();
-      const saveCount = await db.saves.count();
+    console.log(
+      `%c[Database] StoryWeaverDB opened — ${projectCount} project(s), ${assetCount} asset(s), ${saveCount} save(s)`,
+      'color: #22c55e; font-weight: bold; font-size: 13px;'
+    );
 
-      console.log('[Database] Records:', {
-        projects: projectCount,
-        assets: assetCount,
-        saves: saveCount,
+    // If projects exist, log their titles for quick verification
+    if (projectCount > 0) {
+      const titles: string[] = [];
+      await db.projects.each((record) => {
+        titles.push(record.data?.info?.title || `<untitled: ${record.id}>`);
       });
+      console.log('[Database] Projects in DB:', titles);
+    }
+
+    // Request persistent storage — without this, the browser can evict
+    // IndexedDB data under storage pressure (e.g., after accumulating many
+    // large scene images). persist() tells the browser "don't auto-delete this".
+    // It returns immediately with a boolean; no user prompt in most browsers
+    // when the origin has been visited recently.
+    if (navigator.storage?.persist) {
+      const persisted = await navigator.storage.persisted();
+      if (!persisted) {
+        const granted = await navigator.storage.persist();
+        console.log(`[Database] Persistent storage ${granted ? 'GRANTED' : 'DENIED'} — ` +
+          (granted
+            ? 'IndexedDB data is protected from browser eviction'
+            : 'browser may evict data under storage pressure; save frequently & export backups'));
+      } else {
+        console.log('[Database] Persistent storage already active');
+      }
+    }
+
+    // Log storage quota for diagnostics
+    if (navigator.storage?.estimate) {
+      const est = await navigator.storage.estimate();
+      const usedMB = est.usage ? Math.round(est.usage / 1024 / 1024) : 0;
+      const quotaMB = est.quota ? Math.round(est.quota / 1024 / 1024) : 0;
+      console.log(`[Database] Storage: ${usedMB} MB used / ${quotaMB} MB quota (${quotaMB > 0 ? Math.round((usedMB / quotaMB) * 100) : '?'}%)`);
     }
   } catch (error) {
     // Handle database errors

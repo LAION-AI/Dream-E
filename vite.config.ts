@@ -1140,6 +1140,194 @@ export default defineConfig({
           }
 
           // ============================================================
+          // PROJECT BACKUP ENDPOINTS
+          // ============================================================
+          // Server-side file backup system: writes project JSON to disk
+          // so that projects survive browser cache clears, IndexedDB
+          // eviction, or switching browsers. The backup directory lives
+          // alongside the app code for easy discovery.
+          // ============================================================
+
+          /** Configurable backup directory — all project backups go here */
+          const BACKUP_DIR = path.resolve(__dirname, 'backups');
+
+          // ─── POST /api/backup-project ─────────────────────────────
+          // Receives a full Project JSON body and writes it to
+          // backups/{projectId}.json, overwriting any existing backup
+          // for that project ID. Called fire-and-forget after each
+          // IndexedDB save so the user always has a filesystem copy.
+          if (url === '/api/backup-project' && req.method === 'POST') {
+            const chunks: Buffer[] = [];
+            req.on('data', (chunk: Buffer) => { chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)); });
+            req.on('end', () => {
+              try {
+                const bodyStr = Buffer.concat(chunks).toString('utf-8');
+                const project = JSON.parse(bodyStr);
+
+                if (!project || !project.id) {
+                  res.statusCode = 400;
+                  res.setHeader('Content-Type', 'application/json');
+                  res.end(JSON.stringify({ error: 'Invalid project: missing id' }));
+                  return;
+                }
+
+                // Ensure backup directory exists (no-op if already there)
+                fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+                // Write the project JSON to disk. Using writeFileSync here
+                // because we want to guarantee the write completes before
+                // responding — the caller is fire-and-forget so this won't
+                // block the UI, but we need the file to be intact.
+                const filePath = path.join(BACKUP_DIR, `${project.id}.json`);
+                fs.writeFileSync(filePath, bodyStr, 'utf-8');
+
+                const sizeMB = (Buffer.byteLength(bodyStr, 'utf-8') / (1024 * 1024)).toFixed(1);
+                console.log(`[backup] Saved ${project.id} (${sizeMB} MB) → ${filePath}`);
+
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ ok: true, size: Buffer.byteLength(bodyStr, 'utf-8') }));
+              } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Unknown error';
+                console.error('[backup] Failed to save backup:', msg);
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: msg }));
+              }
+            });
+            return;
+          }
+
+          // ─── GET /api/list-backups ────────────────────────────────
+          // Returns a JSON array of available backup summaries:
+          //   [{ id, title, updatedAt, fileSize }]
+          // Reads each .json file, parses only the minimum fields
+          // needed for the dashboard recovery banner. File stat size
+          // gives an indication of project complexity.
+          if (url === '/api/list-backups' && req.method === 'GET') {
+            try {
+              // If backup directory doesn't exist yet, there are no backups
+              if (!fs.existsSync(BACKUP_DIR)) {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify([]));
+                return;
+              }
+
+              const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.json'));
+              const backups: { id: string; title: string; updatedAt: number; fileSize: number }[] = [];
+
+              for (const file of files) {
+                try {
+                  const filePath = path.join(BACKUP_DIR, file);
+                  const stat = fs.statSync(filePath);
+                  const content = fs.readFileSync(filePath, 'utf-8');
+
+                  // Parse full JSON to extract summary fields. For very
+                  // large projects this is not ideal, but list-backups is
+                  // only called once on dashboard load when 0 projects exist,
+                  // and it runs server-side so it won't affect browser memory.
+                  const project = JSON.parse(content);
+
+                  backups.push({
+                    id: project.id || file.replace('.json', ''),
+                    title: project.info?.title || 'Untitled',
+                    updatedAt: project.info?.updatedAt || stat.mtimeMs,
+                    fileSize: stat.size,
+                  });
+                } catch (fileErr) {
+                  // Skip corrupted backup files — don't let one bad file
+                  // prevent listing the rest
+                  console.warn(`[backup] Skipping unreadable backup: ${file}`, fileErr);
+                }
+              }
+
+              // Sort by updatedAt descending (newest first)
+              backups.sort((a, b) => b.updatedAt - a.updatedAt);
+
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify(backups));
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Unknown error';
+              console.error('[backup] Failed to list backups:', msg);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: msg }));
+            }
+            return;
+          }
+
+          // ─── GET /api/restore-backup/:id ──────────────────────────
+          // Returns the full project JSON for a given backup ID.
+          // The client will import this into IndexedDB to restore
+          // the project.
+          if (url.startsWith('/api/restore-backup/') && req.method === 'GET') {
+            try {
+              const backupId = url.replace('/api/restore-backup/', '').split('?')[0];
+
+              if (!backupId) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: 'Missing backup ID' }));
+                return;
+              }
+
+              const filePath = path.join(BACKUP_DIR, `${backupId}.json`);
+
+              if (!fs.existsSync(filePath)) {
+                res.statusCode = 404;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: `Backup not found: ${backupId}` }));
+                return;
+              }
+
+              const content = fs.readFileSync(filePath, 'utf-8');
+              console.log(`[backup] Restoring backup: ${backupId} (${(Buffer.byteLength(content, 'utf-8') / (1024 * 1024)).toFixed(1)} MB)`);
+
+              res.setHeader('Content-Type', 'application/json');
+              res.end(content);
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Unknown error';
+              console.error('[backup] Failed to restore backup:', msg);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: msg }));
+            }
+            return;
+          }
+
+          // ─── DELETE /api/backup-project/:id ───────────────────────
+          // Deletes a backup file from disk. Used when a project is
+          // permanently deleted and the user no longer wants the backup.
+          if (url.startsWith('/api/backup-project/') && req.method === 'DELETE') {
+            try {
+              const backupId = url.replace('/api/backup-project/', '').split('?')[0];
+
+              if (!backupId) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: 'Missing backup ID' }));
+                return;
+              }
+
+              const filePath = path.join(BACKUP_DIR, `${backupId}.json`);
+
+              if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                console.log(`[backup] Deleted backup: ${backupId}`);
+              }
+
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ ok: true }));
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Unknown error';
+              console.error('[backup] Failed to delete backup:', msg);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: msg }));
+            }
+            return;
+          }
+
+          // ============================================================
           // /api/music/* — Proxy to BM25 RPG Music Search Server
           // ============================================================
           // The BM25 server runs on port 7862. We proxy requests so the
@@ -1203,7 +1391,17 @@ export default defineConfig({
 
   server: {
     port: 5173,
-    open: true,
+    // CRITICAL: strictPort prevents Vite from silently incrementing to 5174, 5175, etc.
+    // when 5173 is occupied. Without this, a port change moves the app to a different
+    // browser origin, making IndexedDB data (all saved projects) invisible because
+    // IndexedDB is scoped per origin (protocol + hostname + port).
+    strictPort: true,
+    // NOTE: `open: true` was removed intentionally. On Windows, Vite uses the system
+    // default browser, which may differ from the browser where the user's IndexedDB
+    // data lives (e.g., user works in Chrome but Windows default is Edge). Opening
+    // the wrong browser after a server restart shows an empty project list — making
+    // it look like all data was lost. Users should bookmark http://localhost:5173
+    // and open it in their preferred browser manually.
     cors: true,
   },
 

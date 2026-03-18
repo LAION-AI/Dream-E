@@ -43,10 +43,23 @@ import {
   MoreVertical,
   Upload,
   Sparkles,
+  HardDrive,
 } from 'lucide-react';
-import type { ProjectSummary, CreateProjectOptions } from '@/types';
+import type { ProjectSummary, CreateProjectOptions, Project } from '@/types';
 import * as projectsDB from '@/db/projectsDB';
 import { Button, Modal } from '@components/common';
+
+/**
+ * BACKUP SUMMARY TYPE
+ * Lightweight summary returned by GET /api/list-backups.
+ * Contains just enough info to display in the recovery banner.
+ */
+interface BackupSummary {
+  id: string;
+  title: string;
+  updatedAt: number;
+  fileSize: number;
+}
 
 /**
  * DASHBOARD COMPONENT
@@ -74,6 +87,13 @@ export default function Dashboard() {
   const [isImporting, setIsImporting] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
 
+  // State for server-side backup recovery.
+  // When the user has 0 projects in IndexedDB but backups exist on disk,
+  // we show a recovery banner so they can restore their work. This handles
+  // the common scenario of switching browsers or clearing cache.
+  const [availableBackups, setAvailableBackups] = useState<BackupSummary[]>([]);
+  const [isRestoring, setIsRestoring] = useState(false);
+
   /**
    * Load projects on component mount
    */
@@ -82,7 +102,9 @@ export default function Dashboard() {
   }, []);
 
   /**
-   * Fetch all projects from database
+   * Fetch all projects from database.
+   * If no projects are found, also check for server-side backups
+   * that could be restored (e.g., after cache clear or browser switch).
    */
   async function loadProjects() {
     try {
@@ -90,12 +112,97 @@ export default function Dashboard() {
       setError(null);
       const projectList = await projectsDB.getAllProjects();
       setProjects(projectList);
+
+      // When the user has no projects, check if filesystem backups exist.
+      // This runs only when projects are empty — not on every load — to
+      // avoid unnecessary network requests during normal usage.
+      if (projectList.length === 0) {
+        checkForBackups();
+      } else {
+        // Clear any previously shown backup banner if projects now exist
+        setAvailableBackups([]);
+      }
     } catch (err) {
       console.error('[Dashboard] Failed to load projects:', err);
       setError('Failed to load projects. Please try again.');
     } finally {
       setIsLoading(false);
     }
+  }
+
+  /**
+   * CHECK FOR SERVER-SIDE BACKUPS
+   * Queries the Vite dev server for filesystem backups. If any exist,
+   * populates the availableBackups state to trigger the recovery banner.
+   *
+   * This is called only when loadProjects() returns 0 projects, so it
+   * won't fire during normal operation.
+   */
+  async function checkForBackups() {
+    try {
+      const resp = await fetch('/api/list-backups');
+      if (!resp.ok) return; // Silently skip — backup API may not be available in production
+
+      const backups: BackupSummary[] = await resp.json();
+      if (backups.length > 0) {
+        console.log(`[Dashboard] Found ${backups.length} backup(s) on disk:`, backups.map(b => b.title));
+        setAvailableBackups(backups);
+      }
+    } catch {
+      // Silently ignore — the backup server endpoint is only available
+      // during Vite dev server. In production builds, this fetch will fail
+      // and that's expected behavior.
+    }
+  }
+
+  /**
+   * RESTORE ALL BACKUPS FROM SERVER
+   * Fetches each backup's full project JSON from the server, then saves
+   * it via projectsDB.saveProject() which extracts assets into separate
+   * records (avoiding the giant 40 MB single-record write that causes
+   * IOError on Edge). The redundant server backup triggered by saveProject
+   * is harmless — it just overwrites the same file.
+   */
+  async function handleRestoreAll() {
+    setIsRestoring(true);
+    setError(null);
+
+    let restored = 0;
+    let failed = 0;
+
+    for (const backup of availableBackups) {
+      try {
+        const resp = await fetch(`/api/restore-backup/${backup.id}`);
+        if (!resp.ok) {
+          console.error(`[Dashboard] Failed to fetch backup ${backup.id}: HTTP ${resp.status}`);
+          failed++;
+          continue;
+        }
+
+        const project: Project = await resp.json();
+
+        // Use saveProject() which extracts assets into separate records.
+        // This avoids writing a giant 40 MB record to IndexedDB.
+        await projectsDB.saveProject(project);
+
+        restored++;
+        console.log(`[Dashboard] Restored backup: "${project.info?.title}" (${project.id})`);
+      } catch (err) {
+        console.error(`[Dashboard] Failed to restore backup ${backup.id}:`, err);
+        failed++;
+      }
+    }
+
+    // Clear the backup banner and reload the project list
+    setAvailableBackups([]);
+    setIsRestoring(false);
+
+    if (failed > 0) {
+      setError(`Restored ${restored} project(s), but ${failed} failed. Check console for details.`);
+    }
+
+    // Reload to show the newly restored projects in the grid
+    await loadProjects();
   }
 
   /**
@@ -289,6 +396,42 @@ export default function Dashboard() {
               >
                 Dismiss
               </button>
+            </div>
+          )}
+
+          {/* ==================== BACKUP RECOVERY BANNER ==================== */}
+          {/* Shown when IndexedDB has 0 projects but filesystem backups exist.
+              This catches the common case of browser cache being cleared,
+              switching to a different browser, or IndexedDB eviction under
+              storage pressure. The banner offers one-click restoration. */}
+          {availableBackups.length > 0 && (
+            <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/50 rounded-lg">
+              <div className="flex items-start gap-3">
+                <HardDrive className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-editor-text font-medium">
+                    Found {availableBackups.length} project backup{availableBackups.length !== 1 ? 's' : ''} on disk
+                  </p>
+                  <p className="text-sm text-editor-muted mt-1">
+                    These were saved from a previous session. Your browser&apos;s local
+                    storage appears empty, but your work is safe on the filesystem.
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {availableBackups.map((b) => (
+                      <li key={b.id} className="text-sm text-editor-muted">
+                        &bull; {b.title} ({(b.fileSize / (1024 * 1024)).toFixed(1)} MB)
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    onClick={handleRestoreAll}
+                    isLoading={isRestoring}
+                    className="mt-3"
+                  >
+                    Restore All
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 

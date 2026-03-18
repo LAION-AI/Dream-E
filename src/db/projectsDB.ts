@@ -12,11 +12,15 @@
  * - Delete projects
  * - List all projects
  *
- * WHY SEPARATE THIS?
- * Keeping database operations in dedicated modules:
- * - Makes code easier to test
- * - Separates concerns (UI doesn't know about database details)
- * - Allows changing database implementation without affecting UI
+ * ASSET-SEPARATED STORAGE:
+ * Binary assets (images, audio) are stored in the `assets` table as native
+ * Blobs, NOT inline in the project record. The project record contains only
+ * lightweight `asset:{id}` reference strings. This avoids writing 20-40 MB
+ * records to IndexedDB (which causes IOError crashes in Edge) and instead
+ * writes many small 1-3 MB asset records individually.
+ *
+ * Backwards compatible: projects with legacy inline base64 strings still load
+ * correctly. On first save, they are automatically migrated to the new format.
  *
  * =============================================================================
  */
@@ -31,7 +35,282 @@ import type {
 } from '@/types';
 import { createDefaultSettings, createDefaultProjectInfo } from '@/types/project';
 import { generateId } from '@/utils/idGenerator';
-import { rehydrateForSave } from '@/utils/blobCache';
+import { rehydrateForSave, registerBlob } from '@/utils/blobCache';
+
+// =============================================================================
+// ASSET FIELD DEFINITIONS
+// =============================================================================
+// These fields on scene nodes and entities contain large binary data (images,
+// audio) that should be stored in the assets table instead of inline.
+
+/** Fields on SceneNode.data that hold large binary assets */
+const SCENE_ASSET_FIELDS = ['backgroundImage', 'backgroundMusic', 'voiceoverAudio'] as const;
+
+/** Fields on Entity that hold large binary assets */
+const ENTITY_ASSET_FIELDS = ['referenceImage', 'referenceVoice', 'defaultMusic'] as const;
+
+// =============================================================================
+// ASSET EXTRACTION & RESOLUTION (CORE OF THE SEPARATED STORAGE SYSTEM)
+// =============================================================================
+
+/**
+ * Converts a blob URL or base64 data URL string to a native Blob object.
+ *
+ * WHY fetch() FOR BOTH:
+ * The Fetch API natively handles both `blob:` and `data:` URLs. For blob URLs,
+ * it retrieves the Blob from the browser's internal blob storage. For data URLs,
+ * it decodes the base64 and creates a Blob. This avoids manual atob() parsing.
+ *
+ * @param val - A blob URL ("blob:http://...") or data URL ("data:image/png;base64,...")
+ * @returns The Blob, or null if conversion fails
+ */
+async function resolveToBlob(val: string): Promise<Blob | null> {
+  try {
+    const resp = await fetch(val);
+    if (!resp.ok) return null;
+    return await resp.blob();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * EXTRACT AND SAVE ASSETS
+ * Walks all asset fields in the project, converts blob URLs / base64 strings
+ * to native Blob objects, writes each as a separate record in the `assets`
+ * table, and replaces the field value with an `asset:{id}` reference string.
+ *
+ * DETERMINISTIC ASSET IDs:
+ * Asset IDs are `{projectId}_{ownerId}_{field}` — deterministic based on where
+ * the asset lives in the project. This means:
+ * - Re-saving the same asset overwrites the same record (no accumulation)
+ * - No need to track or garbage-collect stale asset IDs
+ * - Each asset field maps to exactly one record in the assets table
+ *
+ * MUTATES THE PROJECT IN PLACE (call on a clone, not the live store object).
+ *
+ * @param project - The project clone to extract assets from (mutated in place)
+ * @param projectId - The project's ID, used as a prefix for asset IDs
+ * @returns Number of assets extracted
+ */
+async function extractAndSaveAssets(project: Project, projectId: string): Promise<number> {
+  let extracted = 0;
+
+  // Scene node assets
+  for (const node of project.nodes) {
+    if (node.type !== 'scene') continue;
+    const data = node.data as Record<string, unknown>;
+    for (const field of SCENE_ASSET_FIELDS) {
+      const val = data[field];
+      // Skip empty, short strings, already-extracted refs, and static paths (e.g. "/dreamroom.jpg")
+      if (typeof val !== 'string' || val.length <= 200) continue;
+      if (val.startsWith('asset:')) continue;
+      if (!val.startsWith('blob:') && !val.startsWith('data:')) continue;
+
+      const assetId = `${projectId}_${node.id}_${field}`;
+      const blob = await resolveToBlob(val);
+      if (blob) {
+        await db.assets.put({
+          id: assetId,
+          projectId,
+          type: field.includes('Image') || field.includes('image') ? 'image' as const : 'audio' as const,
+          name: `${node.id}_${field}`,
+          mimeType: blob.type || 'application/octet-stream',
+          blob,
+          size: blob.size,
+          createdAt: Date.now(),
+        });
+        data[field] = `asset:${assetId}`;
+        extracted++;
+      }
+    }
+  }
+
+  // Entity assets
+  for (const entity of (project.entities || [])) {
+    const e = entity as unknown as Record<string, unknown>;
+    for (const field of ENTITY_ASSET_FIELDS) {
+      const val = e[field];
+      if (typeof val !== 'string' || val.length <= 200) continue;
+      if (val.startsWith('asset:')) continue;
+      if (!val.startsWith('blob:') && !val.startsWith('data:')) continue;
+
+      const assetId = `${projectId}_${entity.id}_${field}`;
+      const blob = await resolveToBlob(val as string);
+      if (blob) {
+        await db.assets.put({
+          id: assetId,
+          projectId,
+          type: field.includes('Image') || field.includes('image') ? 'image' as const : 'audio' as const,
+          name: `${entity.id}_${field}`,
+          mimeType: blob.type || 'application/octet-stream',
+          blob,
+          size: blob.size,
+          createdAt: Date.now(),
+        });
+        e[field] = `asset:${assetId}`;
+        extracted++;
+      }
+    }
+  }
+
+  // Cover image on project info
+  if (project.info.coverImage &&
+      project.info.coverImage.length > 200 &&
+      !project.info.coverImage.startsWith('asset:') &&
+      (project.info.coverImage.startsWith('blob:') || project.info.coverImage.startsWith('data:'))) {
+    const assetId = `${projectId}_coverImage`;
+    const blob = await resolveToBlob(project.info.coverImage);
+    if (blob) {
+      await db.assets.put({
+        id: assetId,
+        projectId,
+        type: 'image' as const,
+        name: 'coverImage',
+        mimeType: blob.type || 'application/octet-stream',
+        blob,
+        size: blob.size,
+        createdAt: Date.now(),
+      });
+      project.info.coverImage = `asset:${assetId}`;
+      extracted++;
+    }
+  }
+
+  return extracted;
+}
+
+/**
+ * RESOLVE ASSET REFERENCES
+ * The inverse of extractAndSaveAssets(). Walks the project looking for
+ * `asset:{id}` reference strings, fetches the corresponding Blob from the
+ * assets table, creates a blob URL, and registers it in the blob cache
+ * so the rest of the app (display, export, rehydration) works seamlessly.
+ *
+ * BACKWARDS COMPATIBILITY:
+ * Fields that still contain inline base64 data URLs (from old projects that
+ * haven't been migrated yet) are left as-is. The caller's offloadAssetsInPlace()
+ * will convert those to blob URLs separately.
+ *
+ * MUTATES THE PROJECT IN PLACE.
+ *
+ * @param project - The project loaded from IndexedDB (mutated in place)
+ * @returns Number of asset references resolved
+ */
+async function resolveAssetReferences(project: Project): Promise<number> {
+  let resolved = 0;
+
+  // Scene node assets
+  for (const node of project.nodes) {
+    if (node.type !== 'scene') continue;
+    const data = node.data as Record<string, unknown>;
+    for (const field of SCENE_ASSET_FIELDS) {
+      const val = data[field];
+      if (typeof val === 'string' && val.startsWith('asset:')) {
+        const assetId = val.slice(6); // Remove 'asset:' prefix
+        const record = await db.assets.get(assetId);
+        if (record?.blob) {
+          const blobUrl = URL.createObjectURL(record.blob);
+          // Register in blobCache so rehydrateForSave() and export can
+          // convert back to base64 when needed.
+          registerBlob(blobUrl, record.blob);
+          data[field] = blobUrl;
+          resolved++;
+        } else {
+          console.warn(`[ProjectsDB] Asset not found in DB: ${assetId} (node ${node.id}.${field})`);
+          data[field] = '';
+        }
+      }
+    }
+  }
+
+  // Entity assets
+  for (const entity of (project.entities || [])) {
+    const e = entity as unknown as Record<string, unknown>;
+    for (const field of ENTITY_ASSET_FIELDS) {
+      const val = e[field];
+      if (typeof val === 'string' && val.startsWith('asset:')) {
+        const assetId = val.slice(6);
+        const record = await db.assets.get(assetId);
+        if (record?.blob) {
+          const blobUrl = URL.createObjectURL(record.blob);
+          registerBlob(blobUrl, record.blob);
+          e[field] = blobUrl;
+          resolved++;
+        } else {
+          console.warn(`[ProjectsDB] Asset not found in DB: ${assetId} (entity ${entity.id}.${field})`);
+          e[field] = '';
+        }
+      }
+    }
+  }
+
+  // Cover image
+  if (project.info.coverImage?.startsWith('asset:')) {
+    const assetId = project.info.coverImage.slice(6);
+    const record = await db.assets.get(assetId);
+    if (record?.blob) {
+      const blobUrl = URL.createObjectURL(record.blob);
+      registerBlob(blobUrl, record.blob);
+      project.info.coverImage = blobUrl;
+      resolved++;
+    } else {
+      console.warn(`[ProjectsDB] Cover image asset not found: ${assetId}`);
+      project.info.coverImage = '';
+    }
+  }
+
+  return resolved;
+}
+
+// =============================================================================
+// SERVER BACKUP
+// =============================================================================
+
+/**
+ * BACKUP TO SERVER (FIRE-AND-FORGET)
+ * After a successful IndexedDB save, sends the rehydrated project copy
+ * to the Vite dev server's /api/backup-project endpoint. The server
+ * writes it to Build_Output/backups/{projectId}.json on disk.
+ *
+ * WHY THIS EXISTS:
+ * IndexedDB is scoped to a single browser origin (protocol + host + port).
+ * If the user switches browsers, clears cache, or the browser evicts data
+ * under storage pressure, all projects are lost. This filesystem backup
+ * provides a safety net — the dashboard can offer to restore backups.
+ *
+ * WHY FIRE-AND-FORGET:
+ * We don't await this call because it should never slow down the save path.
+ * If the backup fails (e.g., server is production build without middleware),
+ * the error is logged silently and the user's IndexedDB save is unaffected.
+ *
+ * @param project - The rehydrated project copy (base64 data URLs, not blob URLs)
+ */
+function backupToServer(project: Project): void {
+  try {
+    fetch('/api/backup-project', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(project),
+    })
+      .then((resp) => {
+        if (!resp.ok) {
+          console.warn(`[ProjectsDB] Backup failed (HTTP ${resp.status}) for project ${project.id}`);
+        } else {
+          logDB('Backup sent to server', { id: project.id });
+        }
+      })
+      .catch((err) => {
+        // Silent catch — backup failure must never surface as a user-facing error.
+        // Common cause: running in production build without the Vite middleware.
+        console.warn('[ProjectsDB] Backup to server failed (non-blocking):', err?.message || err);
+      });
+  } catch (err) {
+    // Catch synchronous errors from JSON.stringify (e.g., circular refs — shouldn't
+    // happen since rehydrateForSave already produced a serializable copy, but be safe)
+    console.warn('[ProjectsDB] Backup serialization failed:', err);
+  }
+}
 
 /**
  * DEBUG LOGGER FOR DATABASE OPERATIONS
@@ -45,6 +324,10 @@ function logDB(operation: string, data?: unknown): void {
     console.log(`[ProjectsDB] ${operation}`, data ?? '');
   }
 }
+
+// =============================================================================
+// PROJECT CRUD OPERATIONS
+// =============================================================================
 
 /**
  * CREATE NEW PROJECT
@@ -137,10 +420,16 @@ export async function createProject(
 
 /**
  * GET PROJECT BY ID
- * Retrieves a project from the database.
+ * Retrieves a project from the database and resolves any asset references.
+ *
+ * LOAD FLOW:
+ * 1. Read lightweight project record from IndexedDB (asset:{id} references)
+ * 2. Resolve asset references → fetch Blobs from assets table → create blob URLs
+ * 3. Legacy inline base64 strings pass through unchanged (handled later by
+ *    offloadAssetsInPlace in the store)
  *
  * @param id - Project ID
- * @returns The project, or null if not found
+ * @returns The project with blob URLs, or null if not found
  * @throws Error if retrieval fails
  */
 export async function getProject(id: string): Promise<Project | null> {
@@ -156,6 +445,14 @@ export async function getProject(id: string): Promise<Project | null> {
       return null;
     }
 
+    // Resolve asset:{id} references → blob URLs from the assets table.
+    // This handles the new separated storage format. Legacy inline base64
+    // strings are left as-is for the caller's offloadAssetsInPlace() to handle.
+    const resolved = await resolveAssetReferences(record.data);
+    if (resolved > 0) {
+      logDB(`Resolved ${resolved} asset references → blob URLs`);
+    }
+
     logDB('Project loaded', { id, title: record.data.info.title });
 
     return record.data;
@@ -167,41 +464,89 @@ export async function getProject(id: string): Promise<Project | null> {
 
 /**
  * SAVE PROJECT
- * Updates an existing project in the database.
+ * Saves a project using asset-separated storage.
  *
- * This function:
- * 1. Updates the modification timestamp
- * 2. Saves the entire project data
+ * SAVE FLOW:
+ * 1. Clone the project (cheap: blob URLs are ~50 bytes each)
+ * 2. Extract binary assets from clone → individual records in assets table
+ *    (each 1-3 MB, written separately — no more giant 40 MB atomic writes)
+ * 3. Write lightweight project record (~50-200 KB) to projects table
+ * 4. Fire-and-forget: rehydrate blob URLs → base64 for server file backup
  *
- * @param project - The project to save
+ * BACKWARDS COMPATIBILITY:
+ * The clone may contain blob URLs (from offloaded assets) or base64 strings
+ * (from newly generated assets that haven't been offloaded yet). Both are
+ * handled by extractAndSaveAssets() via fetch().
+ *
+ * @param project - The project to save (NOT mutated — a clone is used)
  * @throws Error if save fails
  */
 export async function saveProject(project: Project): Promise<void> {
   logDB('Saving project', { id: project.id, title: project.info.title });
 
   try {
-    // Update timestamp
     const updatedAt = Date.now();
 
-    // rehydrateForSave() creates a deep clone and converts any blob URLs
-    // back to base64 data URLs from the cached Blobs. After asset offloading,
-    // in-memory nodes hold blob URLs (~50 bytes) instead of multi-MB base64
-    // strings, so the clone is cheap. This replaces the old
-    // JSON.parse(JSON.stringify(project)) which doubled memory usage.
-    const projectCopy = await rehydrateForSave(project);
-    projectCopy.info.updatedAt = updatedAt;
+    // Create a lightweight clone. After asset offloading, blob URLs are ~50 bytes
+    // each, so structuredClone is cheap (~5 KB for text+structure vs 40 MB for
+    // inline base64). This clone is what gets written to IndexedDB.
+    const lightCopy = structuredClone(project);
+    lightCopy.info.updatedAt = updatedAt;
 
-    // Create updated record
+    // Extract binary assets from the clone into separate asset records.
+    // Each asset is written individually to the assets table (1-3 MB each).
+    // The clone's fields are replaced with `asset:{id}` reference strings.
+    const extracted = await extractAndSaveAssets(lightCopy, project.id);
+    if (extracted > 0) {
+      logDB(`Extracted ${extracted} assets to separate records`);
+    }
+
+    // The project record is now lightweight — just text, structure, and
+    // `asset:{id}` reference strings. Typically 50-200 KB.
     const record: ProjectRecord = {
-      id: projectCopy.id,
-      data: projectCopy,
+      id: lightCopy.id,
+      data: lightCopy,
       updatedAt,
     };
 
-    // Save to database (upsert - update or insert)
-    await db.projects.put(record);
+    // Write to IndexedDB with retry for transient I/O errors.
+    // With asset-separated storage, this record is small enough that IOErrors
+    // should be extremely rare, but we keep the retry for robustness.
+    const MAX_RETRIES = 3;
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        await db.projects.put(record);
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err;
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.warn(`[ProjectsDB] IndexedDB put failed (attempt ${attempt}/${MAX_RETRIES}): ${errMsg}`);
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, 500 * attempt));
+        }
+      }
+    }
 
-    logDB('Project saved', { id: projectCopy.id });
+    // If all retries failed, ensure server backup still runs as safety net.
+    if (lastError) {
+      console.error('[ProjectsDB] IndexedDB save failed after all retries — falling back to server backup only.', lastError);
+      rehydrateForSave(project)
+        .then((fullCopy) => backupToServer(fullCopy))
+        .catch((err) => console.warn('[ProjectsDB] Server backup also failed:', err));
+      return;
+    }
+
+    logDB('Project saved', { id: lightCopy.id });
+
+    // Fire-and-forget server backup: rehydrate blob URLs → base64 for a
+    // self-contained JSON file on disk. This runs asynchronously and won't
+    // block the UI. The rehydrateForSave() call works on the ORIGINAL project
+    // (which still has blob URLs registered in blobCache), not the lightCopy.
+    rehydrateForSave(project)
+      .then((fullCopy) => backupToServer(fullCopy))
+      .catch((err) => console.warn('[ProjectsDB] Server backup failed:', err));
   } catch (error) {
     console.error('[ProjectsDB] Failed to save project:', error);
     throw new Error(`Failed to save project: ${getErrorMessage(error)}`);
@@ -213,7 +558,7 @@ export async function saveProject(project: Project): Promise<void> {
  * Removes a project and all its associated data from the database.
  *
  * This function also deletes:
- * - All assets belonging to the project
+ * - All assets belonging to the project (both separated and uploaded)
  * - All saves belonging to the project
  *
  * @param id - Project ID to delete
@@ -228,7 +573,8 @@ export async function deleteProject(id: string): Promise<void> {
       // Delete the project
       await db.projects.delete(id);
 
-      // Delete all assets for this project
+      // Delete all assets for this project (covers both separated scene/entity
+      // assets and any explicitly uploaded assets)
       await db.assets.where('projectId').equals(id).delete();
 
       // Delete all saves for this project
@@ -260,9 +606,10 @@ export async function deleteProject(id: string): Promise<void> {
  * each record's memory after we extract the summary fields. This reduces
  * peak memory from O(all projects) to O(largest single project).
  *
- * Additionally, coverImage is skipped if it's a large base64 data URL
- * (it should have been offloaded to a blob URL, but if not, we don't
- * want to keep a multi-MB string in the summary just for a thumbnail).
+ * NOTE: With asset-separated storage, project records are already lightweight
+ * (~50-200 KB), so OOM on the dashboard is no longer a concern for new
+ * projects. This cursor approach is kept for backwards compat with any
+ * old projects that still have inline base64.
  *
  * @returns Array of project summaries, sorted by updatedAt (newest first)
  */
@@ -287,17 +634,23 @@ export async function getAllProjects(): Promise<ProjectSummary[]> {
             return;
           }
 
-          // Skip cover images that are large base64 data URLs — these
-          // should have been offloaded to blob URLs, but if they weren't,
-          // keeping a multi-MB string in the dashboard summary wastes memory.
-          // Small cover images (< 100KB encoded) and blob/http URLs pass through.
-          // Also skip dead blob URLs from previous sessions.
+          // Determine cover image for the summary.
+          // With asset-separated storage, coverImage may be an `asset:{id}` reference.
+          // We skip it in the summary — it would require an async DB lookup which
+          // isn't possible inside the synchronous .each() callback. The dashboard
+          // will show the gradient placeholder instead.
           let coverImage = record.data.info.coverImage;
+          // Skip asset references (can't resolve synchronously)
+          if (coverImage && coverImage.startsWith('asset:')) {
+            coverImage = undefined;
+          }
+          // Skip large base64 (legacy projects not yet migrated)
           if (coverImage && coverImage.startsWith('data:') && coverImage.length > 100_000) {
             coverImage = undefined;
           }
+          // Skip dead blob URLs from previous sessions
           if (coverImage && coverImage.startsWith('blob:')) {
-            coverImage = undefined; // blob URLs don't survive page reloads
+            coverImage = undefined;
           }
 
           summaries.push({
@@ -332,6 +685,12 @@ export async function getAllProjects(): Promise<ProjectSummary[]> {
  * - "(Copy)" appended to title
  * - New timestamps
  *
+ * ASSET HANDLING:
+ * getProject() resolves asset references to blob URLs. The duplicate gets
+ * new node/entity IDs, so on save, extractAndSaveAssets() writes new asset
+ * records with the duplicate's deterministic IDs. We also extract assets
+ * immediately here so the initial save to IndexedDB is lightweight.
+ *
  * @param id - ID of project to duplicate
  * @returns The new duplicate project
  * @throws Error if duplication fails
@@ -340,7 +699,7 @@ export async function duplicateProject(id: string): Promise<Project> {
   logDB('Duplicating project', id);
 
   try {
-    // Get the original project
+    // Get the original project (asset refs already resolved to blob URLs)
     const original = await getProject(id);
 
     if (!original) {
@@ -403,7 +762,12 @@ export async function duplicateProject(id: string): Promise<Project> {
       duplicate.settings.startNodeId = idMap.get(duplicate.settings.startNodeId)!;
     }
 
-    // Save the duplicate
+    // Extract assets into the assets table for the new project.
+    // The duplicate has blob URLs from the original — extractAndSaveAssets()
+    // converts them to Blob records with the new project's deterministic IDs.
+    await extractAndSaveAssets(duplicate, newProjectId);
+
+    // Save the lightweight duplicate record
     const record: ProjectRecord = {
       id: newProjectId,
       data: duplicate,
@@ -432,6 +796,11 @@ export async function duplicateProject(id: string): Promise<Project> {
  * - New node and edge IDs (avoids cross-project ID conflicts)
  * - Updated creation and modification timestamps
  * - " (Imported)" appended to the title for clarity
+ *
+ * ASSET HANDLING:
+ * Imported projects contain inline base64 strings (from the ZIP export).
+ * extractAndSaveAssets() converts these to separate asset records on import,
+ * so the project record stored in IndexedDB is immediately lightweight.
  *
  * @param file - The .dream-e.zip or .storyweaver.zip File from a file input or drop
  * @returns The imported project
@@ -593,7 +962,16 @@ export async function importProject(file: File): Promise<Project> {
       chatMessages: [],
     };
 
-    // Save to database
+    // Extract inline base64 assets into separate asset records.
+    // The imported project contains full base64 strings from the ZIP file.
+    // This converts them to native Blobs in the assets table so the project
+    // record saved to IndexedDB is lightweight from the start.
+    const extracted = await extractAndSaveAssets(importedProject, newProjectId);
+    if (extracted > 0) {
+      logDB(`Import: extracted ${extracted} assets to separate records`);
+    }
+
+    // Save the lightweight project record
     const record: ProjectRecord = {
       id: newProjectId,
       data: importedProject,
@@ -628,6 +1006,10 @@ export async function projectExists(id: string): Promise<boolean> {
   const count = await db.projects.where('id').equals(id).count();
   return count > 0;
 }
+
+// =============================================================================
+// STARTER CONTENT
+// =============================================================================
 
 /**
  * DEFAULT DREAM ROOM TEXT

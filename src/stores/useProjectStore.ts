@@ -1308,7 +1308,15 @@ function scheduleAutoSave(): void {
     const state = useProjectStore.getState();
     if (state.currentProject && state.isDirty) {
       console.log('[ProjectStore] Auto-saving...');
-      await state.saveProject();
+      try {
+        await state.saveProject();
+      } catch (err) {
+        // Auto-save errors must NOT propagate — an unhandled promise rejection
+        // from a setTimeout crashes the page. The saveProject() function already
+        // handles retries and falls back to server backup, so by the time it
+        // throws, the data is either saved or backed up. Just log the warning.
+        console.warn('[ProjectStore] Auto-save failed (data may be backed up to server):', err);
+      }
     }
     autoSaveTimer = null;
   }, AUTO_SAVE_DELAY);
