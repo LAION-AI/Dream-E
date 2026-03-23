@@ -21,13 +21,15 @@
  * =============================================================================
  */
 
-import React, { useMemo } from 'react';
-import { Plus, X, Upload } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Plus, X, Upload, Sparkles, FolderOpen } from 'lucide-react';
 import type { StoryRootNode, StoryRootNodeData } from '@/types';
 import { useProjectStore } from '@stores/useProjectStore';
 import InfoTooltip from '@components/common/InfoTooltip';
 import { STORY_TOOLTIPS } from '@/data/storyTooltips';
 import MediaUploader from './MediaUploader';
+import ImageGenerationOverlay from '@components/media/ImageGenerationOverlay';
+import AssetPicker from '@components/media/AssetPicker';
 
 // =============================================================================
 // CONSTANTS
@@ -74,6 +76,11 @@ interface StoryRootInspectorProps {
  */
 export default function StoryRootInspector({ node }: StoryRootInspectorProps) {
   const updateNode = useProjectStore((s) => s.updateNode);
+
+  /** State for the image generation overlay */
+  const [imageGenOpen, setImageGenOpen] = useState(false);
+  /** State for the asset picker modal */
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
 
   /**
    * Helper to update any field on the StoryRootNode's data object.
@@ -429,7 +436,44 @@ export default function StoryRootInspector({ node }: StoryRootInspectorProps) {
           onChange={handleImageChange}
           placeholder="Click to upload a cover / mood image"
         />
+        {/* Generate Image + Select from Assets buttons */}
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => setImageGenOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-accent/10 border border-accent/30 hover:bg-accent/20 transition-colors text-accent"
+          >
+            <Sparkles size={12} />
+            Generate Image
+          </button>
+          <button
+            onClick={() => setAssetPickerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-editor-bg border border-editor-border hover:bg-editor-surface transition-colors text-editor-text"
+          >
+            <FolderOpen size={12} />
+            Select from Assets
+          </button>
+        </div>
       </div>
+
+      {/* Image Generation Overlay */}
+      <ImageGenerationOverlay
+        isOpen={imageGenOpen}
+        onClose={() => setImageGenOpen(false)}
+        onImageGenerated={(dataUrl) => updateData({ image: dataUrl })}
+        title="Generate Story Image"
+      />
+
+      {/* Asset Picker for selecting existing images */}
+      <AssetPicker
+        isOpen={assetPickerOpen}
+        onClose={() => setAssetPickerOpen(false)}
+        onSelect={(url) => {
+          updateData({ image: url });
+          setAssetPickerOpen(false);
+        }}
+        filterType="image"
+        title="Select Story Image"
+      />
     </div>
   );
 }

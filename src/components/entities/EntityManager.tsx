@@ -25,6 +25,9 @@ import {
   History,
   ChevronDown,
   ChevronRight,
+  Sparkles,
+  FolderOpen,
+  Volume2,
   type LucideIcon,
 } from 'lucide-react';
 import type { EntityCategory, Entity, SceneNode, EntityStateChangeEvent } from '@/types';
@@ -35,6 +38,9 @@ import MediaUploader from '@components/inspector/MediaUploader';
 import { getAssetFingerprint } from '@/utils/assetFingerprint';
 import { computeNodeDepths } from '@/utils/graphDepth';
 import ProfileViewer from './ProfileViewer';
+import ImageGenerationOverlay from '@components/media/ImageGenerationOverlay';
+import TTSGenerationOverlay from '@components/media/TTSGenerationOverlay';
+import AssetPicker from '@components/media/AssetPicker';
 
 // =============================================================================
 // DESCRIPTION TEMPLATES — schema-inspired heading prompts
@@ -314,6 +320,15 @@ export default function EntityManager({ isOpen, onClose, category }: EntityManag
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Entity | null>(null);
 
+  /** State for image generation overlay */
+  const [imageGenOpen, setImageGenOpen] = useState(false);
+  /** State for asset picker (images) */
+  const [imageAssetPickerOpen, setImageAssetPickerOpen] = useState(false);
+  /** State for TTS generation overlay (voice) */
+  const [ttsGenOpen, setTtsGenOpen] = useState(false);
+  /** State for asset picker (voice) */
+  const [voiceAssetPickerOpen, setVoiceAssetPickerOpen] = useState(false);
+
   const entities = useMemo(() => getEntitiesByCategory(category), [
     getEntitiesByCategory,
     category,
@@ -534,6 +549,23 @@ export default function EntityManager({ isOpen, onClose, category }: EntityManag
                           : undefined
                       }
                     />
+                    {/* Generate Image + Select from Assets buttons */}
+                    <div className="flex gap-2 mt-2 flex-wrap">
+                      <button
+                        onClick={() => setImageGenOpen(true)}
+                        className="flex items-center gap-1 px-2 py-1 text-[11px] rounded bg-accent/10 border border-accent/30 hover:bg-accent/20 transition-colors text-accent"
+                      >
+                        <Sparkles size={10} />
+                        Generate
+                      </button>
+                      <button
+                        onClick={() => setImageAssetPickerOpen(true)}
+                        className="flex items-center gap-1 px-2 py-1 text-[11px] rounded bg-editor-bg border border-editor-border hover:bg-editor-surface transition-colors text-editor-text"
+                      >
+                        <FolderOpen size={10} />
+                        Assets
+                      </button>
+                    </div>
                   </div>
 
                   {/* Reference Voice (characters only) */}
@@ -554,6 +586,23 @@ export default function EntityManager({ isOpen, onClose, category }: EntityManag
                       <p className="text-xs text-editor-muted mt-1">
                         Voice identity clip for TTS reference.
                       </p>
+                      {/* Generate Voice + Select from Assets buttons */}
+                      <div className="flex gap-2 mt-1 flex-wrap">
+                        <button
+                          onClick={() => setTtsGenOpen(true)}
+                          className="flex items-center gap-1 px-2 py-1 text-[11px] rounded bg-teal-500/10 border border-teal-500/30 hover:bg-teal-500/20 transition-colors text-teal-400"
+                        >
+                          <Volume2 size={10} />
+                          Generate
+                        </button>
+                        <button
+                          onClick={() => setVoiceAssetPickerOpen(true)}
+                          className="flex items-center gap-1 px-2 py-1 text-[11px] rounded bg-editor-bg border border-editor-border hover:bg-editor-surface transition-colors text-editor-text"
+                        >
+                          <FolderOpen size={10} />
+                          Assets
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -738,6 +787,64 @@ export default function EntityManager({ isOpen, onClose, category }: EntityManag
         confirmLabel="Delete"
         danger
       />
+
+      {/* Image Generation Overlay for reference image */}
+      <ImageGenerationOverlay
+        isOpen={imageGenOpen}
+        onClose={() => setImageGenOpen(false)}
+        onImageGenerated={(dataUrl) => {
+          if (selectedEntity) {
+            handleUpdateField({ referenceImage: dataUrl });
+          }
+        }}
+        initialPrompt={selectedEntity ? `${config.singularLabel} reference portrait: ${selectedEntity.name}. ${selectedEntity.summary || ''}`.trim() : ''}
+        title={selectedEntity ? `Generate Image — ${selectedEntity.name}` : 'Generate Image'}
+      />
+
+      {/* Asset Picker for reference image */}
+      <AssetPicker
+        isOpen={imageAssetPickerOpen}
+        onClose={() => setImageAssetPickerOpen(false)}
+        onSelect={(url) => {
+          if (selectedEntity) {
+            handleUpdateField({ referenceImage: url });
+          }
+          setImageAssetPickerOpen(false);
+        }}
+        filterType="image"
+        title={selectedEntity ? `Select Image — ${selectedEntity.name}` : 'Select Image'}
+      />
+
+      {/* TTS Generation Overlay for reference voice (characters only) */}
+      {config.hasVoice && (
+        <TTSGenerationOverlay
+          isOpen={ttsGenOpen}
+          onClose={() => setTtsGenOpen(false)}
+          onAudioGenerated={(dataUrl) => {
+            if (selectedEntity) {
+              handleUpdateField({ referenceVoice: dataUrl });
+            }
+          }}
+          initialText={selectedEntity ? `Hello, my name is ${selectedEntity.name}.` : ''}
+          title={selectedEntity ? `Generate Voice — ${selectedEntity.name}` : 'Generate Voice'}
+        />
+      )}
+
+      {/* Asset Picker for reference voice (characters only) */}
+      {config.hasVoice && (
+        <AssetPicker
+          isOpen={voiceAssetPickerOpen}
+          onClose={() => setVoiceAssetPickerOpen(false)}
+          onSelect={(url) => {
+            if (selectedEntity) {
+              handleUpdateField({ referenceVoice: url });
+            }
+            setVoiceAssetPickerOpen(false);
+          }}
+          filterType="audio"
+          title={selectedEntity ? `Select Voice — ${selectedEntity.name}` : 'Select Voice'}
+        />
+      )}
     </>
   );
 }

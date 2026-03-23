@@ -17,12 +17,15 @@
  * =============================================================================
  */
 
-import React from 'react';
+import React, { useState } from 'react';
+import { Sparkles, FolderOpen } from 'lucide-react';
 import type { PlotNode, PlotNodeData } from '@/types';
 import { useProjectStore } from '@stores/useProjectStore';
 import InfoTooltip from '@components/common/InfoTooltip';
 import { STORY_TOOLTIPS } from '@/data/storyTooltips';
 import MediaUploader from './MediaUploader';
+import ImageGenerationOverlay from '@components/media/ImageGenerationOverlay';
+import AssetPicker from '@components/media/AssetPicker';
 
 // =============================================================================
 // CONSTANTS
@@ -65,6 +68,11 @@ interface PlotInspectorProps {
  */
 export default function PlotInspector({ node }: PlotInspectorProps) {
   const updateNode = useProjectStore((s) => s.updateNode);
+
+  /** State for the image generation overlay */
+  const [imageGenOpen, setImageGenOpen] = useState(false);
+  /** State for the asset picker modal */
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
 
   /**
    * Helper to update any field on the PlotNode's data object.
@@ -169,7 +177,44 @@ export default function PlotInspector({ node }: PlotInspectorProps) {
           onChange={handleImageChange}
           placeholder="Click to upload a mood / concept image"
         />
+        {/* Generate Image + Select from Assets buttons */}
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => setImageGenOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-accent/10 border border-accent/30 hover:bg-accent/20 transition-colors text-accent"
+          >
+            <Sparkles size={12} />
+            Generate Image
+          </button>
+          <button
+            onClick={() => setAssetPickerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-editor-bg border border-editor-border hover:bg-editor-surface transition-colors text-editor-text"
+          >
+            <FolderOpen size={12} />
+            Select from Assets
+          </button>
+        </div>
       </div>
+
+      {/* Image Generation Overlay */}
+      <ImageGenerationOverlay
+        isOpen={imageGenOpen}
+        onClose={() => setImageGenOpen(false)}
+        onImageGenerated={(dataUrl) => updateData({ image: dataUrl })}
+        title="Generate Plot Image"
+      />
+
+      {/* Asset Picker for selecting existing images */}
+      <AssetPicker
+        isOpen={assetPickerOpen}
+        onClose={() => setAssetPickerOpen(false)}
+        onSelect={(url) => {
+          updateData({ image: url });
+          setAssetPickerOpen(false);
+        }}
+        filterType="image"
+        title="Select Plot Image"
+      />
     </div>
   );
 }

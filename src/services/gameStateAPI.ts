@@ -3,7 +3,7 @@
  * GAME STATE API — Core Command Handlers
  * =============================================================================
  *
- * 38 commands for complete control of the Dream-E game state.
+ * 55 commands for complete control of the Dream-E game state.
  * Every handler validates inputs, includes helpful error suggestions,
  * and returns structured results.
  *
@@ -17,7 +17,7 @@
 
 import { useProjectStore } from '@/stores/useProjectStore';
 import { generateId } from '@/utils/idGenerator';
-import type { Project, StoryNode, Entity, Variable, StoryEdge } from '@/types';
+import type { Project, StoryNode, Entity, Variable, StoryEdge, StoryRootNodeData, PlotNodeData, ActNodeData, RelationshipEdgeData } from '@/types';
 import type { APIResult } from './gameStateAPI.types';
 import { ValidationError } from './gameStateAPI.types';
 import { COMMANDS } from './gameStateAPI.registry';
@@ -1418,6 +1418,607 @@ const handleGenerateSceneVoiceover: CommandHandler = async (params, store, proje
 };
 
 // =============================================================================
+// CO-WRITING MODE HANDLERS
+// =============================================================================
+
+/**
+ * Valid plot types for plot nodes. Used for validation when creating or
+ * updating plot nodes via the co-write commands.
+ */
+const VALID_PLOT_TYPES = [
+  'Main Plot', 'Relationship Plot', 'Antagonist Plot',
+  'Character Development Plot', 'Subplot', 'Custom',
+];
+
+// ─── Story Root ──────────────────────────────────────────────────────
+
+/**
+ * Update fields on the story root node. The story root is the central
+ * node of a co-writing project — it holds title, genre, characters, etc.
+ * Only fields that are provided in params are updated; the rest are left
+ * unchanged. This allows incremental updates without overwriting.
+ */
+const handleUpdateStoryRoot: CommandHandler = (params, store, project) => {
+  const rootNode = project.nodes.find(n => n.type === 'storyRoot');
+  if (!rootNode) {
+    throw new ValidationError(
+      'No story root node found.',
+      'Create a co-writing project first — story root is auto-created with co-write projects.'
+    );
+  }
+
+  const data = { ...(rootNode.data as StoryRootNodeData) };
+
+  // Update each field only if provided, preserving existing values for
+  // fields the caller didn't mention.
+  if (params.title !== undefined) data.title = String(params.title);
+  if (params.genre !== undefined) data.genre = String(params.genre);
+  if (params.targetAudience !== undefined) data.targetAudience = String(params.targetAudience);
+  if (params.punchline !== undefined) data.punchline = String(params.punchline);
+  if (params.protagonistGoal !== undefined) data.protagonistGoal = String(params.protagonistGoal);
+  if (params.summary !== undefined) data.summary = String(params.summary);
+
+  // mainCharacter and antagonist are objects with {name, role}
+  if (params.mainCharacter !== undefined) {
+    const mc = params.mainCharacter as { name?: string; role?: string };
+    data.mainCharacter = {
+      name: mc.name ?? data.mainCharacter?.name ?? '',
+      role: mc.role ?? data.mainCharacter?.role ?? '',
+    };
+  }
+  if (params.antagonist !== undefined) {
+    const ant = params.antagonist as { name?: string; role?: string };
+    data.antagonist = {
+      name: ant.name ?? data.antagonist?.name ?? '',
+      role: ant.role ?? data.antagonist?.role ?? '',
+    };
+  }
+
+  // supportingCharacters is an array of {name, archetype}
+  if (params.supportingCharacters !== undefined) {
+    const sc = params.supportingCharacters as Array<{ name: string; archetype: string }>;
+    if (Array.isArray(sc)) {
+      data.supportingCharacters = sc.map(c => ({
+        name: c.name || '',
+        archetype: c.archetype || '',
+      }));
+    }
+  }
+
+  store.updateNode(rootNode.id, { data } as any);
+
+  return {
+    success: true,
+    rootNodeId: rootNode.id,
+    updated: Object.keys(params),
+  };
+};
+
+/**
+ * Get all data from the story root node. Returns the complete story
+ * structure so the AI agent can see the full context.
+ */
+const handleGetStoryRoot: CommandHandler = (_params, _store, project) => {
+  const rootNode = project.nodes.find(n => n.type === 'storyRoot');
+  if (!rootNode) {
+    throw new ValidationError(
+      'No story root node found.',
+      'Create a co-writing project first.'
+    );
+  }
+
+  const data = rootNode.data as StoryRootNodeData;
+  return {
+    success: true,
+    rootNodeId: rootNode.id,
+    title: data.title,
+    genre: data.genre,
+    targetAudience: data.targetAudience,
+    punchline: data.punchline,
+    mainCharacter: data.mainCharacter,
+    antagonist: data.antagonist,
+    supportingCharacters: data.supportingCharacters,
+    protagonistGoal: data.protagonistGoal,
+    summary: data.summary,
+    image: data.image ? '(has image)' : undefined,
+  };
+};
+
+// ─── Plots ───────────────────────────────────────────────────────────
+
+/**
+ * Create a new plot node and auto-connect it to the story root via an
+ * edge. This mirrors the behavior of dragging a plot node onto the
+ * canvas from the node palette — the edge to root is created automatically
+ * so the user/agent doesn't need a separate connect_nodes call.
+ */
+const handleCreatePlot: CommandHandler = (params, store, project) => {
+  const name = requireString(params, 'name');
+  const plotType = requireString(params, 'plotType');
+  if (!VALID_PLOT_TYPES.includes(plotType)) {
+    throw new ValidationError(
+      `Invalid plotType: ${plotType}`,
+      `Valid types: ${VALID_PLOT_TYPES.join(', ')}`
+    );
+  }
+
+  const plotNodeId = generateId('node');
+  const nodeCount = project.nodes.length;
+
+  store.addNode({
+    id: plotNodeId,
+    type: 'plot',
+    position: { x: 500 + nodeCount * 50, y: 300 + nodeCount * 40 },
+    label: name,
+    data: {
+      name,
+      plotType,
+      description: (params.description as string) || '',
+      customPlotType: (params.customPlotType as string) || undefined,
+    } as PlotNodeData,
+  } as any);
+
+  // Auto-connect to story root if one exists
+  const rootNode = project.nodes.find(n => n.type === 'storyRoot');
+  if (rootNode) {
+    const edgeId = generateId('edge');
+    store.addEdge({
+      id: edgeId,
+      source: rootNode.id,
+      target: plotNodeId,
+    } as any);
+  }
+
+  return { success: true, plotNodeId };
+};
+
+/**
+ * Update fields on an existing plot node. Only provided fields are
+ * changed — the rest keep their current values.
+ */
+const handleUpdatePlot: CommandHandler = (params, store, project) => {
+  const plotNodeId = requireString(params, 'plotNodeId');
+  const node = project.nodes.find(n => n.id === plotNodeId);
+  if (!node || node.type !== 'plot') {
+    const available = project.nodes
+      .filter(n => n.type === 'plot')
+      .map(n => `${n.id} ("${n.label}")`)
+      .join(', ');
+    throw new ValidationError(
+      `Plot node not found: ${plotNodeId}`,
+      available ? `Available plots: ${available}` : 'No plot nodes exist. Use create_plot first.'
+    );
+  }
+
+  const updates: Record<string, unknown> = {};
+  const dataUpdates: Record<string, unknown> = {};
+
+  if (params.name !== undefined) {
+    updates.label = params.name;
+    dataUpdates.name = params.name;
+  }
+  if (params.plotType !== undefined) {
+    if (!VALID_PLOT_TYPES.includes(params.plotType as string)) {
+      throw new ValidationError(
+        `Invalid plotType: ${params.plotType}`,
+        `Valid types: ${VALID_PLOT_TYPES.join(', ')}`
+      );
+    }
+    dataUpdates.plotType = params.plotType;
+  }
+  if (params.description !== undefined) dataUpdates.description = params.description;
+  if (params.customPlotType !== undefined) dataUpdates.customPlotType = params.customPlotType;
+
+  if (Object.keys(dataUpdates).length > 0) {
+    updates.data = { ...(node.data as any), ...dataUpdates };
+  }
+  store.updateNode(plotNodeId, updates as any);
+  return { success: true, plotNodeId, updated: Object.keys(params).filter(k => k !== 'plotNodeId') };
+};
+
+/**
+ * Delete a plot node and all edges connected to it.
+ */
+const handleDeletePlot: CommandHandler = (params, store, project) => {
+  const plotNodeId = requireString(params, 'plotNodeId');
+  const node = project.nodes.find(n => n.id === plotNodeId);
+  if (!node || node.type !== 'plot') {
+    throw new ValidationError(`Plot node not found: ${plotNodeId}`);
+  }
+  const connectedEdges = project.edges.filter(
+    e => e.source === plotNodeId || e.target === plotNodeId
+  );
+  for (const edge of connectedEdges) store.deleteEdge(edge.id);
+  store.deleteNode(plotNodeId);
+  return { success: true, plotNodeId, edgesRemoved: connectedEdges.length };
+};
+
+/**
+ * List all plot nodes in the project with their key data.
+ */
+const handleListPlots: CommandHandler = (_params, _store, project) => {
+  const plots = project.nodes.filter(n => n.type === 'plot');
+  return {
+    success: true,
+    plots: plots.map(p => {
+      const data = p.data as PlotNodeData;
+      return {
+        plotNodeId: p.id,
+        name: data.name,
+        plotType: data.plotType,
+        description: data.description?.slice(0, 200),
+      };
+    }),
+  };
+};
+
+// ─── Acts ────────────────────────────────────────────────────────────
+
+/**
+ * Create a new act node. Act nodes represent structural acts in the
+ * story (e.g., Act 1: The Setup, Act 2: Confrontation, Act 3: Resolution).
+ */
+const handleCreateAct: CommandHandler = (params, store, project) => {
+  const actNumber = params.actNumber as number;
+  if (actNumber === undefined || actNumber === null || typeof actNumber !== 'number') {
+    throw new ValidationError('Missing required parameter: actNumber (must be a number).');
+  }
+
+  const actNodeId = generateId('node');
+  const nodeCount = project.nodes.length;
+
+  store.addNode({
+    id: actNodeId,
+    type: 'act',
+    position: { x: 600 + nodeCount * 50, y: 400 + nodeCount * 40 },
+    label: (params.name as string) || `Act ${actNumber}`,
+    data: {
+      actNumber,
+      name: (params.name as string) || `Act ${actNumber}`,
+      description: (params.description as string) || '',
+    } as ActNodeData,
+  } as any);
+
+  return { success: true, actNodeId };
+};
+
+/**
+ * Update fields on an existing act node.
+ */
+const handleUpdateAct: CommandHandler = (params, store, project) => {
+  const actNodeId = requireString(params, 'actNodeId');
+  const node = project.nodes.find(n => n.id === actNodeId);
+  if (!node || node.type !== 'act') {
+    const available = project.nodes
+      .filter(n => n.type === 'act')
+      .map(n => `${n.id} ("${n.label}")`)
+      .join(', ');
+    throw new ValidationError(
+      `Act node not found: ${actNodeId}`,
+      available ? `Available acts: ${available}` : 'No act nodes exist. Use create_act first.'
+    );
+  }
+
+  const updates: Record<string, unknown> = {};
+  const dataUpdates: Record<string, unknown> = {};
+
+  if (params.actNumber !== undefined) dataUpdates.actNumber = params.actNumber;
+  if (params.name !== undefined) {
+    updates.label = params.name;
+    dataUpdates.name = params.name;
+  }
+  if (params.description !== undefined) dataUpdates.description = params.description;
+
+  if (Object.keys(dataUpdates).length > 0) {
+    updates.data = { ...(node.data as any), ...dataUpdates };
+  }
+  store.updateNode(actNodeId, updates as any);
+  return { success: true, actNodeId, updated: Object.keys(params).filter(k => k !== 'actNodeId') };
+};
+
+/**
+ * Delete an act node and all edges connected to it.
+ */
+const handleDeleteAct: CommandHandler = (params, store, project) => {
+  const actNodeId = requireString(params, 'actNodeId');
+  const node = project.nodes.find(n => n.id === actNodeId);
+  if (!node || node.type !== 'act') {
+    throw new ValidationError(`Act node not found: ${actNodeId}`);
+  }
+  const connectedEdges = project.edges.filter(
+    e => e.source === actNodeId || e.target === actNodeId
+  );
+  for (const edge of connectedEdges) store.deleteEdge(edge.id);
+  store.deleteNode(actNodeId);
+  return { success: true, actNodeId, edgesRemoved: connectedEdges.length };
+};
+
+/**
+ * List all act nodes in the project, sorted by act number.
+ */
+const handleListActs: CommandHandler = (_params, _store, project) => {
+  const acts = project.nodes.filter(n => n.type === 'act');
+  return {
+    success: true,
+    acts: acts
+      .map(a => {
+        const data = a.data as ActNodeData;
+        return {
+          actNodeId: a.id,
+          actNumber: data.actNumber,
+          name: data.name,
+          description: data.description?.slice(0, 200),
+        };
+      })
+      .sort((a, b) => a.actNumber - b.actNumber),
+  };
+};
+
+// ─── Relationships ───────────────────────────────────────────────────
+
+/**
+ * Create a relationship edge between two nodes. This is used for:
+ * - Character-to-character relationships (friendships, rivalries, romance)
+ * - Act-to-plot connections (what part of a plot unfolds in which act)
+ * The edge uses the 'relationship' type for custom rendering.
+ */
+const handleCreateRelationship: CommandHandler = (params, store, project) => {
+  const sourceNodeId = requireString(params, 'sourceNodeId');
+  const targetNodeId = requireString(params, 'targetNodeId');
+
+  // Validate both nodes exist
+  assertNode(project, sourceNodeId);
+  assertNode(project, targetNodeId);
+
+  const edgeId = generateId('edge');
+  const edgeData: RelationshipEdgeData = {
+    relationshipType: (params.relationshipType as string) || '',
+    description: (params.description as string) || '',
+    status: '',
+    history: '',
+    beginning: (params.beginning as string) || undefined,
+    ending: (params.ending as string) || undefined,
+    plotInvolvement: (params.plotInvolvement as string) || undefined,
+  };
+
+  store.addEdge({
+    id: edgeId,
+    source: sourceNodeId,
+    target: targetNodeId,
+    type: 'relationship',
+    data: edgeData,
+  } as any);
+
+  return { success: true, edgeId };
+};
+
+/**
+ * Update data on an existing relationship edge. Only provided fields
+ * are changed — the rest keep their current values.
+ */
+const handleUpdateRelationship: CommandHandler = (params, store, project) => {
+  const edgeId = requireString(params, 'edgeId');
+  const edge = project.edges.find(e => e.id === edgeId);
+  if (!edge) {
+    const available = project.edges
+      .filter(e => e.type === 'relationship')
+      .map(e => `${e.id}: ${e.source} → ${e.target}`)
+      .join(', ');
+    throw new ValidationError(
+      `Relationship edge not found: ${edgeId}`,
+      available ? `Available relationships: ${available}` : 'No relationship edges exist. Use create_relationship first.'
+    );
+  }
+
+  const data = { ...(edge.data as RelationshipEdgeData || {}) } as RelationshipEdgeData;
+
+  if (params.relationshipType !== undefined) data.relationshipType = String(params.relationshipType);
+  if (params.description !== undefined) data.description = String(params.description);
+  if (params.status !== undefined) data.status = String(params.status);
+  if (params.beginning !== undefined) data.beginning = String(params.beginning);
+  if (params.ending !== undefined) data.ending = String(params.ending);
+  if (params.plotInvolvement !== undefined) data.plotInvolvement = String(params.plotInvolvement);
+  if (params.actDevelopments !== undefined) {
+    const ad = params.actDevelopments as Array<{ actLabel: string; development: string }>;
+    if (Array.isArray(ad)) {
+      data.actDevelopments = ad.map(d => ({
+        actLabel: d.actLabel || '',
+        development: d.development || '',
+      }));
+    }
+  }
+
+  // Update the edge data through the store. We need to update the edge
+  // in the project edges array. The store's updateNode won't work for edges,
+  // so we delete and re-add with the same ID (atomic replacement).
+  store.deleteEdge(edgeId);
+  store.addEdge({
+    ...edge,
+    data,
+  } as any);
+
+  return {
+    success: true,
+    edgeId,
+    updated: Object.keys(params).filter(k => k !== 'edgeId'),
+  };
+};
+
+/**
+ * Delete a relationship edge by ID.
+ */
+const handleDeleteRelationship: CommandHandler = (params, store, project) => {
+  const edgeId = requireString(params, 'edgeId');
+  const edge = project.edges.find(e => e.id === edgeId);
+  if (!edge) {
+    throw new ValidationError(`Edge not found: ${edgeId}`);
+  }
+  store.deleteEdge(edgeId);
+  return { success: true, edgeId };
+};
+
+/**
+ * List all relationship edges in the project. Returns edge ID, source/target
+ * node IDs, relationship type, and description preview.
+ */
+const handleListRelationships: CommandHandler = (_params, _store, project) => {
+  // Relationship edges are those with type === 'relationship' or those
+  // connecting character/act/plot nodes with relationship data.
+  const relEdges = project.edges.filter(e =>
+    e.type === 'relationship' || (e.data && (e.data as any).relationshipType !== undefined)
+  );
+
+  return {
+    success: true,
+    relationships: relEdges.map(e => {
+      const data = (e.data as RelationshipEdgeData) || {};
+      return {
+        edgeId: e.id,
+        sourceNodeId: e.source,
+        targetNodeId: e.target,
+        relationshipType: data.relationshipType || '',
+        description: (data.description || '').slice(0, 200),
+      };
+    }),
+  };
+};
+
+// ─── Character Nodes ─────────────────────────────────────────────────
+
+/**
+ * Create a character node on the character canvas. Character nodes are
+ * visual representations linked to entity records. If entityId is provided,
+ * the node links to that existing entity. If name is provided instead, a
+ * new entity is created first, then the node is linked to it.
+ */
+const handleCreateCharacterNode: CommandHandler = (params, store, project) => {
+  let entityId = params.entityId as string | undefined;
+  const name = params.name as string | undefined;
+  const category = (params.category as string) || 'character';
+
+  if (!entityId && !name) {
+    throw new ValidationError(
+      'Either entityId or name must be provided.',
+      'Provide entityId to link to an existing entity, or name to create a new entity.'
+    );
+  }
+
+  // If linking to existing entity, validate it exists
+  if (entityId) {
+    assertEntity(project, entityId);
+  } else if (name) {
+    // Create a new entity for this character node
+    if (!VALID_CATEGORIES.includes(category)) {
+      throw new ValidationError(`Invalid category: ${category}`, `Valid: ${VALID_CATEGORIES.join(', ')}`);
+    }
+    entityId = generateId('entity');
+    const now = Date.now();
+    store.addEntity({
+      id: entityId,
+      category: category as any,
+      name,
+      description: '',
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  const nodeId = generateId('node');
+  const nodeCount = project.nodes.length;
+
+  store.addNode({
+    id: nodeId,
+    type: 'character',
+    position: { x: 300 + nodeCount * 60, y: 200 + nodeCount * 60 },
+    label: name || (project.entities || []).find(e => e.id === entityId)?.name || 'Character',
+    data: {
+      entityId: entityId!,
+    },
+  } as any);
+
+  return { success: true, nodeId, entityId: entityId! };
+};
+
+/**
+ * Set a specific profile field on a character entity. This is a convenience
+ * command that's simpler than patch_entity_profile for setting individual
+ * fields like age, gender, occupation, etc.
+ */
+const handleSetCharacterProfileField: CommandHandler = (params, store, project) => {
+  const entityId = requireString(params, 'entityId');
+  const field = requireString(params, 'field');
+  const value = params.value;
+
+  if (value === undefined) {
+    throw new ValidationError('Missing required parameter: value');
+  }
+
+  const entity = assertEntity(project, entityId);
+  const profile = { ...((entity as any).profile || {}) };
+  profile[field] = value;
+
+  store.updateEntity(entityId, { profile } as any);
+  return { success: true, entityId, field, value };
+};
+
+/**
+ * Generate an image for any co-write node (storyRoot, plot, act) or entity.
+ * Reuses the existing image generation infrastructure (same /api/generate-image
+ * endpoint and style settings). After generation, the image is stored on the
+ * node's data.image field or the entity's referenceImage field.
+ */
+const handleGenerateNodeImage: CommandHandler = async (params, _store, project) => {
+  const targetId = requireString(params, 'targetId');
+  const rawPrompt = requireString(params, 'prompt');
+
+  // Append user's default image style from AI Settings
+  const styleTag = useImageGenStore.getState().defaultImageStyle?.trim();
+  const prompt = styleTag ? `${rawPrompt}. Style: ${styleTag}` : rawPrompt;
+
+  // Determine if targetId is a node or an entity
+  const node = project.nodes.find(n => n.id === targetId);
+  const entity = (project.entities || []).find(e => e.id === targetId);
+
+  if (!node && !entity) {
+    throw new ValidationError(
+      `Target not found: ${targetId}`,
+      'Provide a valid node ID (storyRoot, plot, act) or entity ID.'
+    );
+  }
+
+  const res = await fetch('/api/generate-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt,
+      width: (params.width as number) || 512,
+      height: (params.height as number) || 512,
+      ...getImageGenSettings(),
+    }),
+  });
+  const data = await res.json();
+  if (data.error) throw new ValidationError(data.error);
+
+  // Re-fetch store after async wait (state may have changed)
+  const freshStore = useProjectStore.getState();
+
+  if (node) {
+    // It's a node (storyRoot, plot, act) — set data.image
+    const freshNode = freshStore.currentProject?.nodes.find(n => n.id === targetId);
+    if (freshNode) {
+      freshStore.updateNode(targetId, {
+        data: { ...(freshNode.data as any), image: data.dataUrl },
+      } as any);
+    }
+  } else if (entity) {
+    // It's an entity — set referenceImage
+    freshStore.updateEntity(targetId, { referenceImage: data.dataUrl } as any);
+  }
+
+  return { success: true, targetId, imageGenerated: true };
+};
+
+// =============================================================================
 // HANDLER MAP
 // =============================================================================
 
@@ -1493,6 +2094,24 @@ const handlers: Record<string, CommandHandler> = {
   get_music_track: handleGetMusicTrack,
   assign_music_to_scene: handleAssignMusicToScene,
   list_music_genres: handleListMusicGenres,
+  // Co-Writing
+  update_story_root: handleUpdateStoryRoot,
+  get_story_root: handleGetStoryRoot,
+  create_plot: handleCreatePlot,
+  update_plot: handleUpdatePlot,
+  delete_plot: handleDeletePlot,
+  list_plots: handleListPlots,
+  create_act: handleCreateAct,
+  update_act: handleUpdateAct,
+  delete_act: handleDeleteAct,
+  list_acts: handleListActs,
+  create_relationship: handleCreateRelationship,
+  update_relationship: handleUpdateRelationship,
+  delete_relationship: handleDeleteRelationship,
+  list_relationships: handleListRelationships,
+  create_character_node: handleCreateCharacterNode,
+  set_character_profile_field: handleSetCharacterProfileField,
+  generate_node_image: handleGenerateNodeImage,
 };
 
 // =============================================================================

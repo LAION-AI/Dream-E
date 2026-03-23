@@ -557,6 +557,8 @@ export interface ActNodeData {
   name: string;
   /** Description of what happens in this act */
   description: string;
+  /** Optional mood/concept image for this act */
+  image?: string;
 }
 
 export interface ActNode extends BaseNode {

@@ -670,6 +670,204 @@ export const COMMANDS: CommandMeta[] = [
     returns: 'Array of {key, name, tracks}',
   },
 
+  // ─── CO-WRITING ──────────────────────────────────────────────────────
+
+  // -- Story Root --
+  {
+    name: 'update_story_root',
+    group: 'cowrite',
+    description: 'Update story root fields (title, genre, characters, goal, summary, etc.)',
+    params: [
+      { name: 'title', type: 'string', required: false, description: 'Story title' },
+      { name: 'genre', type: 'string', required: false, description: 'Genre (e.g. Fantasy, Sci-Fi, Romance)' },
+      { name: 'targetAudience', type: 'string', required: false, description: 'Target audience (e.g. Young Adult, Adult)' },
+      { name: 'punchline', type: 'string', required: false, description: 'One-line story hook / logline' },
+      { name: 'protagonistGoal', type: 'string', required: false, description: 'What the protagonist wants to achieve' },
+      { name: 'summary', type: 'string', required: false, description: 'Story summary / synopsis' },
+      { name: 'mainCharacter', type: '{name, role}', required: false, description: 'Main character object with name and role' },
+      { name: 'antagonist', type: '{name, role}', required: false, description: 'Antagonist object with name and role' },
+      { name: 'supportingCharacters', type: '[{name, archetype}]', required: false, description: 'Array of supporting characters with name and archetype' },
+    ],
+    returns: '{rootNodeId, updated}',
+  },
+  {
+    name: 'get_story_root',
+    group: 'cowrite',
+    description: 'Get all story root data (title, genre, characters, goal, summary, image)',
+    params: [],
+    returns: '{rootNodeId, title, genre, targetAudience, punchline, mainCharacter, antagonist, supportingCharacters, protagonistGoal, summary, image}',
+  },
+
+  // -- Plots --
+  {
+    name: 'create_plot',
+    group: 'cowrite',
+    description: 'Create a new plot node (auto-connects to story root)',
+    params: [
+      { name: 'name', type: 'string', required: true, description: 'Plot name' },
+      { name: 'plotType', type: 'string', required: true, description: 'Plot type', validValues: ['Main Plot', 'Relationship Plot', 'Antagonist Plot', 'Character Development Plot', 'Subplot', 'Custom'] },
+      { name: 'description', type: 'string', required: false, description: 'Plot description' },
+      { name: 'customPlotType', type: 'string', required: false, description: 'Custom plot type label (when plotType is Custom)' },
+    ],
+    returns: '{plotNodeId}',
+  },
+  {
+    name: 'update_plot',
+    group: 'cowrite',
+    description: 'Update plot node fields',
+    params: [
+      { name: 'plotNodeId', type: 'string', required: true, description: 'Plot node ID' },
+      { name: 'name', type: 'string', required: false, description: 'New name' },
+      { name: 'plotType', type: 'string', required: false, description: 'New plot type', validValues: ['Main Plot', 'Relationship Plot', 'Antagonist Plot', 'Character Development Plot', 'Subplot', 'Custom'] },
+      { name: 'description', type: 'string', required: false, description: 'New description' },
+      { name: 'customPlotType', type: 'string', required: false, description: 'New custom plot type label' },
+    ],
+    returns: '{plotNodeId, updated}',
+  },
+  {
+    name: 'delete_plot',
+    group: 'cowrite',
+    description: 'Delete a plot node and all its connected edges',
+    params: [
+      { name: 'plotNodeId', type: 'string', required: true, description: 'Plot node ID' },
+    ],
+    returns: '{plotNodeId, edgesRemoved}',
+  },
+  {
+    name: 'list_plots',
+    group: 'cowrite',
+    description: 'List all plot nodes',
+    params: [],
+    returns: 'Array of {plotNodeId, name, plotType, description}',
+  },
+
+  // -- Acts --
+  {
+    name: 'create_act',
+    group: 'cowrite',
+    description: 'Create a new act node',
+    params: [
+      { name: 'actNumber', type: 'number', required: true, description: 'Act number (e.g. 1, 2, 3)' },
+      { name: 'name', type: 'string', required: false, description: 'Act display name (e.g. "The Setup")' },
+      { name: 'description', type: 'string', required: false, description: 'Description of what happens in this act' },
+    ],
+    returns: '{actNodeId}',
+  },
+  {
+    name: 'update_act',
+    group: 'cowrite',
+    description: 'Update act node fields',
+    params: [
+      { name: 'actNodeId', type: 'string', required: true, description: 'Act node ID' },
+      { name: 'actNumber', type: 'number', required: false, description: 'New act number' },
+      { name: 'name', type: 'string', required: false, description: 'New name' },
+      { name: 'description', type: 'string', required: false, description: 'New description' },
+    ],
+    returns: '{actNodeId, updated}',
+  },
+  {
+    name: 'delete_act',
+    group: 'cowrite',
+    description: 'Delete an act node and all its connected edges',
+    params: [
+      { name: 'actNodeId', type: 'string', required: true, description: 'Act node ID' },
+    ],
+    returns: '{actNodeId, edgesRemoved}',
+  },
+  {
+    name: 'list_acts',
+    group: 'cowrite',
+    description: 'List all act nodes',
+    params: [],
+    returns: 'Array of {actNodeId, actNumber, name, description}',
+  },
+
+  // -- Relationships --
+  {
+    name: 'create_relationship',
+    group: 'cowrite',
+    description: 'Create a relationship edge between two nodes (character-character or act-plot)',
+    params: [
+      { name: 'sourceNodeId', type: 'string', required: true, description: 'Source node ID' },
+      { name: 'targetNodeId', type: 'string', required: true, description: 'Target node ID' },
+      { name: 'relationshipType', type: 'string', required: false, description: 'Type of relationship (e.g. "Allies", "Rivals", "Romantic")' },
+      { name: 'description', type: 'string', required: false, description: 'Relationship description' },
+      { name: 'beginning', type: 'string', required: false, description: 'How the relationship starts' },
+      { name: 'ending', type: 'string', required: false, description: 'How the relationship ends' },
+      { name: 'plotInvolvement', type: 'string', required: false, description: 'What parts of a plot play out in this act (for act-plot edges)' },
+    ],
+    returns: '{edgeId}',
+  },
+  {
+    name: 'update_relationship',
+    group: 'cowrite',
+    description: 'Update relationship edge data',
+    params: [
+      { name: 'edgeId', type: 'string', required: true, description: 'Relationship edge ID' },
+      { name: 'relationshipType', type: 'string', required: false, description: 'New relationship type' },
+      { name: 'description', type: 'string', required: false, description: 'New description' },
+      { name: 'status', type: 'string', required: false, description: 'Current status of the relationship' },
+      { name: 'beginning', type: 'string', required: false, description: 'How it starts' },
+      { name: 'ending', type: 'string', required: false, description: 'How it ends' },
+      { name: 'actDevelopments', type: '[{actLabel, development}]', required: false, description: 'Array of act-by-act development entries' },
+      { name: 'plotInvolvement', type: 'string', required: false, description: 'Plot involvement description (for act-plot edges)' },
+    ],
+    returns: '{edgeId, updated}',
+  },
+  {
+    name: 'delete_relationship',
+    group: 'cowrite',
+    description: 'Delete a relationship edge',
+    params: [
+      { name: 'edgeId', type: 'string', required: true, description: 'Relationship edge ID' },
+    ],
+    returns: '{edgeId}',
+  },
+  {
+    name: 'list_relationships',
+    group: 'cowrite',
+    description: 'List all relationship edges',
+    params: [],
+    returns: 'Array of {edgeId, sourceNodeId, targetNodeId, relationshipType, description}',
+  },
+
+  // -- Character Nodes --
+  {
+    name: 'create_character_node',
+    group: 'cowrite',
+    description: 'Create a character node on the character canvas (links to existing entity or creates new one)',
+    params: [
+      { name: 'entityId', type: 'string', required: false, description: 'Entity ID to link to (if linking an existing entity)' },
+      { name: 'name', type: 'string', required: false, description: 'Name for a new entity (if creating new)' },
+      { name: 'category', type: 'string', required: false, description: 'Entity category (default: "character")', validValues: ['character', 'location', 'object', 'concept'] },
+    ],
+    returns: '{nodeId, entityId}',
+    notes: 'Provide entityId to link to an existing entity, or name to create a new entity. At least one is required.',
+  },
+  {
+    name: 'set_character_profile_field',
+    group: 'cowrite',
+    description: 'Set a specific profile field on a character entity',
+    params: [
+      { name: 'entityId', type: 'string', required: true, description: 'Entity ID' },
+      { name: 'field', type: 'string', required: true, description: 'Profile field name (e.g. age, gender, appearance, occupation)' },
+      { name: 'value', type: 'any', required: true, description: 'Value for the profile field' },
+    ],
+    returns: '{entityId, field, value}',
+  },
+  {
+    name: 'generate_node_image',
+    group: 'cowrite',
+    description: 'Generate an image for any co-write node (root, plot, act) or entity',
+    params: [
+      { name: 'targetId', type: 'string', required: true, description: 'Node ID or entity ID to generate image for' },
+      { name: 'prompt', type: 'string', required: true, description: 'Image generation prompt (be vivid and detailed)' },
+      { name: 'width', type: 'number', required: false, description: 'Width in pixels', defaultValue: 512 },
+      { name: 'height', type: 'number', required: false, description: 'Height in pixels', defaultValue: 512 },
+    ],
+    returns: '{targetId, imageGenerated: true}',
+  },
+
   // ── TTS ──
   {
     name: 'generate_scene_voiceover',
@@ -701,6 +899,7 @@ const GROUP_TITLES: Record<string, string> = {
   project: 'Project Commands',
   query: 'Query Commands (Read-Only)',
   music: 'RPG Music Search & Assignment',
+  cowrite: 'Co-Writing Mode Commands',
 };
 
 /**
@@ -791,6 +990,19 @@ You have access to a library of ~2,580 RPG music tracks searchable by situation,
 ## TEXT-TO-SPEECH (TTS)
 If TTS is enabled in the user's AI settings, you can generate voiceover audio for scenes using the \`set_scene_voiceover\` command.
 The TTS service uses Google Gemini and produces natural-sounding narration. Consider generating voiceover for key dramatic scenes.
+
+## CO-WRITING MODE
+When the project is in co-writing mode, you have access to structured storytelling tools:
+- **Story Root**: The central story document with title, genre, characters, goal, summary
+- **Plot Nodes**: Narrative arcs (Main Plot, Relationship Plot, etc.) auto-connected to root
+- **Act Nodes**: Story acts that structure the timeline
+- **Character Nodes**: Visual character cards linked to entities
+- **Relationships**: Edges between characters (with act-by-act development) and between acts and plots (with plot involvement descriptions)
+
+Use update_story_root to fill in the story structure. Use create_plot/create_act to build the narrative framework. Use create_relationship to connect characters and link acts to plots.
+
+For images: use generate_node_image to create images for any node or entity. Provide detailed, cinematic prompts.
+For character profiles: use set_character_profile_field to add/update profile entries (age, gender, appearance, occupation, characterType, etc.).
 
 ## IMPORTANT RULES
 - Always check [Current Game State] for existing IDs before referencing them

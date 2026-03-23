@@ -23,13 +23,16 @@
  * =============================================================================
  */
 
-import React, { useRef } from 'react';
-import { User, AlertTriangle, Volume2, Upload, Trash2 } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { User, AlertTriangle, Volume2, Upload, Trash2, Sparkles, FolderOpen } from 'lucide-react';
 import type { CharacterNode, Entity } from '@/types';
 import { useProjectStore } from '@stores/useProjectStore';
 import InfoTooltip from '@components/common/InfoTooltip';
 import { STORY_TOOLTIPS } from '@/data/storyTooltips';
 import ProfileViewer from '@components/entities/ProfileViewer';
+import ImageGenerationOverlay from '@components/media/ImageGenerationOverlay';
+import TTSGenerationOverlay from '@components/media/TTSGenerationOverlay';
+import AssetPicker from '@components/media/AssetPicker';
 
 // =============================================================================
 // CONSTANTS
@@ -85,6 +88,15 @@ export default function CharacterNodeInspector({ node }: CharacterNodeInspectorP
   const entities = useProjectStore((s) => s.currentProject?.entities || []);
   const updateEntity = useProjectStore((s) => s.updateEntity);
   const voiceInputRef = useRef<HTMLInputElement>(null);
+
+  /** State for image generation overlay (reference image) */
+  const [imageGenOpen, setImageGenOpen] = useState(false);
+  /** State for asset picker (reference image) */
+  const [imageAssetPickerOpen, setImageAssetPickerOpen] = useState(false);
+  /** State for TTS generation overlay (reference voice) */
+  const [ttsGenOpen, setTtsGenOpen] = useState(false);
+  /** State for asset picker (reference voice) */
+  const [voiceAssetPickerOpen, setVoiceAssetPickerOpen] = useState(false);
 
   /**
    * Look up the entity this character node points to.
@@ -219,6 +231,39 @@ export default function CharacterNodeInspector({ node }: CharacterNodeInspectorP
         />
       </div>
 
+      {/* ==================== REFERENCE IMAGE ==================== */}
+      <div>
+        <label className="input-label flex items-center gap-1">
+          Reference Image
+          <InfoTooltip content="A visual reference portrait for this character. Used by the AI image generator to maintain visual consistency across scenes. Can be uploaded, generated via AI, or selected from project assets." />
+        </label>
+        {entity.referenceImage && (
+          <div className="mb-2">
+            <img
+              src={entity.referenceImage}
+              alt={entity.name}
+              className="w-full max-w-[200px] rounded-lg border border-editor-border"
+            />
+          </div>
+        )}
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setImageGenOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-accent/10 border border-accent/30 hover:bg-accent/20 transition-colors text-accent"
+          >
+            <Sparkles size={12} />
+            Generate Image
+          </button>
+          <button
+            onClick={() => setImageAssetPickerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-editor-bg border border-editor-border hover:bg-editor-surface transition-colors text-editor-text"
+          >
+            <FolderOpen size={12} />
+            Select from Assets
+          </button>
+        </div>
+      </div>
+
       {/* ==================== REFERENCE VOICE ==================== */}
       <div>
         <label className="input-label flex items-center gap-1">
@@ -235,13 +280,27 @@ export default function CharacterNodeInspector({ node }: CharacterNodeInspectorP
               className="w-full h-8"
               style={{ filter: 'invert(1) hue-rotate(180deg)', opacity: 0.85 }}
             />
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => voiceInputRef.current?.click()}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-md bg-editor-bg border border-editor-border hover:bg-editor-surface transition-colors text-editor-text"
               >
                 <Upload size={12} />
                 Replace
+              </button>
+              <button
+                onClick={() => setTtsGenOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-teal-500/10 border border-teal-500/30 hover:bg-teal-500/20 transition-colors text-teal-400"
+              >
+                <Volume2 size={12} />
+                Generate Voice
+              </button>
+              <button
+                onClick={() => setVoiceAssetPickerOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-editor-bg border border-editor-border hover:bg-editor-surface transition-colors text-editor-text"
+              >
+                <FolderOpen size={12} />
+                Select from Assets
               </button>
               <button
                 onClick={handleVoiceRemove}
@@ -253,13 +312,31 @@ export default function CharacterNodeInspector({ node }: CharacterNodeInspectorP
             </div>
           </div>
         ) : (
-          <button
-            onClick={() => voiceInputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-editor-border hover:border-teal-500/50 hover:bg-teal-500/5 transition-colors text-editor-muted text-sm"
-          >
-            <Volume2 size={16} />
-            Upload voice reference clip
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={() => voiceInputRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-editor-border hover:border-teal-500/50 hover:bg-teal-500/5 transition-colors text-editor-muted text-sm"
+            >
+              <Volume2 size={16} />
+              Upload voice reference clip
+            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setTtsGenOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-teal-500/10 border border-teal-500/30 hover:bg-teal-500/20 transition-colors text-teal-400"
+              >
+                <Volume2 size={12} />
+                Generate Voice
+              </button>
+              <button
+                onClick={() => setVoiceAssetPickerOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-editor-bg border border-editor-border hover:bg-editor-surface transition-colors text-editor-text"
+              >
+                <FolderOpen size={12} />
+                Select from Assets
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Hidden file input for voice uploads */}
@@ -389,6 +466,54 @@ export default function CharacterNodeInspector({ node }: CharacterNodeInspectorP
           onProfileChange={handleProfileChange}
         />
       </div>
+
+      {/* ==================== OVERLAYS ==================== */}
+
+      {/* Image Generation Overlay for reference image */}
+      <ImageGenerationOverlay
+        isOpen={imageGenOpen}
+        onClose={() => setImageGenOpen(false)}
+        onImageGenerated={(dataUrl) => {
+          updateEntity(entity.id, { referenceImage: dataUrl });
+        }}
+        initialPrompt={entity.name ? `Portrait of ${entity.name}. ${(profile.appearance as string) || ''}`.trim() : ''}
+        title={`Generate Reference Image — ${entity.name}`}
+      />
+
+      {/* Asset Picker for reference image */}
+      <AssetPicker
+        isOpen={imageAssetPickerOpen}
+        onClose={() => setImageAssetPickerOpen(false)}
+        onSelect={(url) => {
+          updateEntity(entity.id, { referenceImage: url });
+          setImageAssetPickerOpen(false);
+        }}
+        filterType="image"
+        title={`Select Reference Image — ${entity.name}`}
+      />
+
+      {/* TTS Generation Overlay for reference voice */}
+      <TTSGenerationOverlay
+        isOpen={ttsGenOpen}
+        onClose={() => setTtsGenOpen(false)}
+        onAudioGenerated={(dataUrl) => {
+          updateEntity(entity.id, { referenceVoice: dataUrl });
+        }}
+        initialText={entity.name ? `Hello, my name is ${entity.name}.` : ''}
+        title={`Generate Reference Voice — ${entity.name}`}
+      />
+
+      {/* Asset Picker for reference voice */}
+      <AssetPicker
+        isOpen={voiceAssetPickerOpen}
+        onClose={() => setVoiceAssetPickerOpen(false)}
+        onSelect={(url) => {
+          updateEntity(entity.id, { referenceVoice: url });
+          setVoiceAssetPickerOpen(false);
+        }}
+        filterType="audio"
+        title={`Select Reference Voice — ${entity.name}`}
+      />
     </div>
   );
 }

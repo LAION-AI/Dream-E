@@ -25,7 +25,7 @@ export type APIResult =
  */
 export interface CommandMeta {
   name: string;
-  group: 'scenes' | 'connections' | 'entities' | 'variables' | 'media' | 'modifiers' | 'branches' | 'comments' | 'project' | 'query' | 'music';
+  group: 'scenes' | 'connections' | 'entities' | 'variables' | 'media' | 'modifiers' | 'branches' | 'comments' | 'project' | 'query' | 'music' | 'cowrite';
   description: string;
   params: ParamDef[];
   returns: string;
