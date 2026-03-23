@@ -78,13 +78,13 @@ export default function InfoTooltip({ content, title }: InfoTooltipProps) {
           <div
             ref={panelRef}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-xl bg-[#1a1d2e] border border-[#2d3148] shadow-2xl"
+            className="relative w-[80vw] max-h-[80vh] overflow-y-auto rounded-xl bg-[#1a1d2e] border border-[#2d3148] shadow-2xl"
           >
             {/* Header */}
             <div className="sticky top-0 flex items-center justify-between px-5 py-3 bg-[#1a1d2e] border-b border-[#2d3148] rounded-t-xl">
               <div className="flex items-center gap-2">
-                <HelpCircle size={16} className="text-purple-400" />
-                <span className="text-sm font-semibold text-[#e2e4ea]">
+                <HelpCircle size={20} className="text-purple-400" />
+                <span className="text-lg font-semibold text-[#e2e4ea]">
                   {title || 'Info'}
                 </span>
               </div>
@@ -97,8 +97,8 @@ export default function InfoTooltip({ content, title }: InfoTooltipProps) {
             </div>
 
             {/* Body */}
-            <div className="px-5 py-4">
-              <p className="text-sm text-[#b0b4cc] leading-relaxed whitespace-pre-wrap">
+            <div className="px-6 py-5">
+              <p className="text-base text-[#c8cce0] leading-relaxed whitespace-pre-wrap">
                 {content}
               </p>
             </div>
