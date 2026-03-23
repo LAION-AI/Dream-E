@@ -121,6 +121,8 @@ export default function AdventureEngine() {
   // If the player clicked an existing choice, owExistingChoiceRef stores its ID so we reuse it.
   const owCustomActionRef = useRef<string | null>(null);
   const owExistingChoiceRef = useRef<string | null>(null);
+  // User-uploaded images attached to the current OW action (for reference image assignment)
+  const owUserImagesRef = useRef<Array<{ base64: string; label: string }> | undefined>(undefined);
   // Pre-created node info: node + edge are created when AI result arrives (before button click).
   // The "Continue to Next Scene" button just transitions to this pre-created node.
   const owPendingNodeRef = useRef<{ nodeId: string; sourceChoiceId: string } | null>(null);
@@ -1696,7 +1698,7 @@ export default function AdventureEngine() {
    * Handle open world free-form action.
    * Sends the player's text to the AI, which generates a new scene continuation.
    */
-  const handleOpenWorldAction = (userAction: string) => {
+  const handleOpenWorldAction = (userAction: string, attachedImages?: Array<{ base64: string; label: string }>) => {
     if (!project || !session) return;
 
     setOwGenerating(true);
@@ -1704,6 +1706,9 @@ export default function AdventureEngine() {
     setOwStreamText('');
     setOwPendingResult(null);
     owPendingNodeRef.current = null;
+
+    // Store user-uploaded images for this action (used in assignUploadedImages handling)
+    owUserImagesRef.current = attachedImages;
 
     // Store the custom action text so persistOwSceneNode can create
     // a dedicated choice output on the current scene node for it.
@@ -1868,7 +1873,11 @@ export default function AdventureEngine() {
         const unsuppressEntity = suppressHistoryRecording();
         useProjectStore.getState().updateEntity(entityId, { referenceImage: imageDataUrl });
         unsuppressEntity();
-      }
+      },
+      // userUploadedImages — images the player attached to their action input.
+      // Passed through to the AI so it can see them and optionally assign them
+      // to entities via assignUploadedImages.
+      attachedImages
     );
 
     owAbortRef.current = abort;
@@ -2034,6 +2043,26 @@ export default function AdventureEngine() {
           }
           console.log(`[AdventureEngine] Applied ${Object.keys(result.entityUpdates).length} entity updates`);
         }
+
+        // --- Assign user-uploaded images to entities (Feature 4) ---
+        // When the AI's response includes assignUploadedImages, map user-uploaded
+        // images as entity reference images. The AI tells us which entity ID should
+        // receive which uploaded image (by 0-based index).
+        if (result.assignUploadedImages && owUserImagesRef.current && owUserImagesRef.current.length > 0) {
+          const uploadedImgs = owUserImagesRef.current;
+          for (const [entityId, imageIndex] of Object.entries(result.assignUploadedImages)) {
+            if (typeof imageIndex === 'number' && imageIndex >= 0 && imageIndex < uploadedImgs.length) {
+              const imgBase64 = uploadedImgs[imageIndex].base64;
+              console.log(`[AdventureEngine] Assigning uploaded image #${imageIndex} ("${uploadedImgs[imageIndex].label}") to entity ${entityId}`);
+              freshStore.updateEntity(entityId, { referenceImage: imgBase64 });
+            } else {
+              console.warn(`[AdventureEngine] assignUploadedImages: invalid index ${imageIndex} for entity ${entityId} (${uploadedImgs.length} images available)`);
+            }
+          }
+          console.log(`[AdventureEngine] Assigned ${Object.keys(result.assignUploadedImages).length} uploaded images to entities`);
+        }
+        // Clear user images ref after processing
+        owUserImagesRef.current = undefined;
 
         // --- Create new entities ---
         const newEntityIdMap: Record<string, string> = {}; // temp index → real ID
@@ -2622,10 +2651,10 @@ export default function AdventureEngine() {
               {openWorldMode && !owGenerating && (
                 <div className="max-w-3xl">
                   <OpenWorldInput
-                    onSubmit={(text) => {
+                    onSubmit={(text, attachedImages) => {
                       // Direct text input: ensure we create a NEW choice (don't reuse stale ref)
                       owExistingChoiceRef.current = null;
-                      handleOpenWorldAction(text);
+                      handleOpenWorldAction(text, attachedImages);
                     }}
                     disabled={owGenerating}
                   />

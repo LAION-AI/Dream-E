@@ -15,7 +15,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, Mic, MicOff, StickyNote } from 'lucide-react';
+import { Send, Loader2, Mic, MicOff, StickyNote, ImagePlus, X } from 'lucide-react';
 import { useImageGenStore } from '@/stores/useImageGenStore';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { Modal } from '@components/common';
@@ -25,7 +25,7 @@ import { Modal } from '@components/common';
 // =============================================================================
 
 interface OpenWorldInputProps {
-  onSubmit: (action: string) => void;
+  onSubmit: (action: string, attachedImages?: Array<{ base64: string; label: string }>) => void;
   disabled: boolean;
   placeholder?: string;
 }
@@ -40,6 +40,10 @@ type RecordingState = 'idle' | 'recording' | 'transcribing';
 export default function OpenWorldInput({ onSubmit, disabled, placeholder }: OpenWorldInputProps) {
   const [text, setText] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // ── Image upload state ──
+  const [attachedImages, setAttachedImages] = useState<Array<{ base64: string; label: string }>>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // ── Mic / ASR state ──
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
@@ -62,8 +66,41 @@ export default function OpenWorldInput({ onSubmit, disabled, placeholder }: Open
   const handleSubmit = () => {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
-    onSubmit(trimmed);
+    onSubmit(trimmed, attachedImages.length > 0 ? attachedImages : undefined);
     setText('');
+    setAttachedImages([]);
+  };
+
+  /**
+   * Handle image file upload — converts each selected image to base64 data URL
+   * and adds it to the attachedImages state for inclusion in the AI request.
+   */
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        setAttachedImages(prev => [...prev, {
+          base64,
+          label: file.name.replace(/\.[^.]+$/, '') // filename without extension
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Reset input so same file can be re-selected
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  /**
+   * Remove an attached image by index.
+   */
+  const removeImage = (index: number) => {
+    setAttachedImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -236,44 +273,97 @@ export default function OpenWorldInput({ onSubmit, disabled, placeholder }: Open
 
   return (
     <div className="relative">
-      <div className="flex items-end gap-2 bg-black/40 backdrop-blur-sm rounded-lg border border-white/10 p-2">
-        <textarea
-          ref={inputRef}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          placeholder={placeholder || 'What do you want to do? (Shift+Enter for new line)'}
-          className="flex-1 bg-transparent text-white/90 text-sm placeholder-white/30 resize-none outline-none min-h-[40px] max-h-[120px] py-1.5 px-2"
-          rows={1}
-          style={{
-            height: 'auto',
-            minHeight: '40px',
-          }}
-          onInput={(e) => {
-            const target = e.target as HTMLTextAreaElement;
-            target.style.height = 'auto';
-            target.style.height = Math.min(target.scrollHeight, 120) + 'px';
-          }}
-        />
+      {/* Hidden file input for image upload */}
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleImageUpload}
+      />
 
-        {/* Action buttons container */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Notes button */}
-          <button
-            onClick={() => setShowNotes(true)}
+      <div className="bg-black/40 backdrop-blur-sm rounded-lg border border-white/10 p-2">
+        {/* Image preview row — shown above the input area when images are attached */}
+        {attachedImages.length > 0 && (
+          <div className="flex gap-2 px-2 pt-1 pb-2 flex-wrap">
+            {attachedImages.map((img, i) => (
+              <div key={i} className="relative group">
+                <img
+                  src={img.base64}
+                  alt={img.label}
+                  className="w-12 h-12 rounded-md object-cover border border-white/20"
+                />
+                <button
+                  onClick={() => removeImage(i)}
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X size={10} className="text-white" />
+                </button>
+                <span className="absolute bottom-0 left-0 right-0 text-[8px] text-white bg-black/60 text-center truncate rounded-b-md">
+                  {img.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={inputRef}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={handleKeyDown}
             disabled={disabled}
-            className={`
-              p-2 rounded-lg transition-all
-              ${disabled
-                ? 'text-white/20 cursor-not-allowed'
-                : 'text-white/40 hover:text-white/70 hover:bg-white/5'
-              }
-            `}
-            title="Project Notes"
-          >
-            <StickyNote size={18} />
-          </button>
+            placeholder={placeholder || 'What do you want to do? (Shift+Enter for new line)'}
+            className="flex-1 bg-transparent text-white/90 text-sm placeholder-white/30 resize-none outline-none min-h-[40px] max-h-[120px] py-1.5 px-2"
+            rows={1}
+            style={{
+              height: 'auto',
+              minHeight: '40px',
+            }}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = 'auto';
+              target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+            }}
+          />
+
+          {/* Action buttons container */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Image upload button */}
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              disabled={disabled}
+              className={`
+                p-2 rounded-lg transition-all
+                ${disabled
+                  ? 'text-white/20 cursor-not-allowed'
+                  : attachedImages.length > 0
+                    ? 'text-green-400 hover:text-green-300 hover:bg-white/5'
+                    : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                }
+              `}
+              title="Attach reference images"
+            >
+              <ImagePlus size={18} />
+            </button>
+
+            {/* Notes button */}
+            <button
+              onClick={() => setShowNotes(true)}
+              disabled={disabled}
+              className={`
+                p-2 rounded-lg transition-all
+                ${disabled
+                  ? 'text-white/20 cursor-not-allowed'
+                  : 'text-white/40 hover:text-white/70 hover:bg-white/5'
+                }
+              `}
+              title="Project Notes"
+            >
+              <StickyNote size={18} />
+            </button>
 
           {/* Mic button */}
           <button
@@ -328,6 +418,7 @@ export default function OpenWorldInput({ onSubmit, disabled, placeholder }: Open
               <Send size={18} />
             )}
           </button>
+        </div>
         </div>
       </div>
 

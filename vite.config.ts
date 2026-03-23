@@ -847,6 +847,9 @@ export default defineConfig({
                   // Entity reference images for Gemini multimodal — each entry has
                   // { entityId, entityName, base64 } where base64 is a data: URL
                   entityRefImages = [] as Array<{ entityId: string; entityName: string; base64: string }>,
+                  // User-uploaded images attached to the player's action input.
+                  // Each entry has { base64, label } where base64 is a data: URL.
+                  userUploadedImages = [] as Array<{ base64: string; label: string }>,
                 } = JSON.parse(body);
 
                 res.setHeader('Content-Type', 'text/event-stream');
@@ -879,6 +882,7 @@ export default defineConfig({
                     sceneIntentHypothesis: { type: 'STRING', description: 'One compressed sentence: what is the player trying to achieve or experience with THIS specific action/prompt? What direction are they pushing the story?' },
                     lastSatisfactionEstimate: { type: 'STRING', description: 'One sentence: approximately how many scenes ago did the player last get what they wanted — a moment of success, fun, or the type of experience they seek? Reference the scene if possible.' },
                     engagementStrategy: { type: 'STRING', description: 'One sentence decision: should this scene SATISFY the player (give them what they want) or CHALLENGE them (introduce complication/conflict/uncertainty that requires active decision-making)? Never make it impossible, just require engagement.' },
+                    narrativeTensionAnalysis: { type: 'STRING', description: 'Analyze the tension arc: how many scenes since last conflict/surprise/setback? If 2+, MUST introduce tension. If recent, may offer respite. Describe what tension element you will introduce and why.' },
                     plannedStateChanges: { type: 'STRING', description: 'One detailed sentence: which specific entities (characters, locations, objects) should change state, and how, to realize the engagement strategy? Changes must be plausible, emotionally intelligent, not cliche. EVERY entity mentioned here MUST get a corresponding entityUpdates entry with profilePatch.' },
                     // ── Scene content (written AFTER the analysis above) ──
                     sceneText: { type: 'STRING', description: 'The narrative continuation (100-300 words). Screenplay-inspired style. Driven by the analysis above.' },
@@ -947,8 +951,17 @@ export default defineConfig({
                       type: 'BOOLEAN',
                       description: 'Set true to auto-generate TTS voiceover for this scene. Default false.',
                     },
+                    floatingGoals: {
+                      type: 'ARRAY',
+                      items: { type: 'STRING' },
+                      description: 'Array of 2-5 active plot threads / unresolved hooks / opportunities. Carry forward from previous scenes, add new ones, remove resolved ones. Each is one sentence.',
+                    },
+                    assignUploadedImages: {
+                      type: 'OBJECT',
+                      description: 'When the player uploads reference images, assign them to entities. Keys are entity IDs, values are 0-based indices of the uploaded images. Only use when the player explicitly attaches images and asks to use them for specific entities.',
+                    },
                   },
-                  required: ['playerGoalHypothesis', 'sceneIntentHypothesis', 'lastSatisfactionEstimate', 'engagementStrategy', 'plannedStateChanges', 'sceneText', 'speakerName', 'choices', 'imagePrompt', 'reuseImage', 'musicQuery', 'sceneSummary', 'presentEntityIds'],
+                  required: ['playerGoalHypothesis', 'sceneIntentHypothesis', 'lastSatisfactionEstimate', 'engagementStrategy', 'narrativeTensionAnalysis', 'plannedStateChanges', 'sceneText', 'speakerName', 'choices', 'imagePrompt', 'reuseImage', 'musicQuery', 'sceneSummary', 'presentEntityIds', 'floatingGoals'],
                 };
 
                 if (provider === 'gemini') {
@@ -976,6 +989,23 @@ export default defineConfig({
                     }
                     // Add separator between images and main context
                     userParts.push({ text: '\n--- END OF ENTITY REFERENCE IMAGES ---\n\nNow here is the story context and player action:\n' });
+                  }
+
+                  // Add user-uploaded images as inline data (from the player's image upload)
+                  if (userUploadedImages.length > 0) {
+                    console.log(`[OW-API] Adding ${userUploadedImages.length} user-uploaded images to Gemini writer context`);
+                    for (let i = 0; i < userUploadedImages.length; i++) {
+                      const img = userUploadedImages[i];
+                      if (!img.base64 || !img.base64.startsWith('data:')) continue;
+                      const match = img.base64.match(/^data:([^;]+);base64,(.+)$/);
+                      if (match) {
+                        userParts.push({ text: `[User uploaded image #${i}: "${img.label}"]` });
+                        userParts.push({
+                          inlineData: { mimeType: match[1], data: match[2] },
+                        });
+                      }
+                    }
+                    userParts.push({ text: '\n--- END OF USER UPLOADED IMAGES ---\n' });
                   }
 
                   // Add the main user message text

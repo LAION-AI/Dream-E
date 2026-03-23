@@ -78,6 +78,10 @@ export interface OpenWorldResult {
   constructedContext?: string;
   /** The system prompt that was sent to the AI for this scene */
   constructedSystemPrompt?: string;
+  /** Array of 2-5 active plot threads / unresolved hooks / opportunities */
+  floatingGoals?: string[];
+  /** When user uploads images, maps entity IDs to 0-based image indices for assignment */
+  assignUploadedImages?: Record<string, number>;
 }
 
 interface OWMetadata {
@@ -97,6 +101,12 @@ interface OWMetadata {
   sceneSummary?: string;
   /** Search query for BM25 background music. Only set when mood/location changes. */
   musicQuery?: string;
+  /** Narrative tension analysis — reflects on recent tension arc */
+  narrativeTensionAnalysis?: string;
+  /** Array of 2-5 active plot threads / unresolved hooks / opportunities */
+  floatingGoals?: string[];
+  /** When user uploads images, maps entity IDs to 0-based image indices for assignment */
+  assignUploadedImages?: Record<string, number>;
 }
 
 // =============================================================================
@@ -204,6 +214,9 @@ function parseOpenWorldResponse(
       entityUpdates: parsed.entityUpdates,
       sceneSummary: parsed.sceneSummary,
       musicQuery: parsed.musicQuery,
+      narrativeTensionAnalysis: parsed.narrativeTensionAnalysis,
+      floatingGoals: parsed.floatingGoals,
+      assignUploadedImages: parsed.assignUploadedImages,
     };
     console.log('[OpenWorld] Parsed structured JSON output successfully');
     return { sceneText, metadata };
@@ -475,7 +488,8 @@ async function streamOpenWorldResponse(
   userMessage: string,
   signal: AbortSignal,
   onTextDelta: (text: string) => void,
-  entityRefImages: Array<{ entityId: string; entityName: string; base64: string }> = []
+  entityRefImages: Array<{ entityId: string; entityName: string; base64: string }> = [],
+  userUploadedImages: Array<{ base64: string; label: string }> = []
 ): Promise<string> {
   const settings = useImageGenStore.getState();
   const writer = settings.writer;
@@ -499,6 +513,10 @@ async function streamOpenWorldResponse(
       // LLM to SEE what characters/locations look like when generating
       // scene descriptions and imagePrompts for visual consistency.
       entityRefImages: writer.provider === 'gemini' ? entityRefImages : [],
+      // User-uploaded images attached to the player's action input.
+      // These are passed as multimodal parts so the AI can see them and
+      // potentially assign them to entities via assignUploadedImages.
+      userUploadedImages: writer.provider === 'gemini' ? userUploadedImages : [],
     }),
     signal,
   });
@@ -566,7 +584,9 @@ export function generateOpenWorldScene(
   onImageReady?: (imageDataUrl: string) => void,
   onMusicReady?: (musicDataUrl: string, metadata: { row_id: number; title: string; duration?: number }) => void,
   currentSceneImage?: string,
-  onEntityImageReady?: (entityId: string, imageDataUrl: string) => void
+  onEntityImageReady?: (entityId: string, imageDataUrl: string) => void,
+  /** User-uploaded images attached to the player's action (for reference image assignment) */
+  userUploadedImages?: Array<{ base64: string; label: string }>
 ): () => void {
   const controller = new AbortController();
 
@@ -768,7 +788,8 @@ export function generateOpenWorldScene(
         context.userMessage,
         controller.signal,
         onTextDelta,
-        writerRefImages
+        writerRefImages,
+        userUploadedImages || []
       );
 
       // ── Step 3: Parse response ───────────────────────────────────
@@ -851,6 +872,8 @@ export function generateOpenWorldScene(
         playerAction: userAction,
         constructedContext: context.userMessage,
         constructedSystemPrompt: context.systemPrompt,
+        floatingGoals: metadata.floatingGoals,
+        assignUploadedImages: metadata.assignUploadedImages,
       });
 
       // ── Step 4.5: Generate missing entity reference images ──────

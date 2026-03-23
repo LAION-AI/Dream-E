@@ -224,7 +224,9 @@ Your output is enforced as a JSON object. You MUST fill the ANALYSIS fields FIRS
 - **sceneIntentHypothesis** (REQUIRED): One compressed sentence: what is the player trying to achieve with THIS specific action/prompt? What direction are they pushing the story? What experience do they seek from this move?
 - **lastSatisfactionEstimate** (REQUIRED): One sentence: approximately how many scenes ago did the player last genuinely get what they wanted — a moment of success, flow, fun, or the type of experience they seek? Reference that scene if possible. This tracks engagement.
 - **engagementStrategy** (REQUIRED): One sentence decision: based on the above analysis, should this scene SATISFY the player's desires (reward, progress, fun moments) or CHALLENGE them (introduce complication, conflict, uncertainty that requires active decision-making, cleverness, or a new approach)? Never make goals impossible — just require engagement. If the player hasn't been satisfied recently, lean toward satisfaction. If things have been too easy, introduce meaningful challenge.
+- **narrativeTensionAnalysis** (REQUIRED): Reflect on the story's current tension arc. How many consecutive scenes have passed without a meaningful conflict, surprise, setback, or unpredictable twist? If the answer is 2 or more, this scene MUST introduce tension — a betrayal, obstacle, mysterious event, moral dilemma, unexpected NPC action, revelation that changes the stakes, or an antagonistic force asserting itself. If there was recent conflict, you may give the player a brief respite or reward — but NEVER let 3+ scenes pass without something that makes the player uncertain about the outcome. Good stories thrive on uncertainty: the player should never be sure if things will work out. Describe what tension element (if any) you will introduce and why.
 - **plannedStateChanges** (REQUIRED): One detailed sentence: which specific entities (characters, locations, objects, concepts) should change state during this scene, and exactly how, to realize the engagement strategy? Every dramatic beat must materialize as concrete entity state changes (emotions, intentions, physical changes, new arrivals, revelations). Changes MUST be plausible, emotionally intelligent, and fit naturally into the world — not cliche or forced for drama's sake. IMPORTANT: Any change mentioned here MUST produce a corresponding entityUpdates entry with a profilePatch that permanently records the change on the entity's profile.
+- **floatingGoals** (REQUIRED): Array of 2-5 "floating goals" — active plot threads, unresolved hooks, or opportunities currently available to the player. Each is a short sentence describing a potential storyline the player could pursue (e.g. "Investigate the strange lights in the abandoned mine", "Win the trust of the suspicious merchant guild", "Find a cure for the spreading corruption before it reaches the village"). These persist and evolve across scenes: carry forward goals from previous scenes, add new ones as the story introduces them, and remove ones that have been resolved or become irrelevant. The player is free to ignore these, but they provide narrative momentum and make the world feel alive with opportunity. At least one goal should promise reward, and at least one should threaten consequences if ignored.
 
 ### SCENE CONTENT FIELDS (driven by the analysis above):
 - **sceneText** (REQUIRED): The narrative continuation, 100-300 words, screenplay-inspired style. Written to realize the engagement strategy and planned state changes above.
@@ -257,6 +259,7 @@ Your output is enforced as a JSON object. You MUST fill the ANALYSIS fields FIRS
 
 ### WORLD-BUILDING FIELDS (use when the story introduces new elements):
 - **newEntities** (optional): Array of new entities to create. Each has: category ("character"|"location"|"object"|"concept"), name, description, and optionally summary and profile (structured data). Use when a genuinely NEW character, location, object, or concept is introduced that isn't in the entity list yet. Include a profile with relevant attributes (appearance, personality, etc.).
+  - **RICH PROFILES REQUIRED**: Every new entity's description MUST be at least 200 words, covering: physical appearance (height, build, hair, eyes, clothing, distinguishing features), personality (temperament, values, quirks, speech patterns), background (history, origin, motivations, secrets), and relationships (connections to other entities). For locations: architecture, materials, colors, lighting, atmosphere, sounds, smells, size, history, notable features. For objects: appearance, material, origin, magical properties, history. Thin, generic descriptions are not acceptable — the profile is the entity's soul and determines how it behaves in all future scenes.
   - **LOCATIONS specifically**: When the story moves to a new location that is narratively important (a town the player will return to, a dungeon with multiple rooms, a recurring meeting place, a character's home), create a location entity for it with a detailed profile: architecture, materials, colors, lighting, atmosphere, notable landmarks, size, surrounding environment. This ensures visual consistency when the player revisits. Do NOT create location entities for brief transitional moments (walking down a hallway, passing through a gate) — only for places that matter to the story and may appear again.
 - **removeEntities** (optional): Array of entity IDs to permanently delete. Use ONLY for irreversible events (character dies permanently, location destroyed forever). Very rare.
 - **entityLinks** (optional): Array of entity IDs to link to this scene beyond presentEntityIds. Use for entities referenced/affected but not physically present.
@@ -282,14 +285,22 @@ Your output is enforced as a JSON object. You MUST fill the ANALYSIS fields FIRS
 11. Only use removeEntities for permanent, irreversible story events (death, destruction) — not for characters leaving a scene
 12. Only use newVariables when a genuinely new game mechanic emerges — don't create redundant variables
 13. **MANDATORY PROFILE UPDATES**: If ANY entity experiences a change during the scene — magical effects, hypnosis, mind control, physical transformation, injury, emotional shift, relationship change, new knowledge, item gain/loss, enchantment, curse, or ANY other persistent effect — you MUST include that entity in entityUpdates with a profilePatch AND a stateChanges array. The profilePatch is the ONLY way changes persist to future scenes. If you skip it, the change is forgotten forever. Use detailed, vivid descriptions that preserve the exact nature and wording of effects.
-14. **READ EXISTING PROFILES**: Before writing entityUpdates, check each entity's current profile in [ALL ENTITY SUMMARIES] or [ENTITY PROFILES]. Build on existing profile data — don't overwrite fields unless the change specifically supersedes them. Add new keys or append to existing ones as appropriate.`;
+14. **READ EXISTING PROFILES**: Before writing entityUpdates, check each entity's current profile in [ALL ENTITY SUMMARIES] or [ENTITY PROFILES]. Build on existing profile data — don't overwrite fields unless the change specifically supersedes them. Add new keys or append to existing ones as appropriate.
+15. **ENTITY PROFILE GROWTH**: After EVERY scene, check all entities involved. Their profiles should GROW over time, not stay static. Use entityUpdates.profilePatch to ADD new information learned about characters (revealed backstory, observed habits, discovered secrets, relationship developments). Profiles should become richer and more detailed with each scene — aim for profiles that eventually reach 500+ words through accumulated updates. Never just repeat existing profile data in patches — add genuinely new information.
+16. **USER-UPLOADED IMAGES**: When the player attaches images with their action, these appear as "User uploaded image #N" in the context. If the player asks to use an image as a reference for a character, location, or object, set assignUploadedImages with the entity ID as key and the image index (0-based) as value. The system will automatically assign the image as that entity's reference portrait.`;
 
 /**
  * Default instruction inserted after the last scene to guide the model.
  */
 export const DEFAULT_WRITER_INSTRUCTION = `Continue the story for another 100–300 words based on the player's action above. Consider all events, character states, variable conditions, and entity backgrounds from the scene timeline. Fill the ANALYSIS fields first (relevantEntityTraits, playerGoalHypothesis, sceneIntentHypothesis, lastSatisfactionEstimate, engagementStrategy, plannedStateChanges), THEN write sceneText driven by that analysis. Be emotionally intelligent, plausible, and interesting.
 
-IMPORTANT — ENTITY PROFILE UPDATES: After writing the scene, check EVERY entity involved. If anything about them changed — physical state, emotional state, relationships, magical effects, knowledge gained, items acquired/lost, injuries, transformations, enchantments, curses, hypnosis, mind control, or ANY other persistent change — you MUST include an entityUpdates entry with a detailed profilePatch AND a stateChanges array. The profilePatch is the entity's long-term memory: if you don't write it there, it will be forgotten in future scenes. The stateChanges array logs the event in their history protocol. Be specific and vivid — preserve the exact wording and details of effects.`;
+IMPORTANT — ENTITY PROFILE UPDATES: After writing the scene, check EVERY entity involved. If anything about them changed — physical state, emotional state, relationships, magical effects, knowledge gained, items acquired/lost, injuries, transformations, enchantments, curses, hypnosis, mind control, or ANY other persistent change — you MUST include an entityUpdates entry with a detailed profilePatch AND a stateChanges array. The profilePatch is the entity's long-term memory: if you don't write it there, it will be forgotten in future scenes. The stateChanges array logs the event in their history protocol. Be specific and vivid — preserve the exact wording and details of effects.
+
+NARRATIVE TENSION: Before writing, check your narrativeTensionAnalysis. If recent scenes have been peaceful/predictable, introduce an element of unpredictability, conflict, or stakes-raising. Great stories keep the player wondering "what happens next?" — never let the world feel static or safe for too long.
+
+FLOATING GOALS: Always maintain 2-5 active plot threads in floatingGoals. Carry forward unresolved goals from previous scenes, add new ones as opportunities emerge, and remove resolved ones. These give the player a sense of a living world with things happening beyond their immediate actions.
+
+ENTITY PROFILE RICHNESS: New entities MUST have descriptions of at least 200 words. For ALL entities involved in the scene, use entityUpdates.profilePatch to ADD new details discovered or revealed. Profiles should grow richer over time — add backstory, personality observations, relationship notes, physical details noticed, secrets revealed. A well-developed entity has 500+ words across all profile fields.`;
 
 const DEFAULT_ASR: ASRSettings = {
   enabled: true,
@@ -361,9 +372,9 @@ export const useImageGenStore = create<AISettingsStore>()(
     }),
     {
       name: 'storyweaver-image-gen-settings',
-      // Version 5: Added generateEntityImages reference image check rule (9b)
-      // and upgraded generateEntityImages field guidance in system prompt.
-      version: 5,
+      // Version 6: Added narrativeTensionAnalysis, floatingGoals, entity profile growth,
+      // user-uploaded images, and rich entity profile requirements.
+      version: 6,
       migrate: (persisted: any, version: number) => {
         if (version < 3 && persisted?.writer) {
           // Auto-upgrade system prompt if it lacks the new relevantEntityTraits
@@ -388,6 +399,16 @@ export const useImageGenStore = create<AISettingsStore>()(
               !persisted.writer.systemPrompt.includes('REFERENCE IMAGE CHECK')) {
             console.log('[ImageGenStore] Migrating to v5: adding reference image check rule (9b)');
             persisted.writer.systemPrompt = DEFAULT_WRITER_SYSTEM_PROMPT;
+          }
+        }
+        if (version < 6 && persisted?.writer) {
+          // Upgrade prompts to include narrativeTensionAnalysis, floatingGoals,
+          // entity profile growth, user-uploaded images, rich entity profiles.
+          if (persisted.writer.systemPrompt &&
+              !persisted.writer.systemPrompt.includes('narrativeTensionAnalysis')) {
+            console.log('[ImageGenStore] Migrating to v6: adding narrativeTensionAnalysis, floatingGoals, entity profile growth, user-uploaded images');
+            persisted.writer.systemPrompt = DEFAULT_WRITER_SYSTEM_PROMPT;
+            persisted.writer.instruction = DEFAULT_WRITER_INSTRUCTION;
           }
         }
         return persisted;

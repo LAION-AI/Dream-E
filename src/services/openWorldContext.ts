@@ -629,6 +629,25 @@ export function buildOpenWorldContext(
     });
   }
 
+  // Floating goals from previous scene — carry these forward
+  if (currentNode) {
+    const prevDataFG = currentNode.data as Record<string, unknown>;
+    const prevAiResponseFG = prevDataFG.aiResponse as string | undefined;
+    if (prevAiResponseFG) {
+      try {
+        const prevParsedFG = JSON.parse(prevAiResponseFG);
+        if (prevParsedFG.floatingGoals && Array.isArray(prevParsedFG.floatingGoals) && prevParsedFG.floatingGoals.length > 0) {
+          sections.push({
+            label: 'floating_goals',
+            text: `[ACTIVE FLOATING GOALS — carry forward, update, or resolve these]\n${prevParsedFG.floatingGoals.map((g: string, i: number) => `  ${i + 1}. ${g}`).join('\n')}`,
+            order: 84,
+            compressible: false,
+          });
+        }
+      } catch { /* skip if not parseable */ }
+    }
+  }
+
   // Previous scene's AI analysis
   if (currentNode) {
     const prevData = currentNode.data as Record<string, unknown>;
@@ -638,7 +657,8 @@ export function buildOpenWorldContext(
         const prevParsed = JSON.parse(prevAiResponse);
         const analysisFields = [
           'playerGoalHypothesis', 'sceneIntentHypothesis',
-          'lastSatisfactionEstimate', 'engagementStrategy', 'plannedStateChanges',
+          'lastSatisfactionEstimate', 'engagementStrategy',
+          'narrativeTensionAnalysis', 'plannedStateChanges', 'floatingGoals',
         ];
         const analysisLines: string[] = [];
         for (const field of analysisFields) {
