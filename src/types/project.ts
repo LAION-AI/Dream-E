@@ -347,6 +347,15 @@ export interface Project {
   id: string;
 
   /**
+   * Project mode.
+   * 'game' = interactive fiction / text-adventure RPG (default).
+   * 'cowrite' = collaborative AI writing mode for stories, novels, screenplays.
+   * Optional for backwards compatibility — existing projects without this field
+   * are treated as 'game' mode projects.
+   */
+  mode?: 'game' | 'cowrite';
+
+  /**
    * Project metadata.
    */
   info: ProjectInfo;
@@ -439,6 +448,12 @@ export interface ProjectSummary {
 
   /** Theme ID */
   theme: ThemeId;
+
+  /**
+   * Project mode ('game' or 'cowrite').
+   * Optional for backwards compatibility — defaults to 'game' when absent.
+   */
+  mode?: 'game' | 'cowrite';
 }
 
 /**
@@ -492,6 +507,13 @@ export interface CreateProjectOptions {
 
   /** Template to use (if any) */
   templateId?: string;
+
+  /**
+   * Project mode ('game' or 'cowrite').
+   * Determines which dashboard this project appears in.
+   * Defaults to 'game' if not specified.
+   */
+  mode?: 'game' | 'cowrite';
 }
 
 /**

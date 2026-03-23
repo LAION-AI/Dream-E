@@ -12,9 +12,13 @@
  * App
  * ├── BrowserRouter (handles URL-based navigation)
  * │   ├── Routes (defines which component shows for which URL)
- * │   │   ├── "/" -> Dashboard (project manager)
+ * │   │   ├── "/" -> StartMenu (mode selection)
+ * │   │   ├── "/game" -> Dashboard (Game Mode projects)
+ * │   │   ├── "/cowrite" -> Dashboard (Co-Writing Mode projects)
  * │   │   ├── "/edit/:id" -> Editor (node canvas)
- * │   │   └── "/play/:id" -> Player (game runtime)
+ * │   │   ├── "/play/:id" -> Player (game runtime)
+ * │   │   ├── "/cowrite/edit/:id" -> Editor (co-writing canvas)
+ * │   │   └── "/cowrite/play/:id" -> Player (co-writing playback)
  *
  * =============================================================================
  */
@@ -43,6 +47,7 @@ import '@/utils/injectBunnyScene';
  *   - Fast initial load
  *   - Editor code downloads when user clicks "Edit"
  */
+const StartMenu = lazy(() => import('@components/startmenu/StartMenu'));
 const Dashboard = lazy(() => import('@components/dashboard/Dashboard'));
 const Editor = lazy(() => import('@components/editor/Editor'));
 const Player = lazy(() => import('@components/player/AdventureEngine'));
@@ -158,15 +163,34 @@ function App() {
          */}
         <Routes>
           {/**
-           * DASHBOARD ROUTE (Home Page)
-           * URL: / or /dashboard
-           * Shows the project manager with all user's projects.
+           * START MENU ROUTE (Landing Page)
+           * URL: /
+           * Shows the mode selection screen (Game Mode vs Co-Writing Mode).
            */}
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/dashboard" element={<Navigate to="/" replace />} />
+          <Route path="/" element={<StartMenu />} />
 
           {/**
-           * EDITOR ROUTE
+           * GAME MODE DASHBOARD
+           * URL: /game
+           * Shows the project manager filtered to Game Mode projects.
+           */}
+          <Route path="/game" element={<Dashboard mode="game" />} />
+
+          {/**
+           * CO-WRITING MODE DASHBOARD
+           * URL: /cowrite
+           * Shows the project manager filtered to Co-Writing Mode projects.
+           */}
+          <Route path="/cowrite" element={<Dashboard mode="cowrite" />} />
+
+          {/**
+           * LEGACY REDIRECT: /dashboard → /game
+           * Maintains backwards compatibility for bookmarks or hardcoded links.
+           */}
+          <Route path="/dashboard" element={<Navigate to="/game" replace />} />
+
+          {/**
+           * GAME MODE EDITOR ROUTE
            * URL: /edit/:projectId
            * The :projectId is a dynamic parameter.
            *
@@ -179,11 +203,26 @@ function App() {
           <Route path="/edit/:projectId" element={<Editor />} />
 
           {/**
-           * PLAYER ROUTE
+           * GAME MODE PLAYER ROUTE
            * URL: /play/:projectId
            * Runs the game for the specified project.
            */}
           <Route path="/play/:projectId" element={<Player />} />
+
+          {/**
+           * CO-WRITING MODE EDITOR ROUTE
+           * URL: /cowrite/edit/:projectId
+           * Same Editor component, but the /cowrite prefix tells navigation
+           * to return to the Co-Writing dashboard instead of Game dashboard.
+           */}
+          <Route path="/cowrite/edit/:projectId" element={<Editor />} />
+
+          {/**
+           * CO-WRITING MODE PLAYER ROUTE
+           * URL: /cowrite/play/:projectId
+           * Same Player component, with /cowrite prefix for correct back-nav.
+           */}
+          <Route path="/cowrite/play/:projectId" element={<Player />} />
 
           {/**
            * CATCH-ALL ROUTE (404)

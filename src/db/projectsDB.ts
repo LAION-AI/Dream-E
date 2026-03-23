@@ -392,6 +392,9 @@ export async function createProject(
     // Construct the project object
     const project: Project = {
       id: projectId,
+      // Store the mode so the dashboard can filter by game vs co-writing projects.
+      // Defaults to 'game' for backwards compatibility.
+      mode: options.mode || 'game',
       info,
       globalVariables: defaultVariables,
       nodes,
@@ -661,6 +664,9 @@ export async function getAllProjects(): Promise<ProjectSummary[]> {
             updatedAt: record.updatedAt,
             nodeCount: record.data.nodes?.length ?? 0,
             theme: record.data.info.theme || 'modern',
+            // Include the project mode so the Dashboard can filter by mode.
+            // Backwards compat: projects without a mode field default to 'game'.
+            mode: (record.data as any).mode || 'game',
           });
         } catch (err) {
           console.error('[ProjectsDB] Error reading project record, skipping:', record?.id, err);

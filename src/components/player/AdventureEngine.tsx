@@ -33,7 +33,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Undo2, Settings, Volume2, VolumeX, ChevronDown, ChevronUp, GripHorizontal, GripVertical, MoveVertical, Pencil, Brain, FileText } from 'lucide-react';
 import { Howl } from 'howler';
 import { usePlayerStore } from '@stores/usePlayerStore';
@@ -64,6 +64,9 @@ export default function AdventureEngine() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  // Detect if we're under the /cowrite route prefix for correct back-navigation.
+  const isCowriteMode = location.pathname.startsWith('/cowrite');
 
   // Query params for "Start from here" / "Continue from here"
   const startNodeParam = searchParams.get('startNode');
@@ -2410,7 +2413,7 @@ export default function AdventureEngine() {
             {error || 'Unable to start game'}
           </h1>
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate(isCowriteMode ? '/cowrite' : '/game')}
             className="px-6 py-3 bg-white/20 rounded-lg hover:bg-white/30 transition-colors"
           >
             Back to Dashboard
@@ -2482,7 +2485,7 @@ export default function AdventureEngine() {
               useEditorStore.getState().setFocusNodeId(session.currentNodeId);
             }
             setOpenWorldMode(false);
-            navigate(`/edit/${projectId}`);
+            navigate(isCowriteMode ? `/cowrite/edit/${projectId}` : `/edit/${projectId}`);
           }}
           className="p-2 rounded-lg bg-black/30 hover:bg-black/50 text-white/70 hover:text-white transition-colors"
           title="Back to Editor (auto-saves progress)"

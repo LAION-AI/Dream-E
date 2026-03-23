@@ -15,7 +15,7 @@
  */
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   X,
   Save,
@@ -34,6 +34,9 @@ import { Button } from '@components/common';
  */
 export default function SystemMenu() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Detect co-writing mode from URL prefix for correct exit navigation.
+  const isCowriteMode = location.pathname.startsWith('/cowrite');
   const {
     project,
     toggleMenu,
@@ -116,7 +119,7 @@ export default function SystemMenu() {
                 loadGame(slot);
                 toggleMenu();
               }}
-              onExit={() => navigate('/')}
+              onExit={() => navigate(isCowriteMode ? '/cowrite' : '/game')}
             />
           ) : (
             <SettingsTab

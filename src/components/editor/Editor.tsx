@@ -33,7 +33,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -138,6 +138,9 @@ export default function Editor() {
 function EditorInner() {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
+  const location = useLocation();
+  // Detect if we're under the /cowrite route prefix to navigate back correctly.
+  const isCowriteMode = location.pathname.startsWith('/cowrite');
 
   // ── R1 FIX: GRANULAR SELECTORS ──
   // Instead of selecting the entire project (which triggers re-render on ANY
@@ -1040,8 +1043,8 @@ function EditorInner() {
 
       const project = await projectsDB.importProject(file);
 
-      // Navigate to the imported project
-      navigate(`/edit/${project.id}`);
+      // Navigate to the imported project, preserving the mode prefix
+      navigate(isCowriteMode ? `/cowrite/edit/${project.id}` : `/edit/${project.id}`);
     } catch (err) {
       console.error('[Editor] Failed to import project:', err);
       alert(
@@ -1077,7 +1080,7 @@ function EditorInner() {
           <h1 className="text-2xl font-bold text-error mb-4">
             {error || 'Project not found'}
           </h1>
-          <Button onClick={() => navigate('/')}>
+          <Button onClick={() => navigate(isCowriteMode ? '/cowrite' : '/game')}>
             Back to Dashboard
           </Button>
         </div>
@@ -1092,7 +1095,7 @@ function EditorInner() {
         {/* Left: Back button and title */}
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate(isCowriteMode ? '/cowrite' : '/game')}
             className="p-2 rounded hover:bg-editor-border text-editor-muted hover:text-editor-text"
             title="Back to Dashboard"
           >
@@ -1289,7 +1292,7 @@ function EditorInner() {
                 return;
               }
               await saveProject();
-              navigate(`/play/${projectId}`);
+              navigate(isCowriteMode ? `/cowrite/play/${projectId}` : `/play/${projectId}`);
             }}
           >
             {pendingUploads > 0 ? 'Uploading...' : 'Play from Start'}
@@ -1304,7 +1307,7 @@ function EditorInner() {
                 return;
               }
               await saveProject();
-              navigate(`/play/${projectId}?openWorld=1`);
+              navigate(isCowriteMode ? `/cowrite/play/${projectId}?openWorld=1` : `/play/${projectId}?openWorld=1`);
             }}
             className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-pink-500 hover:bg-pink-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >

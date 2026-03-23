@@ -62,10 +62,26 @@ interface BackupSummary {
 }
 
 /**
+ * DASHBOARD PROPS
+ * The Dashboard receives a `mode` prop from the router to determine which
+ * projects to display. Game Mode shows interactive fiction / RPG projects,
+ * Co-Writing Mode shows collaborative writing projects.
+ */
+interface DashboardProps {
+  mode: 'game' | 'cowrite';
+}
+
+/**
  * DASHBOARD COMPONENT
  * Main project management interface.
+ *
+ * Accepts a `mode` prop that controls:
+ * - Which projects are displayed (filtered by mode)
+ * - Navigation paths for edit/play (prefixed with /cowrite for co-writing projects)
+ * - UI labels ("Game Projects" vs "Co-Writing Projects")
+ * - New project creation (assigns the correct mode to new projects)
  */
-export default function Dashboard() {
+export default function Dashboard({ mode }: DashboardProps) {
   // Navigation hook for routing
   const navigate = useNavigate();
 
@@ -95,11 +111,13 @@ export default function Dashboard() {
   const [isRestoring, setIsRestoring] = useState(false);
 
   /**
-   * Load projects on component mount
+   * Load projects on component mount, and reload when mode changes.
+   * When the user navigates between /game and /cowrite, the mode prop
+   * changes and we need to re-fetch and re-filter the project list.
    */
   useEffect(() => {
     loadProjects();
-  }, []);
+  }, [mode]);
 
   /**
    * Fetch all projects from database.
@@ -110,7 +128,10 @@ export default function Dashboard() {
     try {
       setIsLoading(true);
       setError(null);
-      const projectList = await projectsDB.getAllProjects();
+      const allProjects = await projectsDB.getAllProjects();
+      // Filter projects by the current dashboard mode.
+      // Backwards compatibility: projects without a mode field are treated as 'game'.
+      const projectList = allProjects.filter(p => (p.mode || 'game') === mode);
       setProjects(projectList);
 
       // When the user has no projects, check if filesystem backups exist.
@@ -219,14 +240,17 @@ export default function Dashboard() {
       const options: CreateProjectOptions = {
         title: newProjectTitle.trim(),
         addStarterContent: true,
+        // Assign the current dashboard mode to the new project so it appears
+        // in the correct dashboard when filtering.
+        mode,
       };
 
       const project = await projectsDB.createProject(options);
 
-      // Close modal and navigate to editor
+      // Close modal and navigate to the editor under the correct mode prefix.
       setIsNewProjectOpen(false);
       setNewProjectTitle('');
-      navigate(`/edit/${project.id}`);
+      navigate(mode === 'cowrite' ? `/cowrite/edit/${project.id}` : `/edit/${project.id}`);
     } catch (err) {
       console.error('[Dashboard] Failed to create project:', err);
       setError('Failed to create project. Please try again.');
@@ -281,8 +305,9 @@ export default function Dashboard() {
       // Reload the project list to show the imported project
       await loadProjects();
 
-      // Navigate directly to the imported project in the editor
-      navigate(`/edit/${project.id}`);
+      // Navigate directly to the imported project in the editor,
+      // using the correct mode-aware route prefix.
+      navigate(mode === 'cowrite' ? `/cowrite/edit/${project.id}` : `/edit/${project.id}`);
     } catch (err) {
       console.error('[Dashboard] Failed to import project:', err);
       setError(
@@ -373,7 +398,18 @@ export default function Dashboard() {
       <main className="flex-1 flex flex-col">
         {/* Header */}
         <header className="h-16 px-8 flex items-center justify-between border-b border-editor-border">
-          <h2 className="text-xl font-semibold text-editor-text">Projects</h2>
+          <div className="flex items-center gap-4">
+            {/* Back to Start Menu button */}
+            <button
+              onClick={() => navigate('/')}
+              className="text-editor-muted hover:text-editor-text text-sm flex items-center gap-1"
+            >
+              &larr; Back to Start
+            </button>
+            <h2 className="text-xl font-semibold text-editor-text">
+              {mode === 'cowrite' ? 'Co-Writing Projects' : 'Game Projects'}
+            </h2>
+          </div>
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-editor-surface flex items-center justify-center">
               <span className="text-editor-muted">U</span>
@@ -465,7 +501,7 @@ export default function Dashboard() {
                   <Plus className="w-8 h-8 text-editor-accent" />
                 </div>
                 <span className="text-editor-muted group-hover:text-editor-text font-medium">
-                  Create New Adventure
+                  {mode === 'cowrite' ? 'Create New Story' : 'Create New Adventure'}
                 </span>
               </button>
 
@@ -504,9 +540,9 @@ export default function Dashboard() {
                 <ProjectCard
                   key={project.id}
                   project={project}
-                  onOpen={() => navigate(`/edit/${project.id}`)}
-                  onPlay={() => navigate(`/play/${project.id}`)}
-                  onPlayOpenWorld={() => navigate(`/play/${project.id}?openWorld=1`)}
+                  onOpen={() => navigate(mode === 'cowrite' ? `/cowrite/edit/${project.id}` : `/edit/${project.id}`)}
+                  onPlay={() => navigate(mode === 'cowrite' ? `/cowrite/play/${project.id}` : `/play/${project.id}`)}
+                  onPlayOpenWorld={() => navigate(mode === 'cowrite' ? `/cowrite/play/${project.id}?openWorld=1` : `/play/${project.id}?openWorld=1`)}
                   onDuplicate={() => handleDuplicateProject(project.id)}
                   onDelete={() => setDeleteProjectId(project.id)}
                   formatDate={formatDate}
@@ -522,7 +558,7 @@ export default function Dashboard() {
       <Modal
         isOpen={isNewProjectOpen}
         onClose={() => setIsNewProjectOpen(false)}
-        title="Create New Adventure"
+        title={mode === 'cowrite' ? 'Create New Story' : 'Create New Adventure'}
         footer={
           <>
             <Button variant="ghost" onClick={() => setIsNewProjectOpen(false)}>
