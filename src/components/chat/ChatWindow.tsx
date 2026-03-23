@@ -40,6 +40,12 @@ interface ChatWindowProps {
   isOpen: boolean;
   /** Called when the modal should close */
   onClose: () => void;
+  /**
+   * When true, the component renders its content directly (no Modal wrapper).
+   * Used by the co-write editor to embed the chat inside a sliding side panel
+   * rather than a fullscreen modal overlay.
+   */
+  panelMode?: boolean;
 }
 
 // =============================================================================
@@ -61,7 +67,7 @@ interface CliStatus {
 // CHAT WINDOW COMPONENT
 // =============================================================================
 
-export default function ChatWindow({ isOpen, onClose }: ChatWindowProps) {
+export default function ChatWindow({ isOpen, onClose, panelMode = false }: ChatWindowProps) {
   // Use targeted selectors to avoid re-rendering on unrelated store changes
   const currentProject = useProjectStore(s => s.currentProject);
   const addChatMessage = useProjectStore(s => s.addChatMessage);
@@ -274,118 +280,149 @@ export default function ChatWindow({ isOpen, onClose }: ChatWindowProps) {
   const isConnected = cliStatus.checked && cliStatus.available;
   const isChecking = !cliStatus.checked;
 
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Chat" size="nearfull">
-      <div className="-mx-6 -mb-4 -mt-4 flex flex-col" style={{ height: '78vh' }}>
+  // ---------------------------------------------------------------------------
+  // Shared chat content — used in both modal mode and panel mode
+  // ---------------------------------------------------------------------------
 
-        {/* ==================== CONNECTION STATUS BAR ==================== */}
-        {cliStatus.checked && (
-          <div className={`px-6 py-2 text-xs flex items-center gap-2 border-b flex-shrink-0 ${
-            isConnected
-              ? 'border-editor-border/50 bg-green-500/5 text-green-400'
-              : 'border-editor-border bg-red-500/5 text-red-400'
-          }`}>
-            {isConnected ? (
-              <>
-                <Wifi size={14} />
-                AI Writer: {cliStatus.version}
-              </>
-            ) : (
-              <>
-                <WifiOff size={14} />
-                {cliStatus.error}
-              </>
-            )}
-          </div>
-        )}
+  /**
+   * The inner chat UI (connection bar, messages, input area).
+   * Extracted so it can be rendered inside either a Modal wrapper (game mode)
+   * or directly inside the co-write sliding panel.
+   *
+   * In panel mode the outer container is the full-height panel div managed
+   * by the parent (Editor.tsx), so we use h-full. In modal mode the content
+   * has a fixed 78vh height and negative margins to fill the Modal chrome.
+   */
+  const chatContent = (
+    <div
+      className={`flex flex-col ${panelMode ? 'h-full' : '-mx-6 -mb-4 -mt-4'}`}
+      style={panelMode ? undefined : { height: '78vh' }}
+    >
 
-        {/* ==================== MESSAGE HISTORY ==================== */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-editor-muted">
-              <Bot size={48} className="mb-4 opacity-40" />
-              <p className="text-lg font-medium">No messages yet</p>
-              <p className="text-sm mt-1 text-center max-w-md">
-                {isChecking
-                  ? 'Checking AI connection...'
-                  : isConnected
-                    ? 'Start a conversation with the AI assistant. It can read and modify your game — create scenes, characters, variables, and more.'
-                    : 'Configure your AI writer in AI Settings (gear icon). Set a provider, API key, and model.'}
-              </p>
-            </div>
+      {/* ==================== CONNECTION STATUS BAR ==================== */}
+      {cliStatus.checked && (
+        <div className={`px-6 py-2 text-xs flex items-center gap-2 border-b flex-shrink-0 ${
+          isConnected
+            ? 'border-editor-border/50 bg-green-500/5 text-green-400'
+            : 'border-editor-border bg-red-500/5 text-red-400'
+        }`}>
+          {isConnected ? (
+            <>
+              <Wifi size={14} />
+              AI Writer: {cliStatus.version}
+            </>
           ) : (
-            messages.map((msg: ChatMessage) => (
-              <ChatBubble key={msg.id} message={msg} />
-            ))
+            <>
+              <WifiOff size={14} />
+              {cliStatus.error}
+            </>
           )}
-          <div ref={scrollAnchorRef} />
         </div>
+      )}
 
-        {/* ==================== STATUS BAR ==================== */}
-        {statusText && (
-          <div className="px-6 py-1.5 text-xs text-editor-muted flex items-center gap-2 border-t border-editor-border/50 flex-shrink-0">
-            <Loader2 size={12} className="animate-spin" />
-            {statusText}
+      {/* ==================== MESSAGE HISTORY ==================== */}
+      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-editor-muted">
+            <Bot size={48} className="mb-4 opacity-40" />
+            <p className="text-lg font-medium">No messages yet</p>
+            <p className="text-sm mt-1 text-center max-w-md">
+              {isChecking
+                ? 'Checking AI connection...'
+                : isConnected
+                  ? 'Start a conversation with the AI assistant. It can read and modify your game — create scenes, characters, variables, and more.'
+                  : 'Configure your AI writer in AI Settings (gear icon). Set a provider, API key, and model.'}
+            </p>
           </div>
+        ) : (
+          messages.map((msg: ChatMessage) => (
+            <ChatBubble key={msg.id} message={msg} />
+          ))
         )}
+        <div ref={scrollAnchorRef} />
+      </div>
 
-        {/* ==================== INPUT AREA ==================== */}
-        <div className="border-t border-editor-border px-6 py-3 flex-shrink-0">
-          <div className="flex gap-2 items-end">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="input flex-1 resize-none text-sm"
-              style={{ minHeight: '60px', maxHeight: '120px' }}
-              placeholder={
-                isConnected
-                  ? 'Type a message... (Enter to send, Shift+Enter for newline)'
-                  : isChecking
-                    ? 'Checking connection...'
-                    : 'AI not configured — open AI Settings (gear icon)'
-              }
-              rows={3}
-              disabled={isProcessing || !isConnected}
-            />
-            <div className="flex flex-col gap-1">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleSend}
-                disabled={!input.trim() || isProcessing || !isConnected}
-                title="Send message"
-              >
-                {isProcessing ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <SendHorizontal size={18} />
-                )}
-              </Button>
-              {messages.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        'Clear all chat messages? This cannot be undone.'
-                      )
-                    ) {
-                      clearChatMessages();
-                      resetAgentContext();
-                    }
-                  }}
-                  title="Clear chat history"
-                >
-                  <Trash2 size={16} />
-                </Button>
+      {/* ==================== STATUS BAR ==================== */}
+      {statusText && (
+        <div className="px-6 py-1.5 text-xs text-editor-muted flex items-center gap-2 border-t border-editor-border/50 flex-shrink-0">
+          <Loader2 size={12} className="animate-spin" />
+          {statusText}
+        </div>
+      )}
+
+      {/* ==================== INPUT AREA ==================== */}
+      <div className="border-t border-editor-border px-6 py-3 flex-shrink-0">
+        <div className="flex gap-2 items-end">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="input flex-1 resize-none text-sm"
+            style={{ minHeight: '60px', maxHeight: '120px' }}
+            placeholder={
+              isConnected
+                ? 'Type a message... (Enter to send, Shift+Enter for newline)'
+                : isChecking
+                  ? 'Checking connection...'
+                  : 'AI not configured — open AI Settings (gear icon)'
+            }
+            rows={3}
+            disabled={isProcessing || !isConnected}
+          />
+          <div className="flex flex-col gap-1">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSend}
+              disabled={!input.trim() || isProcessing || !isConnected}
+              title="Send message"
+            >
+              {isProcessing ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <SendHorizontal size={18} />
               )}
-            </div>
+            </Button>
+            {messages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Clear all chat messages? This cannot be undone.'
+                    )
+                  ) {
+                    clearChatMessages();
+                    resetAgentContext();
+                  }
+                }}
+                title="Clear chat history"
+              >
+                <Trash2 size={16} />
+              </Button>
+            )}
           </div>
         </div>
       </div>
+    </div>
+  );
+
+  // ---------------------------------------------------------------------------
+  // PANEL MODE: render the content directly (no Modal wrapper).
+  // The parent provides the sliding drawer container.
+  // ---------------------------------------------------------------------------
+  if (panelMode) {
+    return chatContent;
+  }
+
+  // ---------------------------------------------------------------------------
+  // MODAL MODE: wrap in the standard near-fullscreen Modal.
+  // ---------------------------------------------------------------------------
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Chat" size="nearfull">
+      {chatContent}
     </Modal>
   );
 }

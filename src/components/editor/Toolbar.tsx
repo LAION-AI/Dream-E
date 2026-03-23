@@ -31,6 +31,7 @@ import {
   GitBranch,
   Calculator,
   MessageSquare,
+  MessageCircle,
   Trash2,
   Copy,
   Scissors,
@@ -191,6 +192,13 @@ interface ToolbarProps {
   activeCanvas?: 'story' | 'character';
   /** Whether the project already has a StoryRoot node (max 1 allowed) */
   hasStoryRoot?: boolean;
+
+  // ── CHAT TOGGLE ──
+
+  /** Callback to toggle the chat sliding panel open/closed */
+  onChatToggle?: () => void;
+  /** Whether the chat panel is currently open (for visual active indicator) */
+  isChatOpen?: boolean;
 }
 
 /**
@@ -220,6 +228,8 @@ export default function Toolbar({
   isCowriteMode = false,
   activeCanvas = 'story',
   hasStoryRoot = false,
+  onChatToggle,
+  isChatOpen = false,
 }: ToolbarProps) {
   /**
    * Handle drag start
@@ -430,8 +440,30 @@ export default function Toolbar({
         )}
       </div>
 
-      {/* Separator */}
+      {/* Separator — pushes the chat button and help text to the bottom */}
       <div className="flex-1" />
+
+      {/* Chat toggle button — shown in co-write mode so the author can open
+       * the AI chat panel from the toolbar without reaching for Ctrl+Shift+C.
+       * Highlighted when the chat panel is currently open. */}
+      {isCowriteMode && onChatToggle && (
+        <div className="mx-2">
+          <button
+            onClick={onChatToggle}
+            className={`
+              w-full aspect-square rounded-lg
+              flex flex-col items-center justify-center
+              transition-colors
+              ${isChatOpen
+                ? 'bg-accent/20 border-2 border-accent text-accent'
+                : 'bg-editor-bg/50 border-2 border-editor-border text-editor-muted hover:text-editor-text hover:bg-editor-bg'}
+            `}
+            title="AI Chat (Ctrl+Shift+C)"
+          >
+            <MessageCircle size={24} />
+          </button>
+        </div>
+      )}
 
       {/* Help text at bottom */}
       <div className="px-2 text-center">

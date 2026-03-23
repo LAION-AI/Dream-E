@@ -74,6 +74,7 @@ import {
   StickyNote,
   Trash2,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { useProjectStore } from '@stores/useProjectStore';
 import { useEditorStore } from '@stores/useEditorStore';
@@ -198,7 +199,8 @@ function EditorInner() {
   const moveNode = useProjectStore(s => s.moveNode);
   const selectNode = useProjectStore(s => s.selectNode);
   const selectedNodeId = useProjectStore(s => s.selectedNodeId);
-  const storeSelectedEdgeId = useProjectStore(s => s.selectedEdgeId);
+  const selectedEdgeId = useProjectStore(s => s.selectedEdgeId);
+  const selectEdge = useProjectStore(s => s.selectEdge);
   const isDirty = useProjectStore(s => s.isDirty);
   const isLoading = useProjectStore(s => s.isLoading);
   const isSaving = useProjectStore(s => s.isSaving);
@@ -248,8 +250,7 @@ function EditorInner() {
   // React Flow programmatic viewport control
   const reactFlow = useReactFlow();
 
-  // Selection and clipboard states
-  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  // Clipboard states
   const [copiedNode, setCopiedNode] = useState<StoryNode | null>(null);
   const [copyCounter, setCopyCounter] = useState(0);
 
@@ -652,7 +653,7 @@ function EditorInner() {
             targetHandle: connection.targetHandle || 'top',
             type: 'relationship',
             data: {
-              relationshipType: 'Connection',
+              relationshipType: 'Relationship',
               description: '',
               status: 'Active',
               history: '',
@@ -710,9 +711,9 @@ function EditorInner() {
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       selectNode(node.id);
-      setSelectedEdgeId(null); // Clear edge selection when selecting a node
+      selectEdge(null); // Clear edge selection when selecting a node
     },
-    [selectNode]
+    [selectNode, selectEdge]
   );
 
   /**
@@ -720,10 +721,10 @@ function EditorInner() {
    */
   const onEdgeClick = useCallback(
     (_event: React.MouseEvent, edge: Edge) => {
-      setSelectedEdgeId(edge.id);
+      selectEdge(edge.id); // Store-level selection so Inspector panel opens
       selectNode(null); // Deselect any node when selecting an edge
     },
-    [selectNode]
+    [selectNode, selectEdge]
   );
 
   /**
@@ -731,8 +732,8 @@ function EditorInner() {
    */
   const onPaneClick = useCallback(() => {
     selectNode(null);
-    setSelectedEdgeId(null); // Also clear edge selection
-  }, [selectNode]);
+    selectEdge(null); // Also clear edge selection
+  }, [selectNode, selectEdge]);
 
   /**
    * Handle node drag stop (update position)
@@ -945,9 +946,9 @@ function EditorInner() {
   const handleDeleteSelectedEdge = useCallback(() => {
     if (selectedEdgeId) {
       deleteEdge(selectedEdgeId);
-      setSelectedEdgeId(null);
+      selectEdge(null);
     }
-  }, [selectedEdgeId, deleteEdge]);
+  }, [selectedEdgeId, deleteEdge, selectEdge]);
 
   /**
    * Delete the selected node.
@@ -1206,13 +1207,13 @@ function EditorInner() {
       } else if (event.key === 'Escape') {
         // Deselect (always works)
         selectNode(null);
-        setSelectedEdgeId(null);
+        selectEdge(null);
       }
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeId, selectedNodeIds, selectedEdgeId, saveProject, undo, redo, canUndo, canRedo, deleteNode, selectNode, handleDeleteSelectedEdge, handleDeleteSelected, handleCopyNode, handlePasteNode, handleCutNode]);
+  }, [selectedNodeId, selectedNodeIds, selectedEdgeId, saveProject, undo, redo, canUndo, canRedo, deleteNode, selectNode, selectEdge, handleDeleteSelectedEdge, handleDeleteSelected, handleCopyNode, handlePasteNode, handleCutNode]);
 
   /**
    * Handle Save As - export project as a file.
@@ -1608,6 +1609,8 @@ function EditorInner() {
             isCowriteMode={isCowriteMode}
             activeCanvas={activeCanvas}
             hasStoryRoot={hasStoryRoot}
+            onChatToggle={() => setIsChatOpen((prev) => !prev)}
+            isChatOpen={isChatOpen}
           />
         )}
 
@@ -1729,7 +1732,7 @@ function EditorInner() {
         </div>
 
         {/* Inspector */}
-        {panels.inspector && (selectedNodeId || storeSelectedEdgeId) && (
+        {panels.inspector && (selectedNodeId || selectedEdgeId) && (
           <Inspector />
         )}
       </div>
@@ -1763,23 +1766,49 @@ function EditorInner() {
         />
       )}
 
-      {/* Chat Window — Modal in game mode, left-side panel in co-write mode */}
+      {/* Chat Window — Modal in game mode, sliding left panel in co-write mode */}
       {isCowriteMode ? (
-        /* CO-WRITE MODE: Fixed left-side panel that slides in from the left.
-         * Width is 40vw to give the author ample room for AI conversation
-         * while still seeing the canvas behind it. The panel has a higher
-         * z-index than the canvas but lower than modals (z-50). */
-        isChatOpen && (
-          <div
-            className="fixed inset-y-0 left-0 w-[40vw] z-40 bg-editor-surface border-r border-editor-border shadow-2xl"
-            style={{ minWidth: '380px', maxWidth: '600px' }}
-          >
+        /* CO-WRITE MODE: Sliding left-side panel (always mounted for CSS transition).
+         *
+         * The panel is 40vw wide, slides in from the left edge using CSS
+         * transform. Keeping it mounted (not conditional) enables the
+         * smooth translate-x animation on both open and close. When closed,
+         * it is translated fully off-screen to the left (-translate-x-full)
+         * and pointer-events are disabled so it doesn't intercept clicks.
+         *
+         * The ChatWindow is rendered in panelMode (no Modal wrapper) — it
+         * fills the panel container directly. A close button and header are
+         * provided by the panel div itself. */
+        <div
+          className={`
+            fixed inset-y-0 left-0 w-[40vw] z-40
+            bg-editor-surface border-r border-editor-border shadow-2xl
+            transform transition-transform duration-300 ease-in-out
+            ${isChatOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'}
+          `}
+          style={{ minWidth: '380px', maxWidth: '600px' }}
+        >
+          {/* Panel header with title and close button */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-editor-border flex-shrink-0">
+            <h3 className="text-sm font-semibold text-editor-text">AI Chat</h3>
+            <button
+              onClick={() => setIsChatOpen(false)}
+              className="text-editor-muted hover:text-editor-text transition-colors p-1 rounded hover:bg-editor-bg"
+              title="Close chat panel"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Chat content (panel mode — no Modal wrapper) */}
+          <div className="h-[calc(100%-49px)] overflow-hidden">
             <ChatWindow
               isOpen={isChatOpen}
               onClose={() => setIsChatOpen(false)}
+              panelMode
             />
           </div>
-        )
+        </div>
       ) : (
         /* GAME MODE: Standard near-fullscreen modal (unchanged) */
         <ChatWindow

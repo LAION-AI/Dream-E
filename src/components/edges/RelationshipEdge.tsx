@@ -22,7 +22,7 @@
  * =============================================================================
  */
 
-import React from 'react';
+import React, { useCallback } from 'react';
 /**
  * IMPORT NOTE: @xyflow/react v12.10.1 ships without .d.ts files (see
  * gotcha #10 in MEMORY.md). BaseEdge, EdgeLabelRenderer, getBezierPath
@@ -31,6 +31,7 @@ import React from 'react';
  */
 import * as ReactFlowAll from '@xyflow/react';
 import type { RelationshipEdgeData } from '@/types';
+import { useProjectStore } from '@stores/useProjectStore';
 
 const { BaseEdge, EdgeLabelRenderer, getBezierPath } = ReactFlowAll as any;
 
@@ -89,6 +90,29 @@ export default function RelationshipEdge({
   // Fall back to a generic label if no relationship type is set
   const label = data?.relationshipType || 'Relationship';
 
+  /**
+   * LABEL CLICK HANDLER
+   *
+   * The label is rendered via EdgeLabelRenderer in an HTML overlay layer
+   * that sits ABOVE the SVG canvas. Clicks on the label div are NOT
+   * propagated to the SVG edge path, so React Flow's built-in onEdgeClick
+   * never fires when the user clicks the label text (which is the most
+   * visible and intuitive click target).
+   *
+   * This handler bridges that gap by programmatically selecting the edge
+   * in the project store when the label is clicked, which causes the
+   * Inspector panel to open with the RelationshipInspector.
+   */
+  const handleLabelClick = useCallback((e: React.MouseEvent) => {
+    // Stop propagation to prevent the pane click handler from immediately
+    // deselecting the edge we're about to select.
+    e.stopPropagation();
+
+    const store = useProjectStore.getState();
+    store.selectEdge(id);
+    store.selectNode(null);
+  }, [id]);
+
   return (
     <>
       {/* The actual edge line — dashed pink bezier curve */}
@@ -116,12 +140,14 @@ export default function RelationshipEdge({
             position: 'absolute',
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             pointerEvents: 'all',
+            cursor: 'pointer',
           }}
           className={`
             px-2 py-0.5 rounded text-[10px] font-medium
             ${selected ? 'bg-pink-600 text-white' : 'bg-pink-900/80 text-pink-200'}
             border border-pink-500/30
           `}
+          onClick={handleLabelClick}
         >
           {label}
         </div>
