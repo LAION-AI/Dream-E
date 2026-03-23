@@ -56,6 +56,13 @@ function ActNode({ data, selected }: NodeProps<ActNodeData>) {
         </span>
       </div>
 
+      {/* Image thumbnail (if one has been generated or uploaded) */}
+      {data.image && (
+        <div className="h-20 overflow-hidden">
+          <img src={data.image} alt="Act" className="w-full h-full object-cover" loading="lazy" />
+        </div>
+      )}
+
       {/* Content — act name and description preview */}
       <div className="p-3 space-y-1">
         <h3 className="text-sm font-bold text-white truncate">
