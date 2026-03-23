@@ -559,6 +559,9 @@ export interface ActNodeData {
   description: string;
   /** Optional mood/concept image for this act */
   image?: string;
+  /** The turning point at the end of this act — the key event that
+   *  propels the story into the next act */
+  turningPoint?: string;
 }
 
 export interface ActNode extends BaseNode {

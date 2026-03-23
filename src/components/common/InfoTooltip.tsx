@@ -3,22 +3,24 @@
  * INFO TOOLTIP COMPONENT
  * =============================================================================
  *
- * A small help-circle icon that, when clicked, shows a popover with
+ * A help-circle icon that, when clicked, shows a centered overlay with
  * educational content about a storytelling concept.
  *
- * WHY CLICK INSTEAD OF HOVER?
- * Hover tooltips disappear when the mouse moves, making long text hard to read.
- * Click-to-open popovers stay visible until the user explicitly dismisses them,
- * which is better for multi-sentence educational content.
+ * WHY A CENTERED OVERLAY INSTEAD OF A RELATIVE POPOVER?
+ * Relative popovers get clipped by panel borders, scroll containers, and
+ * overflow:hidden ancestors. A portal-rendered centered overlay is always
+ * fully visible and readable regardless of where the icon sits in the UI.
  *
  * USAGE:
  *   <label>Genre <InfoTooltip content={STORY_TOOLTIPS.genre} /></label>
+ *   <label>Goal <InfoTooltip content={STORY_TOOLTIPS.protagonistGoal} title="Protagonist Goal" /></label>
  *
  * =============================================================================
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { HelpCircle } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { HelpCircle, X } from 'lucide-react';
 
 interface InfoTooltipProps {
   /** The tooltip body text — can be multiple sentences */
@@ -28,81 +30,82 @@ interface InfoTooltipProps {
 }
 
 /**
- * InfoTooltip — a click-activated popover with an educational explanation.
+ * InfoTooltip — a click-activated overlay with an educational explanation.
  *
- * Renders a small HelpCircle icon inline. Clicking it toggles a floating
- * popover positioned above the icon. The popover is dismissed by clicking
- * outside it or pressing Escape.
- *
- * Accessibility:
- * - Button has a descriptive title attribute
- * - Escape key closes the popover
- * - Click-outside closes the popover
- * - stopPropagation prevents parent form elements from reacting
+ * Renders a small HelpCircle icon inline. Clicking it opens a centered
+ * overlay rendered via React portal on document.body, ensuring it's never
+ * clipped by parent containers. The overlay is dismissed by clicking the
+ * backdrop, the close button, or pressing Escape.
  */
 export default function InfoTooltip({ content, title }: InfoTooltipProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  /**
-   * Effect: register global listeners when the popover is open.
-   *
-   * WHY GLOBAL LISTENERS?
-   * We need to detect clicks outside the popover and Escape key presses
-   * anywhere on the page, not just inside the component. The listeners
-   * are cleaned up when the popover closes to avoid unnecessary event
-   * processing.
-   */
+  // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        popoverRef.current && !popoverRef.current.contains(e.target as Node) &&
-        buttonRef.current && !buttonRef.current.contains(e.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    };
-
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setIsOpen(false);
     };
-
-    document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
+    return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen]);
 
   return (
-    <span className="relative inline-flex items-center ml-1">
+    <>
       {/* Trigger button — small help icon */}
       <button
-        ref={buttonRef}
-        onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
-        className="text-editor-muted/50 hover:text-editor-accent transition-colors"
+        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setIsOpen(!isOpen); }}
+        className="text-editor-muted/50 hover:text-editor-accent transition-colors inline-flex items-center ml-1"
         title="Click for more info"
         type="button"
       >
         <HelpCircle size={14} />
       </button>
 
-      {/* Popover — positioned above the icon, centered horizontally */}
-      {isOpen && (
+      {/* Centered overlay — rendered as a portal on document.body so it's
+          never clipped by inspector panels, scroll containers, or overflow:hidden.
+          Uses a semi-transparent backdrop for visual separation from the canvas. */}
+      {isOpen && createPortal(
         <div
-          ref={popoverRef}
-          className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 rounded-lg bg-editor-surface border border-editor-border shadow-xl text-xs text-editor-muted leading-relaxed"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-8"
+          onClick={() => setIsOpen(false)}
         >
-          {title && <p className="font-semibold text-editor-text mb-1">{title}</p>}
-          <p className="whitespace-pre-wrap">{content}</p>
-          {/* Arrow pointing down toward the icon */}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 w-2 h-2 bg-editor-surface border-r border-b border-editor-border rotate-45 -mt-1" />
-        </div>
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+          {/* Content panel */}
+          <div
+            ref={panelRef}
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-xl bg-[#1a1d2e] border border-[#2d3148] shadow-2xl"
+          >
+            {/* Header */}
+            <div className="sticky top-0 flex items-center justify-between px-5 py-3 bg-[#1a1d2e] border-b border-[#2d3148] rounded-t-xl">
+              <div className="flex items-center gap-2">
+                <HelpCircle size={16} className="text-purple-400" />
+                <span className="text-sm font-semibold text-[#e2e4ea]">
+                  {title || 'Info'}
+                </span>
+              </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-[#6b7094] hover:text-[#e2e4ea] transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4">
+              <p className="text-sm text-[#b0b4cc] leading-relaxed whitespace-pre-wrap">
+                {content}
+              </p>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
-    </span>
+    </>
   );
 }

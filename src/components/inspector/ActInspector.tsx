@@ -118,6 +118,20 @@ export default function ActInspector({ node }: ActInspectorProps) {
         />
       </div>
 
+      {/* ==================== TURNING POINT ==================== */}
+      <div>
+        <label className="input-label flex items-center gap-1">
+          Turning Point
+          <InfoTooltip content={STORY_TOOLTIPS.turningPoint} title="Turning Point" />
+        </label>
+        <textarea
+          value={node.data.turningPoint || ''}
+          onChange={(e) => updateData({ turningPoint: e.target.value })}
+          className="input min-h-[100px] resize-y"
+          placeholder="The pivotal event at the end of this act that changes the story's direction and propels it into the next act..."
+        />
+      </div>
+
       {/* ==================== IMAGE ==================== */}
       <div>
         <label className="input-label">Act Image</label>
