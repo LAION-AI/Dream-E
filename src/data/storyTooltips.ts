@@ -62,4 +62,43 @@ export const STORY_TOOLTIPS = {
   plotNode: 'A plot is a chain of causally connected events. Each event leads to the next through cause and effect: "Because X happened, Y happened, which caused Z." A good plot creates questions in the reader\'s mind and answers them in surprising but inevitable ways.',
   characterNode: 'Each character node represents a character in your story. Connect characters with relationship edges to map out their dynamics. Changes here sync with the entity system.',
   relationship: 'Relationships are the emotional engine of stories. Define how characters feel about each other, what they want from each other, and how their dynamic changes over time. Conflict between characters is what makes scenes dramatic.',
+
+  // ==================== Act-related tooltips ====================
+
+  act: 'An act is a major structural division of your story. The classic three-act structure divides a story into Setup (Act 1, ~25%), Confrontation (Act 2, ~50%), and Resolution (Act 3, ~25%). Each act has a distinct purpose and ends with a major turning point that propels the story forward. You can use more acts for finer-grained pacing.',
+
+  actPlotRelationship: 'This connection defines which parts of a plot arc play out during a specific act. For example, Act 1 might introduce the mystery (Mystery Plot) and establish the love interest (Relationship Plot), while Act 2 deepens both with complications and reveals. Mapping plots to acts helps you visualize pacing — if all your plot developments are crammed into one act, the others may feel thin.',
+
+  // ==================== Relationship development tooltips ====================
+
+  relationshipBeginning: 'How is this relationship at the very start of the story? What is the status quo before events force it to change? This establishes the baseline the audience measures all future changes against. A strong beginning makes every subsequent shift feel earned.',
+
+  relationshipEnding: 'How is this relationship at the end of the story? Has it deepened, broken, reversed, or reached a new understanding? The ending should feel like a natural consequence of everything that happened — surprising yet inevitable. Compare it to the beginning to see the arc.',
+
+  actDevelopment: 'Track how this relationship evolves through each act of the story. Relationships should change — new information, betrayals, shared ordeals, and revelations all reshape how characters feel about each other. Each act should bring at least one significant shift in the relationship dynamic.',
+
+  // ==================== Character type tooltips ====================
+
+  characterType: 'The narrative role this character serves in the story. Each archetype comes with audience expectations — a Mentor teaches wisdom, a Trickster disrupts the status quo, an Anti-hero walks the moral gray zone. Knowing the archetype helps you write consistent behavior while also knowing when to subvert expectations.',
+
+  characterTypes: {
+    Protagonist: 'The central character whose journey drives the story. The audience experiences the narrative primarily through their perspective. They must have a clear external goal (what they want) and an internal need (what they must learn or overcome).',
+    Antagonist: 'The primary force opposing the protagonist. The best antagonists have understandable motivations and believe they are justified. They serve as a dark mirror reflecting what the protagonist could become.',
+    Sidekick: 'The loyal companion who supports the protagonist. They often provide humor, practical skills, or emotional grounding. (e.g., Samwise Gamgee, Ron Weasley)',
+    Mentor: 'A wise guide who teaches the protagonist essential skills or truths. Often removed from the story to force the hero to act independently. (e.g., Gandalf, Obi-Wan Kenobi)',
+    'Love Interest': 'A character who forms a romantic connection with the protagonist. The best love interests have their own goals and agency beyond the romance.',
+    Rival: 'A competitor who pushes the protagonist to grow. Unlike the antagonist, a rival often shares the protagonist\'s goals but competes for the same prize.',
+    'Comic Relief': 'A character who lightens the mood and provides humor. The best comic relief characters also have genuine emotional depth beneath the jokes.',
+    Guardian: 'A protector figure who shields the protagonist, often at great personal cost. They represent safety and stability in a dangerous world.',
+    Herald: 'The character or event that announces change and kicks off the adventure. They deliver the "call to adventure" that disrupts the protagonist\'s ordinary world.',
+    Trickster: 'A clever, morally ambiguous character who disrupts the status quo through wit, deception, or chaos. They challenge authority and rigid thinking.',
+    Shapeshifter: 'A character whose loyalty or nature is uncertain. They keep the protagonist (and reader) guessing — are they friend or foe? Their true nature is revealed at a crucial moment.',
+    'Threshold Guardian': 'A character who tests the protagonist before they can advance. They guard transitions between story phases and must be overcome or won over.',
+    'Anti-hero': 'A protagonist who lacks conventional heroic qualities — they may be morally ambiguous, selfish, or use questionable methods. Their appeal lies in complexity: they do the right thing for the wrong reasons, or the wrong thing for understandable reasons. (e.g., Walter White, Deadpool)',
+    Foil: 'A character designed to contrast with the protagonist, highlighting the hero\'s traits through opposition. A foil doesn\'t have to be an enemy — they can be a friend whose different approach to the same problem illuminates the protagonist\'s strengths and weaknesses.',
+  },
+
+  // ==================== Reference voice tooltip ====================
+
+  referenceVoice: 'Upload an audio clip of this character\'s voice. This reference is used by the TTS (text-to-speech) engine to match the voice identity when generating voiceovers. A 10-30 second clip with clear speech works best.',
 } as const;

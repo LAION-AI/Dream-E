@@ -30,7 +30,7 @@
 import React, { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { useProjectStore } from '@/stores/useProjectStore';
-import { User } from 'lucide-react';
+import { User, Volume2 } from 'lucide-react';
 import { getBlobUrl } from '@/utils/blobCache';
 import type { CharacterNodeData } from '@/types';
 
@@ -109,6 +109,14 @@ function CharacterNode({ data, selected }: NodeProps<CharacterNodeData>) {
           <User size={48} className="text-teal-700" />
         )}
       </div>
+
+      {/* Reference voice indicator — small speaker icon when entity has a voice clip */}
+      {entity?.referenceVoice && (
+        <div className="flex items-center justify-center py-1 bg-teal-900/30">
+          <Volume2 size={12} className="text-teal-400" />
+          <span className="text-[9px] text-teal-400 ml-1">Voice</span>
+        </div>
+      )}
 
       {/* Character info — name and summary from the entity store */}
       <div className="p-2.5 space-y-0.5">

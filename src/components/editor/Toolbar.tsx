@@ -39,6 +39,7 @@ import {
   BookOpen,
   FileText,
   User,
+  Layers,
 } from 'lucide-react';
 
 /**
@@ -127,6 +128,15 @@ const cowriteStoryExtraTypes: NodeTypeInfo[] = [
     color: '#f59e0b',
     bgColor: 'bg-amber-500/10',
     borderColor: 'border-amber-500',
+  },
+  {
+    type: 'act',
+    label: 'Act',
+    description: 'Story act (e.g., Act 1, 2, 3)',
+    icon: Layers,
+    color: '#6366f1',
+    bgColor: 'bg-indigo-500/10',
+    borderColor: 'border-indigo-500',
   },
 ];
 
@@ -239,11 +249,16 @@ export default function Toolbar({
     // Co-write character canvas — only character nodes
     visibleNodeTypes = cowriteCharacterTypes;
   } else {
-    // Co-write story canvas — standard + extras, filtering StoryRoot if one exists
+    // Co-write story canvas — scene + comment + story extras (no choice/modifier).
+    // Choice and modifier nodes are game-mode only; the story canvas focuses on
+    // high-level narrative structure (scenes, plot arcs, acts, comments).
+    const storyBaseTypes = gameNodeTypes.filter(
+      n => n.type !== 'choice' && n.type !== 'modifier'
+    );
     const extras = hasStoryRoot
       ? cowriteStoryExtraTypes.filter(n => n.type !== 'storyRoot')
       : cowriteStoryExtraTypes;
-    visibleNodeTypes = [...gameNodeTypes, ...extras];
+    visibleNodeTypes = [...storyBaseTypes, ...extras];
   }
 
   return (

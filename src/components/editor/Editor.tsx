@@ -105,6 +105,7 @@ import CommentNodeComponent from '../nodes/CommentNode';
 import StoryRootNodeComponent from '../nodes/StoryRootNode';
 import PlotNodeComponent from '../nodes/PlotNode';
 import CharacterNodeComponent from '../nodes/CharacterNode';
+import ActNodeComponent from '../nodes/ActNode';
 
 // Import custom edge components
 import RelationshipEdge from '../edges/RelationshipEdge';
@@ -132,6 +133,7 @@ const nodeTypes: NodeTypes = {
   storyRoot: StoryRootNodeComponent,
   plot: PlotNodeComponent,
   character: CharacterNodeComponent,
+  act: ActNodeComponent,
 };
 
 /**
@@ -147,7 +149,7 @@ const nodeTypes: NodeTypes = {
  * characters are handled by the edge filtering logic (both endpoints must
  * be in the visible node set).
  */
-const STORY_NODE_TYPES = new Set(['scene', 'choice', 'modifier', 'comment', 'storyRoot', 'plot']);
+const STORY_NODE_TYPES = new Set(['scene', 'comment', 'storyRoot', 'plot', 'act']);
 const CHARACTER_NODE_TYPES = new Set(['character']);
 
 /**
@@ -660,6 +662,32 @@ function EditorInner() {
           return; // Don't create default edge
         }
 
+        // Act-to-Plot (or Plot-to-Act) connection: create a relationship edge
+        // with plotInvolvement data so the author can describe what parts of
+        // the plot unfold during this act.
+        if (
+          (sourceNode?.type === 'act' && targetNode?.type === 'plot') ||
+          (sourceNode?.type === 'plot' && targetNode?.type === 'act')
+        ) {
+          const relationshipEdge: StoryEdge = {
+            id: generateId('edge'),
+            source: connection.source,
+            target: connection.target,
+            sourceHandle: connection.sourceHandle || undefined,
+            targetHandle: connection.targetHandle || undefined,
+            type: 'relationship',
+            data: {
+              relationshipType: 'Act-Plot',
+              description: '',
+              status: '',
+              history: '',
+              plotInvolvement: '',
+            },
+          };
+          addProjectEdge(relationshipEdge);
+          return; // Don't create default edge
+        }
+
         // Standard story flow edge
         const newEdge: StoryEdge = {
           id: generateId('edge'),
@@ -839,19 +867,22 @@ function EditorInner() {
               description: '',
             },
           };
-          // Auto-connect to the StoryRoot node (if one exists)
-          const storyRoot = projectNodes?.find(n => n.type === 'storyRoot');
-          if (storyRoot) {
-            addProjectEdge({
-              id: generateId('edge'),
-              source: storyRoot.id,
-              target: newNode.id,
-              sourceHandle: undefined,
-              targetHandle: 'input',
-            });
-          }
           break;
         }
+
+        case 'act':
+          newNode = {
+            id: generateId('node'),
+            type: 'act',
+            position,
+            label: 'New Act',
+            data: {
+              actNumber: 1,
+              name: '',
+              description: '',
+            },
+          };
+          break;
 
         case 'character': {
           // Create a new character entity in the project's entity store
@@ -881,6 +912,20 @@ function EditorInner() {
       }
 
       addNode(newNode);
+
+      // Auto-connect plot nodes to StoryRoot AFTER the node is added,
+      // so that React Flow can find the target node when creating the edge.
+      if (newNode.type === 'plot') {
+        const storyRoot = projectNodes?.find(n => n.type === 'storyRoot');
+        if (storyRoot) {
+          addProjectEdge({
+            id: generateId('edge'),
+            source: storyRoot.id,
+            target: newNode.id,
+          });
+        }
+      }
+
       selectNode(newNode.id);
     },
     [addNode, selectNode, projectNodes, addProjectEdge, addEntity]

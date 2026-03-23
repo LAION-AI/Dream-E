@@ -39,8 +39,9 @@ import CommentInspector from './CommentInspector';
 import StoryRootInspector from './StoryRootInspector';
 import PlotInspector from './PlotInspector';
 import CharacterNodeInspector from './CharacterNodeInspector';
+import ActInspector from './ActInspector';
 import RelationshipInspector from './RelationshipInspector';
-import type { StoryRootNode, PlotNode, CharacterNode } from '@/types';
+import type { StoryRootNode, PlotNode, CharacterNode, ActNode } from '@/types';
 
 /**
  * INSPECTOR COMPONENT
@@ -107,6 +108,8 @@ export default function Inspector() {
         return <PlotInspector node={selectedNode as PlotNode} />;
       case 'character':
         return <CharacterNodeInspector node={selectedNode as CharacterNode} />;
+      case 'act':
+        return <ActInspector node={selectedNode as ActNode} />;
       default:
         return (
           <div className="p-4 text-editor-muted">
@@ -149,6 +152,8 @@ export default function Inspector() {
           return 'Plot Arc';
         case 'character':
           return 'Character';
+        case 'act':
+          return 'Act';
         default:
           return 'Inspector';
       }
@@ -181,6 +186,8 @@ export default function Inspector() {
           return 'border-amber-500';
         case 'character':
           return 'border-cyan-500';
+        case 'act':
+          return 'border-indigo-500';
         default:
           return 'border-editor-border';
       }

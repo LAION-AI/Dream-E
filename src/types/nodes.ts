@@ -72,7 +72,7 @@ export interface BaseNode {
    * This is a "discriminated union" - it helps TypeScript
    * narrow down which node type we're working with.
    */
-  type: 'scene' | 'choice' | 'modifier' | 'comment' | 'storyRoot' | 'plot' | 'character';
+  type: 'scene' | 'choice' | 'modifier' | 'comment' | 'storyRoot' | 'plot' | 'character' | 'act';
 
   /**
    * Position on the canvas.
@@ -549,6 +549,21 @@ export interface CharacterNode extends BaseNode {
   data: CharacterNodeData;
 }
 
+/** Data for an act node — represents a structural act in the story (e.g., Act 1, Act 2, Act 3) */
+export interface ActNodeData {
+  /** The act number (e.g., 1, 2, 3) */
+  actNumber: number;
+  /** Display name of the act (e.g., "The Setup", "Rising Action") */
+  name: string;
+  /** Description of what happens in this act */
+  description: string;
+}
+
+export interface ActNode extends BaseNode {
+  type: 'act';
+  data: ActNodeData;
+}
+
 /** Data stored on relationship edges between character nodes */
 export interface RelationshipEdgeData {
   relationshipType: string;
@@ -557,6 +572,14 @@ export interface RelationshipEdgeData {
   history: string;
   /** If a relationship entity was created, its ID */
   entityId?: string;
+  /** Character relationship: how the relationship starts */
+  beginning?: string;
+  /** Character relationship: development across story acts */
+  actDevelopments?: Array<{ actLabel: string; development: string }>;
+  /** Character relationship: how the relationship ends */
+  ending?: string;
+  /** Act-Plot relationship: what parts of the plot play out in this act */
+  plotInvolvement?: string;
 }
 
 /**
@@ -575,7 +598,7 @@ export interface RelationshipEdgeData {
  *   }
  * }
  */
-export type StoryNode = SceneNode | ChoiceNode | ModifierNode | CommentNode | StoryRootNode | PlotNode | CharacterNode;
+export type StoryNode = SceneNode | ChoiceNode | ModifierNode | CommentNode | StoryRootNode | PlotNode | CharacterNode | ActNode;
 
 /**
  * EDGE INTERFACE
@@ -616,9 +639,10 @@ export interface StoryEdge {
 
   /**
    * Which input of the target node this edge connects to.
-   * Usually 'input' for most nodes.
+   * Usually 'input' for most nodes. Optional when the target node
+   * has only a single unnamed handle (e.g., plot nodes, act nodes).
    */
-  targetHandle: string;
+  targetHandle?: string;
 
   /**
    * If true, shows an animation on the edge.
