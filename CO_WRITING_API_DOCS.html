@@ -1,0 +1,1855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dream-E Co-Writing Mode &mdash; API &amp; Feature Documentation</title>
+<style>
+/* ================================================================
+   GLOBAL RESET & BASE TYPOGRAPHY
+   ================================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:           #0f1117;
+  --bg-surface:   #171923;
+  --bg-surface2:  #1e2130;
+  --bg-code:      #131520;
+  --border:       #2d3148;
+  --border-light: #3a3f5c;
+  --text:         #e2e4ea;
+  --text-muted:   #8b8fa4;
+  --text-dim:     #5a5e76;
+  --accent:       #8b5cf6;
+  --accent-light: #a78bfa;
+  --accent-bg:    rgba(139, 92, 246, 0.08);
+  --blue:         #6c8aff;
+  --green:        #4ade80;
+  --teal:         #2dd4bf;
+  --red:          #ef4444;
+  --yellow:       #facc15;
+  --pink:         #f472b6;
+  --orange:       #fb923c;
+  --mono:         'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  --sans:         'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --sidebar-w:    260px;
+}
+
+html { scroll-behavior: smooth; font-size: 15px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+a { color: var(--accent-light); text-decoration: none; transition: color .15s; }
+a:hover { color: var(--accent); text-decoration: underline; }
+
+::selection { background: rgba(139, 92, 246, 0.35); color: #fff; }
+
+/* ================================================================
+   SIDEBAR NAVIGATION
+   ================================================================ */
+nav.sidebar {
+  position: fixed;
+  top: 0; left: 0;
+  width: var(--sidebar-w);
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border);
+  padding: 24px 0;
+  z-index: 100;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+nav.sidebar .logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px 18px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+
+nav.sidebar .logo svg { flex-shrink: 0; }
+
+nav.sidebar .logo span {
+  font-weight: 700;
+  font-size: 1.15rem;
+  background: linear-gradient(135deg, var(--accent-light), var(--blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+nav.sidebar .logo small {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--text-muted);
+  -webkit-text-fill-color: var(--text-muted);
+}
+
+nav.sidebar ul { list-style: none; }
+
+nav.sidebar > ul > li > a {
+  display: block;
+  padding: 7px 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all .15s;
+}
+
+nav.sidebar > ul > li > a:hover,
+nav.sidebar > ul > li > a.active {
+  color: var(--accent-light);
+  background: var(--accent-bg);
+  text-decoration: none;
+}
+
+nav.sidebar > ul > li > ul { padding-left: 16px; }
+
+nav.sidebar > ul > li > ul > li > a {
+  display: block;
+  padding: 4px 20px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  transition: all .15s;
+}
+
+nav.sidebar > ul > li > ul > li > a:hover {
+  color: var(--accent-light);
+  text-decoration: none;
+}
+
+/* ================================================================
+   MAIN CONTENT AREA
+   ================================================================ */
+main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 920px;
+  padding: 40px 48px 120px;
+}
+
+/* ================================================================
+   HEADINGS
+   ================================================================ */
+h1 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, var(--accent-light), var(--blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+h1 + .subtitle {
+  font-size: 1rem;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+}
+
+h2 {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--accent-light);
+  margin-top: 56px;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--accent-bg);
+}
+
+h3 {
+  font-size: 1.18rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 32px;
+  margin-bottom: 10px;
+}
+
+h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 24px;
+  margin-bottom: 8px;
+}
+
+/* ================================================================
+   PARAGRAPHS, LISTS, INLINE CODE
+   ================================================================ */
+p { margin-bottom: 14px; }
+
+ul, ol { margin-bottom: 14px; padding-left: 22px; }
+li { margin-bottom: 4px; }
+li::marker { color: var(--accent); }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--blue);
+}
+
+/* ================================================================
+   CODE BLOCKS
+   ================================================================ */
+pre {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 14px 0 18px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* Syntax highlighting hints */
+pre .kw { color: var(--accent-light); }
+pre .str { color: var(--green); }
+pre .cmt { color: var(--text-dim); font-style: italic; }
+pre .num { color: var(--orange); }
+pre .fn { color: var(--blue); }
+
+/* ================================================================
+   TABLES
+   ================================================================ */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0 20px;
+  font-size: 0.9rem;
+}
+
+thead th {
+  background: var(--bg-surface2);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 2px solid var(--border);
+}
+
+tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.015); }
+tbody tr:hover { background: var(--accent-bg); }
+
+td code { font-size: 0.85em; }
+
+/* ================================================================
+   COLLAPSIBLE DETAILS/SUMMARY (command reference)
+   ================================================================ */
+details {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 10px 0;
+  transition: border-color .2s;
+}
+
+details[open] { border-color: var(--accent); }
+
+details summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  transition: background .15s;
+}
+
+details summary:hover { background: var(--accent-bg); }
+
+details summary::before {
+  content: '\25B6';
+  font-size: 0.65rem;
+  color: var(--accent);
+  transition: transform .2s;
+}
+
+details[open] summary::before { transform: rotate(90deg); }
+
+details .detail-body {
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* ================================================================
+   BADGES / TAGS
+   ================================================================ */
+.badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+
+.badge-required { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+.badge-optional { background: rgba(139, 92, 246, 0.1); color: var(--accent-light); border: 1px solid rgba(139, 92, 246, 0.25); }
+.badge-node     { background: rgba(108, 138, 255, 0.12); color: var(--blue); border: 1px solid rgba(108, 138, 255, 0.3); }
+.badge-edge     { background: rgba(244, 114, 182, 0.12); color: var(--pink); border: 1px solid rgba(244, 114, 182, 0.3); }
+.badge-green    { background: rgba(74, 222, 128, 0.12); color: var(--green); border: 1px solid rgba(74, 222, 128, 0.3); }
+
+/* ================================================================
+   NOTE / INFO BOXES
+   ================================================================ */
+.infobox {
+  padding: 14px 18px;
+  border-radius: 8px;
+  margin: 14px 0 18px;
+  font-size: 0.9rem;
+}
+
+.infobox-purple {
+  background: var(--accent-bg);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  color: var(--accent-light);
+}
+
+.infobox-blue {
+  background: rgba(108, 138, 255, 0.06);
+  border: 1px solid rgba(108, 138, 255, 0.2);
+  color: var(--blue);
+}
+
+.infobox-green {
+  background: rgba(74, 222, 128, 0.06);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  color: var(--green);
+}
+
+.infobox-yellow {
+  background: rgba(250, 204, 21, 0.06);
+  border: 1px solid rgba(250, 204, 21, 0.2);
+  color: var(--yellow);
+}
+
+.infobox strong { color: var(--text); }
+
+/* ================================================================
+   NODE COLOR CHIPS (visual node type indicators)
+   ================================================================ */
+.node-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid;
+}
+
+.node-chip .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.chip-root     { border-color: rgba(139, 92, 246, 0.4); background: rgba(139, 92, 246, 0.08); }
+.chip-root .dot { background: var(--accent); }
+
+.chip-plot     { border-color: rgba(251, 146, 60, 0.4); background: rgba(251, 146, 60, 0.08); }
+.chip-plot .dot { background: var(--orange); }
+
+.chip-act      { border-color: rgba(45, 212, 191, 0.4); background: rgba(45, 212, 191, 0.08); }
+.chip-act .dot  { background: var(--teal); }
+
+.chip-char     { border-color: rgba(244, 114, 182, 0.4); background: rgba(244, 114, 182, 0.08); }
+.chip-char .dot { background: var(--pink); }
+
+.chip-scene    { border-color: rgba(108, 138, 255, 0.4); background: rgba(108, 138, 255, 0.08); }
+.chip-scene .dot { background: var(--blue); }
+
+.chip-comment  { border-color: rgba(139, 143, 164, 0.4); background: rgba(139, 143, 164, 0.08); }
+.chip-comment .dot { background: var(--text-muted); }
+
+/* ================================================================
+   FIELD DESCRIPTION LISTS
+   ================================================================ */
+dl.fields { margin: 12px 0 18px; }
+dl.fields dt {
+  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 0.88rem;
+  color: var(--blue);
+  margin-top: 10px;
+}
+dl.fields dd {
+  margin-left: 0;
+  padding-left: 16px;
+  border-left: 2px solid var(--border);
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  margin-bottom: 8px;
+}
+
+/* ================================================================
+   VOICE GRID
+   ================================================================ */
+.voice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+
+.voice-card {
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-align: center;
+  color: var(--text);
+  transition: border-color .15s, background .15s;
+}
+
+.voice-card:hover {
+  border-color: var(--teal);
+  background: rgba(45, 212, 191, 0.05);
+}
+
+/* ================================================================
+   RESPONSIVE
+   ================================================================ */
+@media (max-width: 900px) {
+  nav.sidebar { display: none; }
+  main { margin-left: 0; padding: 24px 20px 80px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ================================================================
+     SIDEBAR NAVIGATION
+     ================================================================ -->
+<nav class="sidebar">
+  <div class="logo">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" rx="6" fill="#8b5cf6"/>
+      <path d="M7 14l4.5-6L14 11l3.5-5L21 14l-3 4H10L7 14z" fill="#fff" opacity="0.9"/>
+      <circle cx="14" cy="17" r="2.5" fill="#fff" opacity="0.6"/>
+    </svg>
+    <span>Dream-E<small>Co-Writing Mode Docs</small></span>
+  </div>
+
+  <ul>
+    <li><a href="#overview">1. Overview</a></li>
+    <li>
+      <a href="#node-types">2. Node Types</a>
+      <ul>
+        <li><a href="#node-story-root">Story Root</a></li>
+        <li><a href="#node-plot">Plot Node</a></li>
+        <li><a href="#node-act">Act Node</a></li>
+        <li><a href="#node-character">Character Node</a></li>
+        <li><a href="#node-scene">Scene Node</a></li>
+        <li><a href="#node-comment">Comment Node</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#edge-types">3. Edge / Relationship Types</a>
+      <ul>
+        <li><a href="#edge-char-char">Character-to-Character</a></li>
+        <li><a href="#edge-act-plot">Act-to-Plot</a></li>
+        <li><a href="#edge-root-plot">Root-to-Plot</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#api-reference">4. API Command Reference</a>
+      <ul>
+        <li><a href="#cmd-story-root">Story Root (2)</a></li>
+        <li><a href="#cmd-plots">Plots (4)</a></li>
+        <li><a href="#cmd-acts">Acts (4)</a></li>
+        <li><a href="#cmd-relationships">Relationships (4)</a></li>
+        <li><a href="#cmd-characters">Characters (2)</a></li>
+        <li><a href="#cmd-image-gen">Image Generation (1)</a></li>
+      </ul>
+    </li>
+    <li><a href="#context-system">5. Context System</a></li>
+    <li><a href="#image-generation">6. Image Generation</a></li>
+    <li><a href="#tts-voice">7. TTS / Voice Generation</a></li>
+    <li><a href="#storytelling-reference">8. Storytelling Reference</a></li>
+  </ul>
+</nav>
+
+<!-- ================================================================
+     MAIN CONTENT
+     ================================================================ -->
+<main>
+
+<!-- ──────────────────────────────────────────────────────────────
+     1. OVERVIEW
+     ────────────────────────────────────────────────────────────── -->
+<h1 id="overview">Dream-E Co-Writing Mode</h1>
+<p class="subtitle">API Reference &amp; Feature Documentation &mdash; v2026.03</p>
+
+<p>
+  <strong>Co-Writing Mode</strong> is a structured storytelling workspace in Dream-E designed for
+  authors who want to plan, outline, and develop a narrative <em>before</em> (or alongside) building
+  the interactive game graph. It provides dedicated node types for story structure&mdash;story root,
+  plot arcs, acts, and character relationship webs&mdash;plus an AI chat agent that can manipulate
+  all of these via a programmatic API.
+</p>
+
+<h3>How it differs from Game Mode</h3>
+<table>
+  <thead><tr><th>Aspect</th><th>Game Mode</th><th>Co-Writing Mode</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Primary purpose</td>
+      <td>Build playable interactive fiction</td>
+      <td>Outline, develop, and structure a narrative</td>
+    </tr>
+    <tr>
+      <td>Canvas</td>
+      <td>Single canvas with all node types</td>
+      <td>Dual canvas system (Story + Character)</td>
+    </tr>
+    <tr>
+      <td>Unique nodes</td>
+      <td>Scene, Choice, Modifier, Comment</td>
+      <td>Story Root, Plot, Act, Character (plus Scene &amp; Comment)</td>
+    </tr>
+    <tr>
+      <td>Edge types</td>
+      <td>Standard directed flow edges</td>
+      <td>Relationship edges with metadata (type, beginning, act developments, ending)</td>
+    </tr>
+    <tr>
+      <td>AI commands</td>
+      <td>Scene/entity/variable CRUD</td>
+      <td>All game-mode commands + 17 co-write commands</td>
+    </tr>
+    <tr>
+      <td>Player mode</td>
+      <td>Full adventure engine playback</td>
+      <td>N/A (narrative planning tool)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>The Dual Canvas System</h3>
+<p>
+  In co-write mode, a <strong>tab bar</strong> appears above the React Flow canvas with two tabs:
+</p>
+<ul>
+  <li>
+    <strong>Story Canvas</strong> &mdash; Shows <code>scene</code>, <code>comment</code>,
+    <code>storyRoot</code>, <code>plot</code>, and <code>act</code> nodes. This is the narrative
+    structure view where you lay out the overall story arc and plot lines.
+  </li>
+  <li>
+    <strong>Character Canvas</strong> &mdash; Shows <code>character</code> nodes only. These are
+    visual character cards linked to entities. Relationship edges between characters display on this
+    canvas, letting you map out the character web with detailed relationship data.
+  </li>
+</ul>
+<p>
+  Edges are filtered so that only edges whose <em>both</em> endpoints are visible on the current
+  canvas are shown. This prevents dangling connections from appearing when the other node lives on
+  the other canvas tab.
+</p>
+
+<div class="infobox infobox-purple">
+  <strong>Toolbar behavior:</strong> In co-write mode, the toolbar adapts to the active canvas.
+  On the Story Canvas you can drag out Story Root (max 1), Plot Arc, Act, Scene, and Comment nodes.
+  On the Character Canvas you can drag out Character nodes only.
+</div>
+
+
+<!-- ──────────────────────────────────────────────────────────────
+     2. NODE TYPES
+     ────────────────────────────────────────────────────────────── -->
+<h2 id="node-types">2. Node Types</h2>
+
+<!-- ── Story Root ── -->
+<h3 id="node-story-root">
+  <span class="node-chip chip-root"><span class="dot"></span> Story Root Node</span>
+</h3>
+<p>
+  The central anchor of a co-writing project. There is exactly <strong>one</strong> Story Root node
+  per project. It holds the high-level story metadata that defines the narrative's foundation:
+  title, genre, target audience, logline, characters, and synopsis. Plot nodes auto-connect to it.
+</p>
+
+<h4>StoryRootNodeData Fields</h4>
+<dl class="fields">
+  <dt>title <code>string</code></dt>
+  <dd>The working title of the story. Can be changed at any time.</dd>
+
+  <dt>genre <code>string</code></dt>
+  <dd>Primary genre (e.g., Fantasy, Sci-Fi, Romance, Thriller, Horror, Mystery, Literary Fiction). Sets reader expectations for tone, pacing, and story conventions.</dd>
+
+  <dt>targetAudience <code>string</code></dt>
+  <dd>Who the story is written for (e.g., Young Adult, Adult, Middle Grade, New Adult). Affects language complexity, theme maturity, and content boundaries.</dd>
+
+  <dt>punchline <code>string</code></dt>
+  <dd>The "logline" or elevator pitch &mdash; capture the entire story in 1&ndash;2 sentences. Formula: <em>[Character] must [Goal] before [Stakes/Deadline], but [Obstacle].</em></dd>
+
+  <dt>mainCharacter <code>{ name: string, role: string }</code></dt>
+  <dd>The protagonist &mdash; the character whose journey drives the story. Should have a clear <em>want</em> (external goal) and a <em>need</em> (internal growth).</dd>
+
+  <dt>antagonist <code>{ name: string, role: string }</code></dt>
+  <dd>The primary opposing force. Can be a villain, rival, nature, society, or the protagonist's own flaws.</dd>
+
+  <dt>supportingCharacters <code>Array&lt;{ name: string, archetype: string, customArchetype?: string }&gt;</code></dt>
+  <dd>Characters who help, hinder, or reflect the protagonist. Each should serve a narrative function and feel like a real person.</dd>
+
+  <dt>protagonistGoal <code>string</code></dt>
+  <dd>The one clear, concrete objective the protagonist pursues. This launches the plot (Act 1) and gets resolved at the climax (Act 3). Should be specific and measurable.</dd>
+
+  <dt>summary <code>string</code></dt>
+  <dd>A 300&ndash;500 word overview of the entire story from beginning to end, including the ending. Covers: hook, rising action, midpoint shift, crisis/climax, and resolution.</dd>
+
+  <dt>image <code>string?</code></dt>
+  <dd>Optional mood/concept image for the story. Can be AI-generated via the <code>generate_node_image</code> command.</dd>
+</dl>
+
+<h4>Visual Appearance</h4>
+<p>
+  Rendered with a <strong>purple accent border</strong> and a crown/book icon. The title is displayed
+  prominently. If an image is set, it appears as a background or card header. Only one Story Root is
+  permitted per project.
+</p>
+
+<h4>How to Create</h4>
+<p>
+  Drag the "Story Root" item from the toolbar on the Story Canvas. If one already exists, the toolbar
+  item is hidden. Programmatically, the root is created automatically when a co-write project is
+  initialized; use <code>update_story_root</code> to populate its fields.
+</p>
+
+
+<!-- ── Plot Node ── -->
+<h3 id="node-plot">
+  <span class="node-chip chip-plot"><span class="dot"></span> Plot Node</span>
+</h3>
+<p>
+  Represents a narrative arc or storyline thread. Each plot node auto-connects to the Story Root
+  when created, establishing a parent-child relationship. A project can have any number of plots.
+</p>
+
+<h4>PlotNodeData Fields</h4>
+<dl class="fields">
+  <dt>name <code>string</code></dt>
+  <dd>The plot's display name (e.g., "The Ring Quest", "Forbidden Love").</dd>
+
+  <dt>plotType <code>string</code></dt>
+  <dd>
+    One of: <code>Main Plot</code>, <code>Relationship Plot</code>, <code>Antagonist Plot</code>,
+    <code>Character Development Plot</code>, <code>Subplot</code>, <code>Custom</code>.
+  </dd>
+
+  <dt>customPlotType <code>string?</code></dt>
+  <dd>A free-text label used when <code>plotType</code> is "Custom" (e.g., "Political Intrigue Thread").</dd>
+
+  <dt>description <code>string</code></dt>
+  <dd>Description of the plot's arc &mdash; what it covers, how it escalates, how it resolves.</dd>
+
+  <dt>image <code>string?</code></dt>
+  <dd>Optional mood/concept image for the plot arc. AI-generatable.</dd>
+</dl>
+
+<h4>Plot Types Explained</h4>
+<table>
+  <thead><tr><th>Type</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>Main Plot</code></td><td>The central storyline driven by the protagonist's primary goal. Every other plot connects to or contrasts with this one. Follows: Goal &rarr; Obstacles &rarr; Escalation &rarr; Crisis &rarr; Climax &rarr; Resolution.</td></tr>
+    <tr><td><code>Relationship Plot</code></td><td>A storyline about a key relationship (romantic, familial, or friendship). Provides the emotional core and runs parallel to the main plot.</td></tr>
+    <tr><td><code>Antagonist Plot</code></td><td>The storyline from the antagonist's perspective. Should escalate in parallel, creating increasing pressure on the protagonist.</td></tr>
+    <tr><td><code>Character Development Plot</code></td><td>An internal arc where a character overcomes a flaw, learns a truth, or transforms. The "need" vs "want" dynamic.</td></tr>
+    <tr><td><code>Subplot</code></td><td>A secondary storyline that enriches the world or themes. Good subplots echo the main plot's themes in a different key.</td></tr>
+    <tr><td><code>Custom</code></td><td>Any arc that doesn't fit standard categories: mystery threads, political intrigue, quests-within-quests, etc.</td></tr>
+  </tbody>
+</table>
+
+<h4>Visual Appearance</h4>
+<p>
+  Rendered with an <strong>orange accent border</strong>. Displays the plot name and type badge.
+  Auto-connected to the Story Root via a directed edge upon creation.
+</p>
+
+<h4>How to Create</h4>
+<p>
+  Drag from toolbar, or use the <code>create_plot</code> API command. The edge to the Story Root is
+  automatically created.
+</p>
+
+
+<!-- ── Act Node ── -->
+<h3 id="node-act">
+  <span class="node-chip chip-act"><span class="dot"></span> Act Node</span>
+</h3>
+<p>
+  Represents a major structural division of the story (e.g., Act 1: Setup, Act 2: Confrontation,
+  Act 3: Resolution). Acts define the timeline and pacing structure. They can be connected to
+  Plot nodes via relationship edges to specify which parts of each plot play out in each act.
+</p>
+
+<h4>ActNodeData Fields</h4>
+<dl class="fields">
+  <dt>actNumber <code>number</code></dt>
+  <dd>The act number (e.g., 1, 2, 3). Used for ordering and display.</dd>
+
+  <dt>name <code>string</code></dt>
+  <dd>Display name of the act (e.g., "The Setup", "Rising Action", "The Reckoning").</dd>
+
+  <dt>description <code>string</code></dt>
+  <dd>Description of what happens during this act &mdash; key events, turning points, character states.</dd>
+
+  <dt>image <code>string?</code></dt>
+  <dd>Optional mood/concept image for this act. AI-generatable.</dd>
+</dl>
+
+<h4>Three-Act Structure Reference</h4>
+<table>
+  <thead><tr><th>Act</th><th>Proportion</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td>Act 1 &mdash; Setup</td><td>~25%</td><td>Establish the ordinary world, introduce characters, present the inciting incident that disrupts the status quo.</td></tr>
+    <tr><td>Act 2 &mdash; Confrontation</td><td>~50%</td><td>Rising action, escalating conflicts, midpoint shift, complications, character growth under pressure.</td></tr>
+    <tr><td>Act 3 &mdash; Resolution</td><td>~25%</td><td>Crisis, climax, resolution. The protagonist faces the final challenge and the story's central question is answered.</td></tr>
+  </tbody>
+</table>
+
+<div class="infobox infobox-blue">
+  <strong>Tip:</strong> You can use more than three acts for finer-grained pacing. Each act should end
+  with a major turning point that propels the story forward.
+</div>
+
+<h4>Visual Appearance</h4>
+<p>
+  Rendered with a <strong>teal accent border</strong>. Shows "Act N" with the act name and
+  description excerpt. Sorted by <code>actNumber</code> in the context listing.
+</p>
+
+
+<!-- ── Character Node ── -->
+<h3 id="node-character">
+  <span class="node-chip chip-char"><span class="dot"></span> Character Node</span>
+</h3>
+<p>
+  A visual card on the Character Canvas that links to an entity in the project's entity system.
+  Character nodes allow you to map out relationships between characters using specialized
+  relationship edges. Changes sync bidirectionally with the entity system.
+</p>
+
+<h4>CharacterNodeData Fields</h4>
+<dl class="fields">
+  <dt>entityId <code>string</code></dt>
+  <dd>The ID of the linked entity. The character node is a visual proxy &mdash; all actual data (name, description, profile, image) lives on the entity.</dd>
+</dl>
+
+<h4>Predefined Profile Fields</h4>
+<p>The Character Node Inspector surfaces these predefined profile fields (stored on the entity's <code>profile</code> object):</p>
+<table>
+  <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>characterType</code></td><td>Dropdown</td><td>Narrative archetype: Protagonist, Antagonist, Sidekick, Mentor, Love Interest, Rival, Comic Relief, Guardian, Herald, Trickster, Shapeshifter, Threshold Guardian, Anti-hero, Foil, Custom</td></tr>
+    <tr><td><code>age</code></td><td>Text</td><td>Character's age or age range (e.g., "34", "Late twenties", "Ancient")</td></tr>
+    <tr><td><code>gender</code></td><td>Text</td><td>Gender identity, informing pronoun usage and social dynamics</td></tr>
+    <tr><td><code>appearance</code></td><td>Textarea</td><td>Physical description: height, build, hair, eyes, distinguishing features, typical clothing. Used by AI for image generation consistency</td></tr>
+    <tr><td><code>occupation</code></td><td>Text</td><td>Profession or role in the story world (e.g., "Blacksmith", "Court Spy", "Starship Engineer")</td></tr>
+    <tr><td><code>problemSolvingStrategies</code></td><td>Textarea</td><td>How the character approaches problems: fight, negotiate, trick, analyze, avoid? Defines their agency in scenes</td></tr>
+  </tbody>
+</table>
+<p>
+  Below the predefined fields, a <strong>ProfileViewer</strong> component allows adding arbitrary
+  free-form profile fields. Any key-value pair can be added (e.g., "motivations", "speech_style",
+  "inventory"). Profile values are inline-editable (click to edit).
+</p>
+
+<h4>Entity Features Available on Character Nodes</h4>
+<ul>
+  <li><strong>Reference Image</strong> &mdash; A portrait that can be uploaded, AI-generated, or selected from project assets. Used by the image generator for visual consistency.</li>
+  <li><strong>Reference Voice</strong> &mdash; An audio clip for TTS voice matching. A 10&ndash;30 second clip with clear speech works best. Can be uploaded or AI-generated.</li>
+</ul>
+
+
+<!-- ── Scene Node ── -->
+<h3 id="node-scene">
+  <span class="node-chip chip-scene"><span class="dot"></span> Scene Node</span>
+</h3>
+<p>
+  Scene nodes are still available on the Story Canvas in co-write mode. They work identically to
+  game mode: background image, story text, speaker name, choices, linked entities, and media
+  (background music, voiceover). Scenes allow you to draft actual content alongside the structural
+  planning.
+</p>
+
+
+<!-- ── Comment Node ── -->
+<h3 id="node-comment">
+  <span class="node-chip chip-comment"><span class="dot"></span> Comment Node</span>
+</h3>
+<p>
+  Comments remain available on the Story Canvas for designer notes, TODO markers, and organizational
+  annotations. They do not affect gameplay or narrative structure. Each comment has a configurable
+  background color for visual categorization.
+</p>
+
+
+<!-- ──────────────────────────────────────────────────────────────
+     3. EDGE / RELATIONSHIP TYPES
+     ────────────────────────────────────────────────────────────── -->
+<h2 id="edge-types">3. Edge / Relationship Types</h2>
+
+<!-- ── Char-to-Char ── -->
+<h3 id="edge-char-char">Character-to-Character Relationships</h3>
+<p>
+  When you draw an edge between two Character Nodes on the Character Canvas, it is created as a
+  <strong>relationship edge</strong> with a specialized data payload. These edges are rendered with
+  a <strong>dashed pink bezier curve</strong> and a label showing the relationship type.
+</p>
+
+<h4>RelationshipEdgeData Fields (Character-Character)</h4>
+<dl class="fields">
+  <dt>relationshipType <code>string</code></dt>
+  <dd>The nature of the relationship (e.g., "Allies", "Rivals", "Romantic", "Mentor-Student", "Siblings", "Enemies").</dd>
+
+  <dt>description <code>string</code></dt>
+  <dd>Freeform description of the relationship's dynamics, power balance, and significance.</dd>
+
+  <dt>status <code>string</code></dt>
+  <dd>Current status of the relationship (e.g., "Strong", "Strained", "Broken", "Evolving").</dd>
+
+  <dt>history <code>string</code></dt>
+  <dd>Background history of how the relationship formed and key past events.</dd>
+
+  <dt>beginning <code>string?</code></dt>
+  <dd>How the relationship exists at the very start of the story. The baseline the audience measures all future changes against.</dd>
+
+  <dt>actDevelopments <code>Array&lt;{ actLabel: string, development: string }&gt;?</code></dt>
+  <dd>
+    Act-by-act tracking of how the relationship evolves. Each entry maps an act label to a description
+    of the relationship's shift during that act. Relationships should change &mdash; new information,
+    betrayals, shared ordeals, and revelations all reshape how characters feel about each other.
+  </dd>
+
+  <dt>ending <code>string?</code></dt>
+  <dd>How the relationship stands at the end of the story. Has it deepened, broken, reversed, or reached a new understanding? Should feel like a natural consequence of all preceding events.</dd>
+
+  <dt>entityId <code>string?</code></dt>
+  <dd>If a dedicated "relationship entity" was created in the entity system, its ID is stored here.</dd>
+</dl>
+
+
+<!-- ── Act-to-Plot ── -->
+<h3 id="edge-act-plot">Act-to-Plot Connections</h3>
+<p>
+  Relationship edges can also connect <strong>Act Nodes</strong> to <strong>Plot Nodes</strong>.
+  These edges use the <code>plotInvolvement</code> field to describe which parts of a plot arc
+  play out during a specific act.
+</p>
+
+<h4>RelationshipEdgeData Fields (Act-Plot)</h4>
+<dl class="fields">
+  <dt>plotInvolvement <code>string?</code></dt>
+  <dd>
+    What parts of the plot play out in this act. For example: "Act 1 introduces the mystery and
+    plants the first clues" or "Act 2 deepens the romantic subplot with a betrayal revelation."
+    Mapping plots to acts helps visualize pacing &mdash; if all plot developments are crammed into
+    one act, the others may feel thin.
+  </dd>
+</dl>
+
+<div class="infobox infobox-yellow">
+  <strong>Pacing check:</strong> Connecting acts to plots creates a visual matrix of your story's pacing.
+  Every plot should have meaningful development in at least two acts. If one act has no plot connections,
+  consider whether it's carrying enough narrative weight.
+</div>
+
+
+<!-- ── Root-to-Plot ── -->
+<h3 id="edge-root-plot">Story Root-to-Plot Links</h3>
+<p>
+  When a Plot Node is created (via toolbar drag or API), an edge is <strong>automatically created</strong>
+  from the Story Root to the new plot node. These are standard directed edges (not relationship edges)
+  representing the parent-child hierarchy: the Story Root is the parent of all plot arcs.
+</p>
+
+
+<!-- ──────────────────────────────────────────────────────────────
+     4. CO-WRITING API COMMAND REFERENCE
+     ────────────────────────────────────────────────────────────── -->
+<h2 id="api-reference">4. Co-Writing API Command Reference</h2>
+
+<p>
+  All commands use the Dream-E command block format. The AI chat agent emits these inline in its
+  responses, and they are executed sequentially by the agentic loop.
+</p>
+
+<pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">command_name</span><span class="kw">&gt;&gt;&gt;</span>
+{<span class="str">"param"</span>: <span class="str">"value"</span>, <span class="str">"anotherParam"</span>: <span class="num">42</span>}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+
+<p>
+  The <code>cowrite</code> group contains <strong>17 commands</strong> organized into six sub-groups.
+  All commands are available when the project is in co-write mode.
+</p>
+
+
+<!-- ─── Story Root Commands ─── -->
+<h3 id="cmd-story-root">Story Root Commands</h3>
+
+<details>
+  <summary><code>update_story_root</code> &mdash; Update story root fields</summary>
+  <div class="detail-body">
+    <p>Update any combination of story root fields. All parameters are optional &mdash; only the fields you include will be changed.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>title</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Story title</td></tr>
+        <tr><td><code>genre</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Genre (e.g. Fantasy, Sci-Fi, Romance)</td></tr>
+        <tr><td><code>targetAudience</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Target audience (e.g. Young Adult, Adult)</td></tr>
+        <tr><td><code>punchline</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>One-line story hook / logline</td></tr>
+        <tr><td><code>protagonistGoal</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>What the protagonist wants to achieve</td></tr>
+        <tr><td><code>summary</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Story summary / synopsis</td></tr>
+        <tr><td><code>mainCharacter</code></td><td><code>{name, role}</code></td><td><span class="badge badge-optional">optional</span></td><td>Main character object with name and role</td></tr>
+        <tr><td><code>antagonist</code></td><td><code>{name, role}</code></td><td><span class="badge badge-optional">optional</span></td><td>Antagonist object with name and role</td></tr>
+        <tr><td><code>supportingCharacters</code></td><td><code>[{name, archetype}]</code></td><td><span class="badge badge-optional">optional</span></td><td>Array of supporting characters with name and archetype</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{rootNodeId, updated}</code> &mdash; the story root node ID and a list of updated field names.</p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">update_story_root</span><span class="kw">&gt;&gt;&gt;</span>
+{
+  <span class="str">"title"</span>: <span class="str">"The Last Cartographer"</span>,
+  <span class="str">"genre"</span>: <span class="str">"Fantasy"</span>,
+  <span class="str">"targetAudience"</span>: <span class="str">"Young Adult"</span>,
+  <span class="str">"punchline"</span>: <span class="str">"A blind mapmaker must chart a vanishing continent before it disappears forever, but every map she draws erases part of her memory."</span>,
+  <span class="str">"mainCharacter"</span>: {<span class="str">"name"</span>: <span class="str">"Sera Voss"</span>, <span class="str">"role"</span>: <span class="str">"protagonist"</span>},
+  <span class="str">"antagonist"</span>: {<span class="str">"name"</span>: <span class="str">"The Archivist"</span>, <span class="str">"role"</span>: <span class="str">"antagonist"</span>},
+  <span class="str">"protagonistGoal"</span>: <span class="str">"Map the Fading Isles before they vanish completely"</span>
+}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+<details>
+  <summary><code>get_story_root</code> &mdash; Get all story root data</summary>
+  <div class="detail-body">
+    <p>Retrieves the complete story root document including all fields and the associated image.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td colspan="4"><em>No parameters</em></td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{rootNodeId, title, genre, targetAudience, punchline, mainCharacter, antagonist, supportingCharacters, protagonistGoal, summary, image}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">get_story_root</span><span class="kw">&gt;&gt;&gt;</span>
+{}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+
+    <div class="infobox infobox-blue">
+      <strong>Note:</strong> This is a read-only query command. Its full JSON response is sent back to the AI agent in the agentic loop, allowing the agent to reference the current story state before making changes.
+    </div>
+  </div>
+</details>
+
+
+<!-- ─── Plot Commands ─── -->
+<h3 id="cmd-plots">Plot Commands</h3>
+
+<details>
+  <summary><code>create_plot</code> &mdash; Create a new plot node (auto-connects to story root)</summary>
+  <div class="detail-body">
+    <p>Creates a new plot node on the Story Canvas. An edge from the Story Root to the new plot is automatically created.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>name</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Plot name</td></tr>
+        <tr><td><code>plotType</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>One of: <code>Main Plot</code>, <code>Relationship Plot</code>, <code>Antagonist Plot</code>, <code>Character Development Plot</code>, <code>Subplot</code>, <code>Custom</code></td></tr>
+        <tr><td><code>description</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Plot description / synopsis</td></tr>
+        <tr><td><code>customPlotType</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Custom plot type label (used when plotType is "Custom")</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{plotNodeId}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">create_plot</span><span class="kw">&gt;&gt;&gt;</span>
+{
+  <span class="str">"name"</span>: <span class="str">"The Ring Quest"</span>,
+  <span class="str">"plotType"</span>: <span class="str">"Main Plot"</span>,
+  <span class="str">"description"</span>: <span class="str">"Sera must journey through the Fading Isles, mapping each one before it vanishes. Each map costs her a memory, forcing her to choose between knowledge and identity."</span>
+}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+<details>
+  <summary><code>update_plot</code> &mdash; Update plot node fields</summary>
+  <div class="detail-body">
+    <p>Update any fields on an existing plot node.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>plotNodeId</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Plot node ID</td></tr>
+        <tr><td><code>name</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>New name</td></tr>
+        <tr><td><code>plotType</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>New plot type (same valid values as create_plot)</td></tr>
+        <tr><td><code>description</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>New description</td></tr>
+        <tr><td><code>customPlotType</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>New custom plot type label</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{plotNodeId, updated}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">update_plot</span><span class="kw">&gt;&gt;&gt;</span>
+{
+  <span class="str">"plotNodeId"</span>: <span class="str">"node_abc123"</span>,
+  <span class="str">"description"</span>: <span class="str">"Updated: The quest now involves three ancient maps that must be combined to reveal the final island."</span>
+}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+<details>
+  <summary><code>delete_plot</code> &mdash; Delete a plot node and its connected edges</summary>
+  <div class="detail-body">
+    <p>Removes a plot node and all edges connected to it (including the auto-created edge from Story Root).</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>plotNodeId</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Plot node ID to delete</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{plotNodeId, edgesRemoved}</code> &mdash; the deleted ID and count of edges removed.</p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">delete_plot</span><span class="kw">&gt;&gt;&gt;</span>
+{<span class="str">"plotNodeId"</span>: <span class="str">"node_abc123"</span>}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+<details>
+  <summary><code>list_plots</code> &mdash; List all plot nodes</summary>
+  <div class="detail-body">
+    <p>Returns all plot nodes in the project. This is a read-only query &mdash; full JSON is returned to the agent.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td colspan="4"><em>No parameters</em></td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>Array of {plotNodeId, name, plotType, description}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">list_plots</span><span class="kw">&gt;&gt;&gt;</span>
+{}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+
+<!-- ─── Act Commands ─── -->
+<h3 id="cmd-acts">Act Commands</h3>
+
+<details>
+  <summary><code>create_act</code> &mdash; Create a new act node</summary>
+  <div class="detail-body">
+    <p>Creates a new act node on the Story Canvas representing a structural division of the story.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>actNumber</code></td><td><code>number</code></td><td><span class="badge badge-required">required</span></td><td>Act number (e.g. 1, 2, 3)</td></tr>
+        <tr><td><code>name</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Act display name (e.g. "The Setup")</td></tr>
+        <tr><td><code>description</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Description of what happens in this act</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{actNodeId}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">create_act</span><span class="kw">&gt;&gt;&gt;</span>
+{
+  <span class="str">"actNumber"</span>: <span class="num">1</span>,
+  <span class="str">"name"</span>: <span class="str">"The Ordinary World"</span>,
+  <span class="str">"description"</span>: <span class="str">"Sera works in the royal cartography guild, blind but gifted with magical spatial awareness. She discovers a map that shouldn't exist."</span>
+}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+<details>
+  <summary><code>update_act</code> &mdash; Update act node fields</summary>
+  <div class="detail-body">
+    <p>Update any fields on an existing act node.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>actNodeId</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Act node ID</td></tr>
+        <tr><td><code>actNumber</code></td><td><code>number</code></td><td><span class="badge badge-optional">optional</span></td><td>New act number</td></tr>
+        <tr><td><code>name</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>New name</td></tr>
+        <tr><td><code>description</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>New description</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{actNodeId, updated}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">update_act</span><span class="kw">&gt;&gt;&gt;</span>
+{
+  <span class="str">"actNodeId"</span>: <span class="str">"node_def456"</span>,
+  <span class="str">"name"</span>: <span class="str">"The Call to Adventure"</span>,
+  <span class="str">"description"</span>: <span class="str">"A mysterious stranger arrives with a commission: map the Fading Isles before they vanish. Sera's mentor warns her, but she accepts."</span>
+}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+<details>
+  <summary><code>delete_act</code> &mdash; Delete an act node and its connected edges</summary>
+  <div class="detail-body">
+    <p>Removes an act node and all edges connected to it.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>actNodeId</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Act node ID to delete</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{actNodeId, edgesRemoved}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">delete_act</span><span class="kw">&gt;&gt;&gt;</span>
+{<span class="str">"actNodeId"</span>: <span class="str">"node_def456"</span>}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+<details>
+  <summary><code>list_acts</code> &mdash; List all act nodes</summary>
+  <div class="detail-body">
+    <p>Returns all act nodes sorted by act number. Full JSON is returned to the agent.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td colspan="4"><em>No parameters</em></td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>Array of {actNodeId, actNumber, name, description}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">list_acts</span><span class="kw">&gt;&gt;&gt;</span>
+{}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+
+<!-- ─── Relationship Commands ─── -->
+<h3 id="cmd-relationships">Relationship Commands</h3>
+
+<details>
+  <summary><code>create_relationship</code> &mdash; Create a relationship edge between two nodes</summary>
+  <div class="detail-body">
+    <p>
+      Creates a relationship edge. Works for <strong>character-to-character</strong> connections
+      (with relationship type, beginning, ending) and <strong>act-to-plot</strong> connections
+      (with plot involvement descriptions).
+    </p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>sourceNodeId</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Source node ID</td></tr>
+        <tr><td><code>targetNodeId</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Target node ID</td></tr>
+        <tr><td><code>relationshipType</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Type of relationship (e.g. "Allies", "Rivals", "Romantic")</td></tr>
+        <tr><td><code>description</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Relationship description</td></tr>
+        <tr><td><code>beginning</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>How the relationship starts</td></tr>
+        <tr><td><code>ending</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>How the relationship ends</td></tr>
+        <tr><td><code>plotInvolvement</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>What parts of a plot play out in this act (for act-plot edges)</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{edgeId}</code></p>
+
+    <h4>Example: Character Relationship</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">create_relationship</span><span class="kw">&gt;&gt;&gt;</span>
+{
+  <span class="str">"sourceNodeId"</span>: <span class="str">"node_sera"</span>,
+  <span class="str">"targetNodeId"</span>: <span class="str">"node_kael"</span>,
+  <span class="str">"relationshipType"</span>: <span class="str">"Reluctant Allies"</span>,
+  <span class="str">"description"</span>: <span class="str">"Sera distrusts Kael's motives but needs his navigation skills. He needs her maps."</span>,
+  <span class="str">"beginning"</span>: <span class="str">"Strangers forced into partnership by circumstance"</span>,
+  <span class="str">"ending"</span>: <span class="str">"Deep mutual respect and unspoken romantic tension"</span>
+}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+
+    <h4>Example: Act-Plot Connection</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">create_relationship</span><span class="kw">&gt;&gt;&gt;</span>
+{
+  <span class="str">"sourceNodeId"</span>: <span class="str">"node_act1"</span>,
+  <span class="str">"targetNodeId"</span>: <span class="str">"node_mainplot"</span>,
+  <span class="str">"plotInvolvement"</span>: <span class="str">"Act 1 introduces the quest: Sera discovers the first fading map and accepts the commission."</span>
+}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+<details>
+  <summary><code>update_relationship</code> &mdash; Update relationship edge data</summary>
+  <div class="detail-body">
+    <p>Update any fields on an existing relationship edge. Supports act-by-act development tracking.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>edgeId</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Relationship edge ID</td></tr>
+        <tr><td><code>relationshipType</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>New relationship type</td></tr>
+        <tr><td><code>description</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>New description</td></tr>
+        <tr><td><code>status</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Current status of the relationship</td></tr>
+        <tr><td><code>beginning</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>How it starts</td></tr>
+        <tr><td><code>ending</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>How it ends</td></tr>
+        <tr><td><code>actDevelopments</code></td><td><code>[{actLabel, development}]</code></td><td><span class="badge badge-optional">optional</span></td><td>Array of act-by-act development entries</td></tr>
+        <tr><td><code>plotInvolvement</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Plot involvement description (for act-plot edges)</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{edgeId, updated}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">update_relationship</span><span class="kw">&gt;&gt;&gt;</span>
+{
+  <span class="str">"edgeId"</span>: <span class="str">"edge_xyz789"</span>,
+  <span class="str">"status"</span>: <span class="str">"Strained"</span>,
+  <span class="str">"actDevelopments"</span>: [
+    {<span class="str">"actLabel"</span>: <span class="str">"Act 1"</span>, <span class="str">"development"</span>: <span class="str">"Forced partnership — mutual suspicion"</span>},
+    {<span class="str">"actLabel"</span>: <span class="str">"Act 2"</span>, <span class="str">"development"</span>: <span class="str">"Shared ordeal builds grudging trust, then a betrayal revelation"</span>},
+    {<span class="str">"actLabel"</span>: <span class="str">"Act 3"</span>, <span class="str">"development"</span>: <span class="str">"Reconciliation and sacrifice — trust fully restored"</span>}
+  ]
+}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+<details>
+  <summary><code>delete_relationship</code> &mdash; Delete a relationship edge</summary>
+  <div class="detail-body">
+    <p>Removes a relationship edge by its ID.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>edgeId</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Relationship edge ID</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{edgeId}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">delete_relationship</span><span class="kw">&gt;&gt;&gt;</span>
+{<span class="str">"edgeId"</span>: <span class="str">"edge_xyz789"</span>}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+<details>
+  <summary><code>list_relationships</code> &mdash; List all relationship edges</summary>
+  <div class="detail-body">
+    <p>Returns all relationship edges in the project. Full JSON is returned to the agent.</p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td colspan="4"><em>No parameters</em></td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>Array of {edgeId, sourceNodeId, targetNodeId, relationshipType, description}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">list_relationships</span><span class="kw">&gt;&gt;&gt;</span>
+{}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+
+<!-- ─── Character Commands ─── -->
+<h3 id="cmd-characters">Character Node Commands</h3>
+
+<details>
+  <summary><code>create_character_node</code> &mdash; Create a character node on the Character Canvas</summary>
+  <div class="detail-body">
+    <p>
+      Creates a character node that links to an entity. You can either link to an <strong>existing entity</strong>
+      by providing <code>entityId</code>, or <strong>create a new entity</strong> by providing <code>name</code>.
+      At least one of these is required.
+    </p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>entityId</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Entity ID to link to (if linking an existing entity)</td></tr>
+        <tr><td><code>name</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Name for a new entity (if creating new)</td></tr>
+        <tr><td><code>category</code></td><td><code>string</code></td><td><span class="badge badge-optional">optional</span></td><td>Entity category. Valid values: <code>character</code>, <code>location</code>, <code>object</code>, <code>concept</code>. Default: <code>character</code></td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{nodeId, entityId}</code></p>
+
+    <div class="infobox infobox-green">
+      <strong>Constraint:</strong> At least one of <code>entityId</code> or <code>name</code> must be provided.
+      Providing <code>entityId</code> links to an existing entity. Providing <code>name</code> creates a new entity
+      and links the character node to it.
+    </div>
+
+    <h4>Example: Link existing entity</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">create_character_node</span><span class="kw">&gt;&gt;&gt;</span>
+{<span class="str">"entityId"</span>: <span class="str">"entity_sera_voss"</span>}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+
+    <h4>Example: Create new entity</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">create_character_node</span><span class="kw">&gt;&gt;&gt;</span>
+{<span class="str">"name"</span>: <span class="str">"Kael Windrunner"</span>, <span class="str">"category"</span>: <span class="str">"character"</span>}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+<details>
+  <summary><code>set_character_profile_field</code> &mdash; Set a profile field on a character entity</summary>
+  <div class="detail-body">
+    <p>
+      A convenience command for setting individual profile fields on an entity. Simpler than using
+      <code>patch_entity_profile</code> when you just want to set one field at a time.
+    </p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>entityId</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Entity ID</td></tr>
+        <tr><td><code>field</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Profile field name (e.g. <code>age</code>, <code>gender</code>, <code>appearance</code>, <code>occupation</code>, <code>characterType</code>, <code>problemSolvingStrategies</code>, or any custom key)</td></tr>
+        <tr><td><code>value</code></td><td><code>any</code></td><td><span class="badge badge-required">required</span></td><td>Value for the profile field (string, number, boolean, array, or object)</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{entityId, field, value}</code></p>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">set_character_profile_field</span><span class="kw">&gt;&gt;&gt;</span>
+{
+  <span class="str">"entityId"</span>: <span class="str">"entity_sera_voss"</span>,
+  <span class="str">"field"</span>: <span class="str">"appearance"</span>,
+  <span class="str">"value"</span>: <span class="str">"Tall and willowy with silver-white hair worn in a long braid. Milky, sightless eyes that seem to shimmer with an inner light. Always carries a worn leather satchel of mapping tools."</span>
+}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+
+    <h4>Common Profile Field Names</h4>
+    <table>
+      <thead><tr><th>Field</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>characterType</code></td><td>Narrative archetype (Protagonist, Antagonist, Mentor, etc.)</td></tr>
+        <tr><td><code>age</code></td><td>Age or age range</td></tr>
+        <tr><td><code>gender</code></td><td>Gender identity</td></tr>
+        <tr><td><code>appearance</code></td><td>Physical description</td></tr>
+        <tr><td><code>occupation</code></td><td>Profession or role</td></tr>
+        <tr><td><code>problemSolvingStrategies</code></td><td>How the character approaches challenges</td></tr>
+        <tr><td><code>personality</code></td><td>Personality traits and temperament</td></tr>
+        <tr><td><code>background</code></td><td>Backstory and history</td></tr>
+        <tr><td><code>motivations</code></td><td>What drives the character</td></tr>
+        <tr><td><code>speech_style</code></td><td>How the character talks</td></tr>
+        <tr><td><code>abilities</code></td><td>Skills and powers</td></tr>
+        <tr><td><code>inventory</code></td><td>Items and possessions</td></tr>
+      </tbody>
+    </table>
+  </div>
+</details>
+
+
+<!-- ─── Image Generation Command ─── -->
+<h3 id="cmd-image-gen">Image Generation Command</h3>
+
+<details>
+  <summary><code>generate_node_image</code> &mdash; Generate an image for any co-write node or entity</summary>
+  <div class="detail-body">
+    <p>
+      Triggers AI image generation for a co-write node (story root, plot, act) or an entity.
+      The generated image is automatically assigned to the target. Uses the provider and model
+      configured in AI Settings.
+    </p>
+
+    <table>
+      <thead><tr><th>Parameter</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>targetId</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Node ID or entity ID to generate image for</td></tr>
+        <tr><td><code>prompt</code></td><td><code>string</code></td><td><span class="badge badge-required">required</span></td><td>Image generation prompt (be vivid and detailed)</td></tr>
+        <tr><td><code>width</code></td><td><code>number</code></td><td><span class="badge badge-optional">optional</span></td><td>Width in pixels. Default: <code>512</code></td></tr>
+        <tr><td><code>height</code></td><td><code>number</code></td><td><span class="badge badge-optional">optional</span></td><td>Height in pixels. Default: <code>512</code></td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Returns:</strong> <code>{targetId, imageGenerated: true}</code></p>
+
+    <div class="infobox infobox-purple">
+      <strong>Prompt quality matters.</strong> Write prompts like an art director &mdash; be specific about composition,
+      lighting, style, colors, and mood. Image generation takes ~10&ndash;30 seconds.
+    </div>
+
+    <h4>Example</h4>
+    <pre><code><span class="kw">&lt;&lt;&lt;SW_CMD:</span><span class="fn">generate_node_image</span><span class="kw">&gt;&gt;&gt;</span>
+{
+  <span class="str">"targetId"</span>: <span class="str">"entity_sera_voss"</span>,
+  <span class="str">"prompt"</span>: <span class="str">"Portrait of a tall, willowy woman with flowing silver-white hair in a long braid, milky sightless eyes that shimmer with inner light, wearing a weathered explorer's coat over a midnight-blue tunic, leather satchel of antique mapping tools at her side, soft golden rim lighting, fantasy art style, painterly, rich deep colors"</span>,
+  <span class="str">"width"</span>: <span class="num">768</span>,
+  <span class="str">"height"</span>: <span class="num">1024</span>
+}
+<span class="kw">&lt;&lt;&lt;/SW_CMD&gt;&gt;&gt;</span></code></pre>
+  </div>
+</details>
+
+
+<!-- ──────────────────────────────────────────────────────────────
+     5. CONTEXT SYSTEM
+     ────────────────────────────────────────────────────────────── -->
+<h2 id="context-system">5. Context System</h2>
+
+<h3>What the AI Sees</h3>
+<p>
+  Every message to the AI chat agent is prefixed with a <code>[Current Game State]</code> block
+  generated by <code>getGameContext()</code>. This snapshot includes:
+</p>
+<ul>
+  <li><strong>Project info:</strong> Title, mode (<code>cowrite</code> or <code>game</code>), start node ID</li>
+  <li><strong>Scenes:</strong> All scene nodes with IDs, labels, text preview (120 chars), choices, connections, media indicators</li>
+  <li><strong>Entities:</strong> All entities with IDs, categories, names, image/profile indicators, summary preview</li>
+  <li><strong>Variables:</strong> All global variables with IDs, names, types, default values</li>
+  <li><strong>Edges:</strong> All edges with IDs, source/target, source handles</li>
+</ul>
+
+<h3>Co-Write Context Extension</h3>
+<p>
+  When the project is in co-write mode, a <code>[CO-WRITING STRUCTURE]</code> section is appended
+  containing:
+</p>
+<ul>
+  <li><strong>Story Root:</strong> Node ID, title, genre, target audience, punchline, main character, antagonist, supporting characters, protagonist goal, summary (200-char preview), image indicator</li>
+  <li><strong>Plots:</strong> Each plot with ID, name, type, image indicator, description preview (100 chars)</li>
+  <li><strong>Acts:</strong> Each act with ID, act number, name, description preview (100 chars), sorted by act number</li>
+  <li><strong>Character Nodes:</strong> Each character node with ID and linked entity name</li>
+  <li><strong>Relationships:</strong> Each relationship edge with ID, source/target IDs, type, description preview (80 chars)</li>
+</ul>
+
+<h3>The Agentic Loop</h3>
+<p>
+  The AI operates in a multi-turn agentic loop managed by <code>aiChatService.ts</code>:
+</p>
+<ol>
+  <li>User sends a message (prefixed with fresh game state)</li>
+  <li>Agent responds with text and <code>&lt;&lt;&lt;SW_CMD:...&gt;&gt;&gt;</code> command blocks</li>
+  <li>Commands are extracted and executed sequentially via <code>executeCommand()</code></li>
+  <li>Results (successes, errors, JSON data for query commands) are <strong>sent back to the agent</strong> with updated game state</li>
+  <li>Agent reviews results, can retry failures or issue additional commands</li>
+  <li>Loop continues until the agent responds with <strong>no commands</strong> (task complete) or <strong>MAX_ITERATIONS</strong> is reached</li>
+</ol>
+
+<div class="infobox infobox-green">
+  <strong>MAX_ITERATIONS = 10</strong> per user message. This allows up to ~50+ commands across multiple turns,
+  enough to build a substantial story structure in one conversation step. The limit prevents runaway loops.
+</div>
+
+<h3>Data Commands</h3>
+<p>
+  The following co-write commands are classified as "data commands" &mdash; their full JSON response
+  is included in the results message sent back to the agent (not just a success/fail indicator):
+</p>
+<ul>
+  <li><code>get_story_root</code></li>
+  <li><code>list_plots</code></li>
+  <li><code>list_acts</code></li>
+  <li><code>list_relationships</code></li>
+</ul>
+
+
+<!-- ──────────────────────────────────────────────────────────────
+     6. IMAGE GENERATION
+     ────────────────────────────────────────────────────────────── -->
+<h2 id="image-generation">6. Image Generation</h2>
+
+<h3>ImageGenerationOverlay Features</h3>
+<p>
+  The <code>ImageGenerationOverlay</code> is a shared modal component used across the app for
+  AI image generation. It can be opened from scene inspectors, entity managers, character
+  inspectors, story root, plot, and act inspectors.
+</p>
+
+<h4>UI Elements</h4>
+<ul>
+  <li><strong>Provider info bar:</strong> Shows the active AI provider and model name with a green "active" indicator</li>
+  <li><strong>Prompt textarea:</strong> Free-text description of the desired image</li>
+  <li><strong>Aspect ratio selector:</strong> 7 preset ratios (see table below)</li>
+  <li><strong>Reference images:</strong> Upload from disk or select from project assets. Displayed as 64px thumbnail previews with remove buttons</li>
+  <li><strong>Generate button:</strong> Triggers generation with loading spinner state</li>
+  <li><strong>Result preview:</strong> Shows the generated image with "Use This Image" and "Regenerate" options</li>
+  <li><strong>Error display:</strong> Shows API errors with warning icon</li>
+</ul>
+
+<h4>Supported Aspect Ratios</h4>
+<table>
+  <thead><tr><th>Ratio</th><th>Width (px)</th><th>Height (px)</th><th>Common Use</th></tr></thead>
+  <tbody>
+    <tr><td><code>1:1</code></td><td>1024</td><td>1024</td><td>Character portraits, icons</td></tr>
+    <tr><td><code>16:9</code></td><td>1280</td><td>720</td><td>Widescreen scene backgrounds, cinematic shots</td></tr>
+    <tr><td><code>9:16</code></td><td>720</td><td>1280</td><td>Vertical / mobile-first images, full-body portraits</td></tr>
+    <tr><td><code>3:2</code></td><td>1200</td><td>800</td><td>Classic photography ratio, balanced scenes</td></tr>
+    <tr><td><code>2:3</code></td><td>800</td><td>1200</td><td>Book covers, tall scenes</td></tr>
+    <tr><td><code>4:3</code></td><td>1024</td><td>768</td><td>Standard monitor ratio, general scenes</td></tr>
+    <tr><td><code>3:4</code></td><td>768</td><td>1024</td><td>Tall compositions, three-quarter portraits</td></tr>
+  </tbody>
+</table>
+
+<h4>Reference Images</h4>
+<p>Reference images help the AI model maintain visual consistency. Two sources are available:</p>
+<ul>
+  <li><strong>Upload:</strong> Click the upload button to select an image from disk (PNG, JPEG, GIF, WebP)</li>
+  <li><strong>Assets:</strong> Click "Assets" to open the AssetPicker sub-modal and select from existing project images</li>
+</ul>
+<p>
+  Up to 8 reference images can be sent depending on the provider. For BFL FLUX 2 models, they map
+  to <code>input_image</code> through <code>input_image_8</code>. For Gemini, they are sent as
+  <code>inlineData</code> parts before the prompt text.
+</p>
+
+<h4>Image Generation Providers</h4>
+<table>
+  <thead><tr><th>Provider</th><th>Models</th><th>Reference Image Support</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Black Forest Labs (BFL)</strong></td>
+      <td>
+        <code>flux-2-pro-preview</code>, <code>flux-2-pro</code>, <code>flux-2-max</code>,
+        <code>flux-2-flex</code>, <code>flux-2-klein-9b-preview</code>, <code>flux-2-klein-9b</code>
+      </td>
+      <td>Up to 8 (FLUX 2) or 1 (FLUX 1.x)</td>
+    </tr>
+    <tr>
+      <td><strong>Google Gemini</strong></td>
+      <td>
+        <code>Nano Banana 2</code>, <code>Nano Banana Pro</code>,
+        <code>Gemini 2.0 Flash Image</code>, <code>Imagen 3.0</code>
+      </td>
+      <td>Yes (inline data parts)</td>
+    </tr>
+    <tr>
+      <td><strong>OpenAI-Compatible</strong></td>
+      <td>Configurable endpoint + model name</td>
+      <td>Provider-dependent</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4>Default Image Style</h4>
+<p>
+  A <code>defaultImageStyle</code> string is automatically appended to all image prompts. The default is:
+</p>
+<pre><code><span class="str">"aesthetic blockbuster movie style movie still with hq color grading.
+Make sure all images have a movie-like depth of field and a soft,
+hollywood movie-like lighting"</span></code></pre>
+<p>This can be customized in AI Settings.</p>
+
+<h4>How Generated Images Are Assigned</h4>
+<ul>
+  <li><strong>Co-write nodes</strong> (Story Root, Plot, Act): Stored on the node's <code>data.image</code> field</li>
+  <li><strong>Entities</strong> (characters, locations, etc.): Stored on <code>entity.referenceImage</code></li>
+  <li><strong>Scenes:</strong> Stored on <code>data.backgroundImage</code></li>
+</ul>
+
+
+<!-- ──────────────────────────────────────────────────────────────
+     7. TTS / VOICE GENERATION
+     ────────────────────────────────────────────────────────────── -->
+<h2 id="tts-voice">7. TTS / Voice Generation</h2>
+
+<h3>TTSGenerationOverlay Features</h3>
+<p>
+  The <code>TTSGenerationOverlay</code> is a shared modal for generating text-to-speech audio
+  via the Google Gemini TTS API. It can be opened from character inspectors (for reference voices),
+  scene inspectors (for voiceovers), and entity managers.
+</p>
+
+<h4>UI Elements</h4>
+<ul>
+  <li><strong>Google API Key status bar:</strong> Green indicator if key is set, red if missing</li>
+  <li><strong>Text textarea:</strong> The text to convert to speech</li>
+  <li><strong>Voice instruction textarea:</strong> How the text should be spoken (narration style, emotion, delivery). Default: <em>"Read aloud in a very natural fluid audiobook narrator style, very genuine:"</em></li>
+  <li><strong>Voice selector dropdown:</strong> 23 Gemini voices (see below)</li>
+  <li><strong>Model selector dropdown:</strong> Flash (fast) or Pro (quality)</li>
+  <li><strong>Generate button:</strong> Triggers generation with spinner</li>
+  <li><strong>Audio preview:</strong> HTML5 audio player with playback controls</li>
+  <li><strong>"Use This Audio" / "Regenerate" buttons</strong></li>
+</ul>
+
+<h4>TTS Models</h4>
+<table>
+  <thead><tr><th>Model</th><th>Label</th><th>Characteristics</th></tr></thead>
+  <tbody>
+    <tr><td><code>gemini-2.5-flash-preview-tts</code></td><td>Gemini 2.5 Flash TTS (fast)</td><td>Lower latency, good for previews and rapid iteration</td></tr>
+    <tr><td><code>gemini-2.5-pro-preview-tts</code></td><td>Gemini 2.5 Pro TTS (quality)</td><td>Higher quality, better for final audio, more expressive</td></tr>
+  </tbody>
+</table>
+
+<h4>Available Gemini Voices (23)</h4>
+<div class="voice-grid">
+  <div class="voice-card">Zephyr</div>
+  <div class="voice-card">Puck</div>
+  <div class="voice-card">Charon</div>
+  <div class="voice-card">Kore</div>
+  <div class="voice-card">Fenrir</div>
+  <div class="voice-card">Leda</div>
+  <div class="voice-card">Orus</div>
+  <div class="voice-card">Aoede</div>
+  <div class="voice-card">Callirrhoe</div>
+  <div class="voice-card">Autonoe</div>
+  <div class="voice-card">Enceladus</div>
+  <div class="voice-card">Iapetus</div>
+  <div class="voice-card">Umbriel</div>
+  <div class="voice-card">Algieba</div>
+  <div class="voice-card">Despina</div>
+  <div class="voice-card">Erinome</div>
+  <div class="voice-card">Gacrux</div>
+  <div class="voice-card">Laomedeia</div>
+  <div class="voice-card">Pulcherrima</div>
+  <div class="voice-card">Sadachbia</div>
+  <div class="voice-card">Sulafat</div>
+  <div class="voice-card">Vindemiatrix</div>
+  <div class="voice-card">Zubenelgenubi</div>
+</div>
+
+<h4>Voice Instruction Examples</h4>
+<table>
+  <thead><tr><th>Style</th><th>Instruction Text</th></tr></thead>
+  <tbody>
+    <tr><td>Default narrator</td><td><em>Read aloud in a very natural fluid audiobook narrator style, very genuine:</em></td></tr>
+    <tr><td>Grizzled warrior</td><td><em>Speak in a deep, gravelly voice with a slight northern accent. Sound weary but determined, like a seasoned soldier.</em></td></tr>
+    <tr><td>Mysterious oracle</td><td><em>Whisper with an ethereal, otherworldly quality. Slow, deliberate pacing with dramatic pauses. Slightly echoing.</em></td></tr>
+    <tr><td>Excited child</td><td><em>High energy, fast-paced, full of wonder and excitement. Slightly breathless. Voice cracks with emotion occasionally.</em></td></tr>
+    <tr><td>Villainous monologue</td><td><em>Smooth, controlled, and condescending. A velvet voice hiding malice. Occasional theatrical emphasis on threatening words.</em></td></tr>
+    <tr><td>News broadcast</td><td><em>Professional, clear, measured pace. Authoritative but neutral. Slight urgency for dramatic developments.</em></td></tr>
+  </tbody>
+</table>
+
+<h4>How Generated Audio Is Assigned</h4>
+<ul>
+  <li><strong>Entity reference voice:</strong> Stored on <code>entity.referenceVoice</code> &mdash; used by the TTS engine for voice identity matching across scenes</li>
+  <li><strong>Scene voiceover:</strong> Stored on <code>data.voiceoverAudio</code> via the <code>generate_scene_voiceover</code> media command</li>
+</ul>
+
+<div class="infobox infobox-blue">
+  <strong>Chunked streaming TTS:</strong> The TTS service (<code>ttsService.ts</code>) splits long texts
+  into growing chunks for in-order delivery, enabling audio playback to begin before the entire text
+  is processed.
+</div>
+
+
+<!-- ──────────────────────────────────────────────────────────────
+     8. STORYTELLING CONCEPTS REFERENCE
+     ────────────────────────────────────────────────────────────── -->
+<h2 id="storytelling-reference">8. Storytelling Concepts Reference</h2>
+
+<p>
+  Dream-E's co-writing mode includes an embedded writing coach via contextual tooltips. These
+  concepts are sourced from <code>storyTooltips.ts</code> and appear as info icons throughout the UI.
+</p>
+
+<h3>Genre Conventions</h3>
+<p>
+  Genre sets reader expectations for tone, pacing, and story conventions. Common genres supported in
+  Dream-E's story root:
+</p>
+<table>
+  <thead><tr><th>Genre</th><th>Key Expectations</th></tr></thead>
+  <tbody>
+    <tr><td>Fantasy</td><td>Worldbuilding, magic systems, quests, good vs evil, mythic undertones. Music: orchestral, Celtic, choral, harp, flute.</td></tr>
+    <tr><td>Sci-Fi</td><td>Technology extrapolation, philosophical questions, futuristic settings, scientific plausibility.</td></tr>
+    <tr><td>Romance</td><td>Central love story, emotional beats, relationship milestones, satisfying resolution.</td></tr>
+    <tr><td>Thriller</td><td>High stakes, ticking clock, plot twists, escalating danger, fast pacing.</td></tr>
+    <tr><td>Horror</td><td>Dread, atmosphere, the unknown, vulnerability, transgression. Music: organ, piano, atmospheric, dissonant strings.</td></tr>
+    <tr><td>Mystery</td><td>Clue planting, red herrings, fair play, revelation, detective logic.</td></tr>
+    <tr><td>Literary Fiction</td><td>Character-driven, thematic depth, prose quality, ambiguity, social commentary.</td></tr>
+  </tbody>
+</table>
+
+<h3>Character Archetypes</h3>
+<p>
+  The following character types are available in the Character Type dropdown. Each comes with
+  narrative expectations that help maintain consistency:
+</p>
+
+<table>
+  <thead><tr><th>Archetype</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Protagonist</strong></td><td>The central character whose journey drives the story. Must have a clear external goal (what they want) and an internal need (what they must learn or overcome).</td></tr>
+    <tr><td><strong>Antagonist</strong></td><td>The primary force opposing the protagonist. Best antagonists have understandable motivations and serve as a dark mirror reflecting what the protagonist could become.</td></tr>
+    <tr><td><strong>Sidekick</strong></td><td>Loyal companion who provides humor, practical skills, or emotional grounding. (e.g., Samwise Gamgee, Ron Weasley)</td></tr>
+    <tr><td><strong>Mentor</strong></td><td>Wise guide who teaches essential skills or truths. Often removed to force the hero to act independently. (e.g., Gandalf, Obi-Wan)</td></tr>
+    <tr><td><strong>Love Interest</strong></td><td>Forms a romantic connection with the protagonist. Best love interests have their own goals and agency beyond the romance.</td></tr>
+    <tr><td><strong>Rival</strong></td><td>Competitor who pushes the protagonist to grow. Shares the protagonist's goals but competes for the same prize.</td></tr>
+    <tr><td><strong>Comic Relief</strong></td><td>Lightens the mood with humor. Best comic relief characters have genuine emotional depth beneath the jokes.</td></tr>
+    <tr><td><strong>Guardian</strong></td><td>Protector who shields the protagonist at great personal cost. Represents safety and stability.</td></tr>
+    <tr><td><strong>Herald</strong></td><td>Announces change and kicks off the adventure. Delivers the "call to adventure" that disrupts the ordinary world.</td></tr>
+    <tr><td><strong>Trickster</strong></td><td>Clever, morally ambiguous disruptor who uses wit, deception, or chaos. Challenges authority and rigid thinking.</td></tr>
+    <tr><td><strong>Shapeshifter</strong></td><td>Character whose loyalty or nature is uncertain. Keeps everyone guessing &mdash; friend or foe? True nature revealed at a crucial moment.</td></tr>
+    <tr><td><strong>Threshold Guardian</strong></td><td>Tests the protagonist before they can advance. Guards transitions between story phases.</td></tr>
+    <tr><td><strong>Anti-hero</strong></td><td>Protagonist lacking conventional heroic qualities &mdash; morally ambiguous, selfish, or using questionable methods. Appeal lies in complexity. (e.g., Walter White, Deadpool)</td></tr>
+    <tr><td><strong>Foil</strong></td><td>Designed to contrast with the protagonist, highlighting the hero's traits through opposition. Can be a friend whose different approach illuminates strengths and weaknesses.</td></tr>
+  </tbody>
+</table>
+
+<h3>Plot Type Explanations</h3>
+<table>
+  <thead><tr><th>Type</th><th>Explanation</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Main Plot</strong></td><td>Central storyline driven by the protagonist's primary goal. Follows: Goal &rarr; Obstacles &rarr; Escalation &rarr; Crisis &rarr; Climax &rarr; Resolution. Every other plot connects to or contrasts with this one.</td></tr>
+    <tr><td><strong>Relationship Plot</strong></td><td>About a key relationship (romantic, familial, friendship). Runs parallel to the main plot and often provides the emotional core.</td></tr>
+    <tr><td><strong>Antagonist Plot</strong></td><td>Told from the antagonist's perspective. Should escalate in parallel, creating increasing pressure. Best stories show the antagonist as a mirror of the protagonist.</td></tr>
+    <tr><td><strong>Character Development Plot</strong></td><td>Internal arc: overcoming a flaw, learning a truth, or transforming. The "need" vs "want" &mdash; what the character thinks they need vs what they actually need to grow.</td></tr>
+    <tr><td><strong>Subplot</strong></td><td>Secondary storyline enriching the world or themes. Good subplots echo the main plot's themes in a different key.</td></tr>
+    <tr><td><strong>Custom</strong></td><td>Any narrative thread that doesn't fit standard categories: mystery threads, political intrigue, quests-within-quests.</td></tr>
+  </tbody>
+</table>
+
+<h3>Three-Act Structure</h3>
+<p>The classic story architecture dividing a narrative into three major phases:</p>
+<table>
+  <thead><tr><th>Act</th><th>Name</th><th>~Proportion</th><th>Key Elements</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Act 1</strong></td>
+      <td>Setup</td>
+      <td>~25%</td>
+      <td>
+        <strong>Ordinary World</strong> &rarr; <strong>Inciting Incident</strong> &rarr; <strong>First Plot Point</strong><br>
+        Establish characters, setting, and status quo. The inciting incident disrupts everything.
+        By the end of Act 1, the protagonist commits to the journey (or is forced into it).
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Act 2</strong></td>
+      <td>Confrontation</td>
+      <td>~50%</td>
+      <td>
+        <strong>Rising Action</strong> &rarr; <strong>Midpoint</strong> &rarr; <strong>Complications</strong> &rarr; <strong>Second Plot Point</strong><br>
+        The protagonist faces escalating obstacles. The midpoint shifts from reactive to proactive
+        (or vice versa). Subplots deepen. Stakes rise. By the end, all seems lost.
+      </td>
+    </tr>
+    <tr>
+      <td><strong>Act 3</strong></td>
+      <td>Resolution</td>
+      <td>~25%</td>
+      <td>
+        <strong>Crisis</strong> &rarr; <strong>Climax</strong> &rarr; <strong>Resolution</strong><br>
+        The protagonist faces the final challenge, drawing on everything they've learned.
+        The central question is answered. Loose ends are tied. The new status quo is established.
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Logline / Punchline Formula</h3>
+<p>The logline formula captures your entire story in one to two sentences:</p>
+<pre><code><span class="cmt">// The formula:</span>
+[<span class="fn">Character</span>] must [<span class="fn">Goal</span>] before [<span class="fn">Stakes/Deadline</span>], but [<span class="fn">Obstacle</span>].
+
+<span class="cmt">// Example:</span>
+<span class="str">"A blind mapmaker must chart a vanishing continent before it
+disappears forever, but every map she draws erases part of her memory."</span>
+
+<span class="cmt">// Components:</span>
+<span class="fn">Character</span>  = Who (with a defining trait that creates tension)
+<span class="fn">Goal</span>      = What they must accomplish (specific, measurable)
+<span class="fn">Stakes</span>    = What happens if they fail (time pressure adds urgency)
+<span class="fn">Obstacle</span>  = What makes success difficult (ideally connected to the character)</code></pre>
+
+<h3>Relationship Development</h3>
+<p>
+  Relationships are the emotional engine of stories. Dream-E's co-write mode tracks relationship
+  evolution across three dimensions:
+</p>
+<ul>
+  <li><strong>Beginning:</strong> How the relationship exists at the story's start. The baseline the audience measures all changes against. A strong beginning makes every subsequent shift feel earned.</li>
+  <li><strong>Act Developments:</strong> Track how the relationship evolves through each act. Each act should bring at least one significant shift &mdash; new information, betrayals, shared ordeals, and revelations all reshape dynamics.</li>
+  <li><strong>Ending:</strong> How the relationship stands at the story's conclusion. Has it deepened, broken, reversed, or reached a new understanding? Should feel like a natural consequence of everything that happened &mdash; surprising yet inevitable.</li>
+</ul>
+
+
+<!-- ──────────────────────────────────────────────────────────────
+     FOOTER
+     ────────────────────────────────────────────────────────────── -->
+<div style="margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 0.82rem;">
+  <p>
+    Dream-E Co-Writing Mode API Documentation &mdash; Generated from source code analysis.<br>
+    Source files: <code>gameStateAPI.registry.ts</code>, <code>gameStateAPI.context.ts</code>,
+    <code>nodes.ts</code>, <code>ImageGenerationOverlay.tsx</code>, <code>TTSGenerationOverlay.tsx</code>,
+    <code>storyTooltips.ts</code>, <code>aiChatService.ts</code>, <code>CanvasTabBar.tsx</code>,
+    <code>CharacterNodeInspector.tsx</code>, <code>Editor.tsx</code>
+  </p>
+</div>
+
+</main>
+
+</body>
+</html>
