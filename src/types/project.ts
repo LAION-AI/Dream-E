@@ -418,6 +418,14 @@ export interface Project {
    * Persisted per-project so different projects can use different configs.
    */
   aiConfig?: AIConfig;
+
+  /**
+   * Which canvas is currently active in co-writing mode.
+   * 'story' = the plot/structure canvas (default)
+   * 'character' = the character relationship canvas
+   * Only meaningful when mode === 'cowrite'.
+   */
+  activeCanvas?: 'story' | 'character';
 }
 
 /**

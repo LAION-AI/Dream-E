@@ -5,11 +5,19 @@
  *
  * The left sidebar in the editor containing draggable node types.
  *
- * NODES AVAILABLE:
+ * GAME MODE NODES:
  * - Scene Node (Blue) - Story content
  * - Choice Node (Yellow) - Branching logic
  * - Modifier Node (Green) - Variable operations
  * - Comment Box (Gray) - Designer notes
+ *
+ * CO-WRITE MODE — STORY CANVAS NODES:
+ * - All game-mode nodes above, PLUS:
+ * - Story Root (Purple) - High-level story metadata (max 1 per project)
+ * - Plot Arc (Amber) - Narrative arcs branching from the story root
+ *
+ * CO-WRITE MODE — CHARACTER CANVAS NODES:
+ * - Character (Teal) - Linked to an entity in the project store
  *
  * DRAG AND DROP:
  * Users drag nodes from here to the canvas to create them.
@@ -28,13 +36,36 @@ import {
   Scissors,
   Clipboard,
   ListX,
+  BookOpen,
+  FileText,
+  User,
 } from 'lucide-react';
 
 /**
- * NODE TYPE DEFINITIONS
- * Information about each node type for the toolbar.
+ * NODE TYPE DEFINITION
+ * Metadata for each draggable node item in the toolbar.
+ *
+ * The `icon` field accepts any Lucide icon component. We use `any` for the
+ * icon type because LucideIcon's ForwardRefExoticComponent type has complex
+ * generic constraints that don't match a simple React.ComponentType — this
+ * is a known Lucide React type quirk. The icons are only used inside JSX
+ * as `<node.icon size={24} ... />` which is always safe.
  */
-const nodeTypes = [
+interface NodeTypeInfo {
+  type: string;
+  label: string;
+  description: string;
+  icon: any;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+}
+
+/**
+ * GAME MODE NODE TYPES
+ * The base set of nodes available in every project mode.
+ */
+const gameNodeTypes: NodeTypeInfo[] = [
   {
     type: 'scene',
     label: 'Scene Node',
@@ -74,6 +105,48 @@ const nodeTypes = [
 ];
 
 /**
+ * CO-WRITE STORY CANVAS EXTRA NODE TYPES
+ * These are appended to the game node types when viewing the story canvas
+ * in co-write mode.
+ */
+const cowriteStoryExtraTypes: NodeTypeInfo[] = [
+  {
+    type: 'storyRoot',
+    label: 'Story Root',
+    description: 'Central story metadata',
+    icon: BookOpen,
+    color: '#a855f7',
+    bgColor: 'bg-purple-500/10',
+    borderColor: 'border-purple-500',
+  },
+  {
+    type: 'plot',
+    label: 'Plot Arc',
+    description: 'Narrative arc / subplot',
+    icon: FileText,
+    color: '#f59e0b',
+    bgColor: 'bg-amber-500/10',
+    borderColor: 'border-amber-500',
+  },
+];
+
+/**
+ * CO-WRITE CHARACTER CANVAS NODE TYPES
+ * The only node type available when viewing the character canvas.
+ */
+const cowriteCharacterTypes: NodeTypeInfo[] = [
+  {
+    type: 'character',
+    label: 'Character',
+    description: 'Add a character to the web',
+    icon: User,
+    color: '#14b8a6',
+    bgColor: 'bg-teal-500/10',
+    borderColor: 'border-teal-500',
+  },
+];
+
+/**
  * TOOLBAR PROPS
  */
 interface ToolbarProps {
@@ -99,10 +172,28 @@ interface ToolbarProps {
   onCopyNode?: () => void;
   /** Callback to paste the copied node */
   onPasteNode?: () => void;
+
+  // ── CO-WRITE MODE PROPS ──
+
+  /** Whether the editor is in co-write mode */
+  isCowriteMode?: boolean;
+  /** Which canvas tab is active in co-write mode */
+  activeCanvas?: 'story' | 'character';
+  /** Whether the project already has a StoryRoot node (max 1 allowed) */
+  hasStoryRoot?: boolean;
 }
 
 /**
  * TOOLBAR COMPONENT
+ *
+ * Renders draggable node items based on the current mode and canvas tab.
+ * In game mode, shows the four standard node types.
+ * In co-write mode, the visible items depend on which canvas tab is active:
+ * - Story Canvas: standard nodes + Story Root (if none exists) + Plot Arc
+ * - Character Canvas: Character node only
+ *
+ * Action buttons (cut/copy/paste/delete) are always shown when relevant,
+ * regardless of mode.
  */
 export default function Toolbar({
   selectedEdgeId,
@@ -116,6 +207,9 @@ export default function Toolbar({
   onCutNode,
   onCopyNode,
   onPasteNode,
+  isCowriteMode = false,
+  activeCanvas = 'story',
+  hasStoryRoot = false,
 }: ToolbarProps) {
   /**
    * Handle drag start
@@ -129,13 +223,36 @@ export default function Toolbar({
     event.dataTransfer.effectAllowed = 'move';
   };
 
+  /**
+   * COMPUTE VISIBLE NODE TYPES
+   *
+   * Game mode: always show the four standard types.
+   * Co-write Story Canvas: standard + story root (if not yet placed) + plot arc.
+   * Co-write Character Canvas: character only.
+   */
+  let visibleNodeTypes: NodeTypeInfo[];
+
+  if (!isCowriteMode) {
+    // Game mode — unchanged from before
+    visibleNodeTypes = gameNodeTypes;
+  } else if (activeCanvas === 'character') {
+    // Co-write character canvas — only character nodes
+    visibleNodeTypes = cowriteCharacterTypes;
+  } else {
+    // Co-write story canvas — standard + extras, filtering StoryRoot if one exists
+    const extras = hasStoryRoot
+      ? cowriteStoryExtraTypes.filter(n => n.type !== 'storyRoot')
+      : cowriteStoryExtraTypes;
+    visibleNodeTypes = [...gameNodeTypes, ...extras];
+  }
+
   return (
     <aside className="w-toolbar bg-editor-surface border-r border-editor-border flex flex-col py-4 gap-2">
       {/* Title (hidden, for accessibility) */}
       <h2 className="sr-only">Node Toolbar</h2>
 
       {/* Node buttons */}
-      {nodeTypes.map((node) => (
+      {visibleNodeTypes.map((node) => (
         <div
           key={node.type}
           draggable

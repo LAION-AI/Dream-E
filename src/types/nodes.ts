@@ -72,7 +72,7 @@ export interface BaseNode {
    * This is a "discriminated union" - it helps TypeScript
    * narrow down which node type we're working with.
    */
-  type: 'scene' | 'choice' | 'modifier' | 'comment';
+  type: 'scene' | 'choice' | 'modifier' | 'comment' | 'storyRoot' | 'plot' | 'character';
 
   /**
    * Position on the canvas.
@@ -506,6 +506,59 @@ export interface CommentNode extends BaseNode {
   };
 }
 
+/** Data for the story root node — the central node of a co-writing project */
+export interface StoryRootNodeData {
+  title: string;
+  genre: string;
+  targetAudience: string;
+  punchline: string;
+  mainCharacter: { name: string; role: string };
+  antagonist: { name: string; role: string };
+  supportingCharacters: Array<{ name: string; archetype: string; customArchetype?: string }>;
+  protagonistGoal: string;
+  summary: string;
+  image?: string;
+}
+
+export interface StoryRootNode extends BaseNode {
+  type: 'storyRoot';
+  data: StoryRootNodeData;
+}
+
+/** Data for a plot node — represents a narrative arc */
+export interface PlotNodeData {
+  name: string;
+  plotType: string;
+  customPlotType?: string;
+  description: string;
+  image?: string;
+}
+
+export interface PlotNode extends BaseNode {
+  type: 'plot';
+  data: PlotNodeData;
+}
+
+/** Data for a character node on the character canvas — links to an entity */
+export interface CharacterNodeData {
+  entityId: string;
+}
+
+export interface CharacterNode extends BaseNode {
+  type: 'character';
+  data: CharacterNodeData;
+}
+
+/** Data stored on relationship edges between character nodes */
+export interface RelationshipEdgeData {
+  relationshipType: string;
+  description: string;
+  status: string;
+  history: string;
+  /** If a relationship entity was created, its ID */
+  entityId?: string;
+}
+
 /**
  * STORY NODE UNION TYPE
  * Any of the four node types.
@@ -522,7 +575,7 @@ export interface CommentNode extends BaseNode {
  *   }
  * }
  */
-export type StoryNode = SceneNode | ChoiceNode | ModifierNode | CommentNode;
+export type StoryNode = SceneNode | ChoiceNode | ModifierNode | CommentNode | StoryRootNode | PlotNode | CharacterNode;
 
 /**
  * EDGE INTERFACE
@@ -583,6 +636,20 @@ export interface StoryEdge {
     /** Line width in pixels */
     strokeWidth?: number;
   };
+
+  /**
+   * Optional edge type for custom edge rendering.
+   * - undefined / omitted: default React Flow edge renderer
+   * - 'relationship': RelationshipEdge component (dashed pink bezier + label)
+   */
+  type?: string;
+
+  /**
+   * Optional relationship data for edges between character nodes.
+   * Only present on edges in the character canvas that represent
+   * interpersonal relationships.
+   */
+  data?: RelationshipEdgeData;
 }
 
 /**

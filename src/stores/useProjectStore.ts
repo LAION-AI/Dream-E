@@ -192,6 +192,13 @@ interface ProjectState {
   deleteEdge: (id: string) => void;
 
   /**
+   * Updates an existing edge's properties (e.g., data, style).
+   * @param id - Edge ID
+   * @param updates - Partial edge data to merge
+   */
+  updateEdge: (id: string, updates: Partial<StoryEdge>) => void;
+
+  /**
    * Selects an edge.
    * @param id - Edge ID to select (null to deselect)
    */
@@ -777,6 +784,22 @@ export const useProjectStore = create<ProjectState>()(
           state.isDirty = true;
 
           console.log('[ProjectStore] Edge deleted:', id);
+        }
+      });
+      // Schedule auto-save
+      scheduleAutoSave();
+    },
+
+    updateEdge: (id, updates) => {
+      set((state) => {
+        if (state.currentProject) {
+          const index = state.currentProject.edges.findIndex((e) => e.id === id);
+          if (index !== -1) {
+            // Record history with debouncing (for text changes in edge data)
+            recordHistory(state, false);
+            Object.assign(state.currentProject.edges[index], updates);
+            state.isDirty = true;
+          }
         }
       });
       // Schedule auto-save

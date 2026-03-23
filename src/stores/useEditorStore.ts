@@ -205,6 +205,21 @@ interface EditorState {
 
   /** Set the node ID to focus on when returning to editor */
   setFocusNodeId: (nodeId: string | null) => void;
+
+  // ==================== DUAL CANVAS STATE (CO-WRITE MODE) ====================
+
+  /**
+   * Active canvas tab in co-write mode.
+   *
+   * 'story' — shows scene, choice, modifier, comment, storyRoot, and plot nodes
+   * 'character' — shows character nodes and relationship edges
+   *
+   * In game mode this value is ignored (all node types are always shown).
+   */
+  activeCanvas: 'story' | 'character';
+
+  /** Switch between the story and character canvas tabs */
+  setActiveCanvas: (canvas: 'story' | 'character') => void;
 }
 
 /**
@@ -268,6 +283,7 @@ export const useEditorStore = create<EditorState>()(
       lastMousePosition: { x: 0, y: 0 },
       pendingUploads: 0,
       focusNodeId: null,
+      activeCanvas: 'story',
 
       // ==================== VIEWPORT ACTIONS ====================
 
@@ -416,6 +432,12 @@ export const useEditorStore = create<EditorState>()(
 
       setFocusNodeId: (nodeId) => {
         set({ focusNodeId: nodeId });
+      },
+
+      // ==================== DUAL CANVAS ACTIONS ====================
+
+      setActiveCanvas: (canvas) => {
+        set({ activeCanvas: canvas });
       },
     }),
     {

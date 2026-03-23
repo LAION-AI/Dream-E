@@ -70,6 +70,10 @@ export default {
           choice: '#eab308',       // Yellow - Choice nodes
           modifier: '#22c55e',     // Green - Modifier nodes
           comment: '#6b7280',      // Gray - Comment nodes
+          storyRoot: '#8b5cf6',    // Purple - Story root node (co-writing)
+          plot: '#f59e0b',         // Amber - Plot arc nodes (co-writing)
+          character: '#14b8a6',    // Teal - Character nodes (co-writing)
+          relationship: '#ec4899', // Pink - Relationship edges (co-writing)
         },
 
         // Player theme colors (will be overridden by CSS variables)

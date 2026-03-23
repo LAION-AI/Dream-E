@@ -102,22 +102,53 @@ import SceneNodeComponent from '../nodes/SceneNode';
 import ChoiceNodeComponent from '../nodes/ChoiceNode';
 import ModifierNodeComponent from '../nodes/ModifierNode';
 import CommentNodeComponent from '../nodes/CommentNode';
+import StoryRootNodeComponent from '../nodes/StoryRootNode';
+import PlotNodeComponent from '../nodes/PlotNode';
+import CharacterNodeComponent from '../nodes/CharacterNode';
 
-// Import toolbar and inspector
+// Import custom edge components
+import RelationshipEdge from '../edges/RelationshipEdge';
+
+// Import toolbar, inspector, and canvas tab bar
 import Toolbar from './Toolbar';
 import Inspector from '../inspector/Inspector';
+import CanvasTabBar from './CanvasTabBar';
 
 /**
  * NODE TYPES REGISTRY
  * Maps node type strings to React components.
  * React Flow uses this to render the correct component for each node.
+ *
+ * Includes both game-mode nodes (scene, choice, modifier, comment) and
+ * co-write-mode nodes (storyRoot, plot, character). All types are registered
+ * unconditionally — canvas filtering in co-write mode controls which nodes
+ * are visible on each tab without needing to swap the registry.
  */
 const nodeTypes: NodeTypes = {
   scene: SceneNodeComponent,
   choice: ChoiceNodeComponent,
   modifier: ModifierNodeComponent,
   comment: CommentNodeComponent,
+  storyRoot: StoryRootNodeComponent,
+  plot: PlotNodeComponent,
+  character: CharacterNodeComponent,
 };
+
+/**
+ * NODE TYPE SETS FOR DUAL-CANVAS FILTERING (CO-WRITE MODE)
+ *
+ * These Sets are module-level constants so the sync effect can reference
+ * them without allocating new objects on every render cycle.
+ *
+ * Story Canvas includes the "standard" game nodes (scene, choice, modifier,
+ * comment) PLUS the co-write-only structural nodes (storyRoot, plot).
+ *
+ * Character Canvas only includes character nodes. Relationship edges between
+ * characters are handled by the edge filtering logic (both endpoints must
+ * be in the visible node set).
+ */
+const STORY_NODE_TYPES = new Set(['scene', 'choice', 'modifier', 'comment', 'storyRoot', 'plot']);
+const CHARACTER_NODE_TYPES = new Set(['character']);
 
 /**
  * EDITOR WRAPPER
@@ -165,6 +196,7 @@ function EditorInner() {
   const moveNode = useProjectStore(s => s.moveNode);
   const selectNode = useProjectStore(s => s.selectNode);
   const selectedNodeId = useProjectStore(s => s.selectedNodeId);
+  const storeSelectedEdgeId = useProjectStore(s => s.selectedEdgeId);
   const isDirty = useProjectStore(s => s.isDirty);
   const isLoading = useProjectStore(s => s.isLoading);
   const isSaving = useProjectStore(s => s.isSaving);
@@ -173,6 +205,7 @@ function EditorInner() {
   const redo = useProjectStore(s => s.redo);
   const canUndo = useProjectStore(s => s.canUndo);
   const canRedo = useProjectStore(s => s.canRedo);
+  const addEntity = useProjectStore(s => s.addEntity);
 
   // Editor store — use individual selectors to avoid re-rendering the
   // entire Editor component when unrelated editor state changes.
@@ -182,6 +215,8 @@ function EditorInner() {
   const togglePanel = useEditorStore(s => s.togglePanel);
   const preferences = useEditorStore(s => s.preferences);
   const pendingUploads = useEditorStore(s => s.pendingUploads);
+  const activeCanvas = useEditorStore(s => s.activeCanvas);
+  const setActiveCanvas = useEditorStore(s => s.setActiveCanvas);
 
   // Local state for React Flow
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -223,6 +258,35 @@ function EditorInner() {
     () => nodes.filter((n) => n.selected).map((n) => n.id),
     [nodes]
   );
+
+  /**
+   * EDGE TYPES REGISTRY
+   * Maps custom edge type strings to React components.
+   * Currently only 'relationship' is custom; default edges use the
+   * built-in React Flow renderer.
+   */
+  const edgeTypes = useMemo(() => ({
+    relationship: RelationshipEdge,
+  }), []);
+
+  /**
+   * NODE TYPE SETS FOR CANVAS FILTERING (CO-WRITE MODE)
+   *
+   * Story Canvas shows: scene, choice, modifier, comment, storyRoot, plot
+   * Character Canvas shows: character
+   *
+   * These are defined as module-level constants (hoisted above for clarity)
+   * so that the sync effect can reference them without creating new Set
+   * objects on every render.
+   */
+  // (Sets defined as stable references — they never change)
+
+  /**
+   * HAS STORY ROOT — whether the project already contains a StoryRoot node.
+   * Used by the Toolbar to conditionally show or hide the "Story Root" drag item
+   * (only one StoryRoot is allowed per project).
+   */
+  const hasStoryRoot = projectNodes?.some(n => n.type === 'storyRoot') || false;
 
   /**
    * Load project on mount
@@ -331,10 +395,32 @@ function EditorInner() {
       // R1 FIX: Capture the granular selector values instead of the full project.
       // This means this effect only fires when nodes/edges/selection actually change,
       // NOT when unrelated fields (notes, isDirty, entities, chat) change.
-      const capturedNodes = projectNodes;
-      const capturedEdges = projectEdges;
+      const capturedNodesRaw = projectNodes;
+      const capturedEdgesRaw = projectEdges;
       const selNodeId = selectedNodeId;
       const selEdgeId = selectedEdgeId;
+
+      // ── DUAL-CANVAS FILTERING (CO-WRITE MODE) ──
+      // In co-write mode, only show the node types belonging to the active
+      // canvas tab. In game mode (visibleTypes === null), show everything.
+      const visibleTypes = isCowriteMode
+        ? (activeCanvas === 'story' ? STORY_NODE_TYPES : CHARACTER_NODE_TYPES)
+        : null; // null = show all (game mode)
+
+      const capturedNodes = visibleTypes
+        ? capturedNodesRaw.filter(n => visibleTypes.has(n.type))
+        : capturedNodesRaw;
+
+      // Filter edges: only keep edges where BOTH source and target are visible.
+      // This prevents dangling edges from appearing when the other endpoint's
+      // node type is on a different canvas tab.
+      const visibleNodeIds = visibleTypes
+        ? new Set(capturedNodes.map(n => n.id))
+        : null;
+
+      const capturedEdges = visibleNodeIds
+        ? capturedEdgesRaw.filter(e => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target))
+        : capturedEdgesRaw;
 
       syncRafRef.current = requestAnimationFrame(() => {
         syncRafRef.current = null;
@@ -389,7 +475,10 @@ function EditorInner() {
 
       prevFlowNodesRef.current = nextMap;
 
-      // Convert StoryEdges to React Flow edges
+      // Convert StoryEdges to React Flow edges.
+      // Relationship edges (between CharacterNodes) need their `type` and
+      // `data` passed through so React Flow renders the custom RelationshipEdge
+      // component instead of the default edge renderer.
       const flowEdges: Edge[] = capturedEdges.map((edge) => ({
         id: edge.id,
         source: edge.source,
@@ -401,6 +490,8 @@ function EditorInner() {
         style: edge.id === selEdgeId
           ? selectedEdgeStyleRef.current
           : edge.style,
+        ...(edge.type ? { type: edge.type } : {}),
+        ...(edge.data ? { data: edge.data } : {}),
       }));
 
       // R4 FIX: Replace O(N) string fingerprint with reference-based comparison.
@@ -445,7 +536,7 @@ function EditorInner() {
         }
       };
     }
-  }, [projectNodes, projectEdges, selectedNodeId, selectedEdgeId, setNodes, setEdges, syncTrigger]);
+  }, [projectNodes, projectEdges, selectedNodeId, selectedEdgeId, setNodes, setEdges, syncTrigger, activeCanvas, isCowriteMode]);
 
   /**
    * Find the scene node with the longest path from the start node.
@@ -531,11 +622,45 @@ function EditorInner() {
   }, [projectNodes, nodes, selectNode, reactFlow, findDeepestSceneNode]);
 
   /**
-   * Handle new connection between nodes
+   * Handle new connection between nodes.
+   *
+   * CHARACTER-TO-CHARACTER CONNECTIONS:
+   * When both endpoints are CharacterNodes (on the character canvas),
+   * the edge is created as a 'relationship' type with metadata fields
+   * for relationship type, description, status, and history. This uses
+   * the RelationshipEdge custom renderer (dashed pink bezier + label).
+   *
+   * ALL OTHER CONNECTIONS:
+   * Standard story flow edges with the default animated style.
    */
   const onConnect = useCallback(
     (connection: Connection) => {
       if (connection.source && connection.target) {
+        // Check if both source and target are character nodes
+        const sourceNode = projectNodes?.find(n => n.id === connection.source);
+        const targetNode = projectNodes?.find(n => n.id === connection.target);
+
+        if (sourceNode?.type === 'character' && targetNode?.type === 'character') {
+          // Create a relationship edge between characters
+          const relationshipEdge: StoryEdge = {
+            id: generateId('edge'),
+            source: connection.source,
+            target: connection.target,
+            sourceHandle: connection.sourceHandle || undefined,
+            targetHandle: connection.targetHandle || 'top',
+            type: 'relationship',
+            data: {
+              relationshipType: 'Connection',
+              description: '',
+              status: 'Active',
+              history: '',
+            },
+          };
+          addProjectEdge(relationshipEdge);
+          return; // Don't create default edge
+        }
+
+        // Standard story flow edge
         const newEdge: StoryEdge = {
           id: generateId('edge'),
           source: connection.source,
@@ -548,7 +673,7 @@ function EditorInner() {
         addProjectEdge(newEdge);
       }
     },
-    [addProjectEdge, preferences.animateEdges]
+    [addProjectEdge, preferences.animateEdges, projectNodes]
   );
 
   /**
@@ -680,6 +805,77 @@ function EditorInner() {
           };
           break;
 
+        // ── CO-WRITE MODE NODE TYPES ──
+
+        case 'storyRoot':
+          newNode = {
+            id: generateId('node'),
+            type: 'storyRoot',
+            position,
+            label: 'Story Root',
+            data: {
+              title: '',
+              genre: '',
+              targetAudience: '',
+              punchline: '',
+              mainCharacter: { name: '', role: 'Protagonist' },
+              antagonist: { name: '', role: 'Antagonist' },
+              supportingCharacters: [],
+              protagonistGoal: '',
+              summary: '',
+            },
+          };
+          break;
+
+        case 'plot': {
+          newNode = {
+            id: generateId('node'),
+            type: 'plot',
+            position,
+            label: 'New Plot',
+            data: {
+              name: '',
+              plotType: 'Main Plot',
+              description: '',
+            },
+          };
+          // Auto-connect to the StoryRoot node (if one exists)
+          const storyRoot = projectNodes?.find(n => n.type === 'storyRoot');
+          if (storyRoot) {
+            addProjectEdge({
+              id: generateId('edge'),
+              source: storyRoot.id,
+              target: newNode.id,
+              sourceHandle: undefined,
+              targetHandle: 'input',
+            });
+          }
+          break;
+        }
+
+        case 'character': {
+          // Create a new character entity in the project's entity store
+          // and link the CharacterNode to it via entityId.
+          const entityId = generateId('entity');
+          addEntity({
+            id: entityId,
+            name: 'New Character',
+            category: 'character',
+            description: '',
+            summary: '',
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+          newNode = {
+            id: generateId('node'),
+            type: 'character',
+            position,
+            label: 'New Character',
+            data: { entityId },
+          };
+          break;
+        }
+
         default:
           return;
       }
@@ -687,7 +883,7 @@ function EditorInner() {
       addNode(newNode);
       selectNode(newNode.id);
     },
-    [addNode, selectNode]
+    [addNode, selectNode, projectNodes, addProjectEdge, addEntity]
   );
 
   /**
@@ -709,24 +905,43 @@ function EditorInner() {
   }, [selectedEdgeId, deleteEdge]);
 
   /**
-   * Delete the selected node
+   * Delete the selected node.
+   *
+   * STORY ROOT PROTECTION:
+   * The StoryRoot node is the structural anchor of a co-write project.
+   * Deleting it would orphan all plot/scene connections, so we prevent
+   * deletion entirely. The user must delete the project to remove it.
    */
   const handleDeleteSelectedNode = useCallback(() => {
     if (selectedNodeId) {
+      // Prevent deletion of the StoryRoot node
+      const nodeToDelete = projectNodes?.find(n => n.id === selectedNodeId);
+      if (nodeToDelete?.type === 'storyRoot') {
+        console.log('[Editor] Cannot delete StoryRoot node');
+        return;
+      }
       deleteNode(selectedNodeId);
     }
-  }, [selectedNodeId, deleteNode]);
+  }, [selectedNodeId, deleteNode, projectNodes]);
 
   /**
    * Delete all nodes in the current multi-selection.
    * Uses batch deleteNodes so it's a single undo step.
+   * Excludes StoryRoot nodes from deletion.
    */
   const handleDeleteSelected = useCallback(() => {
     if (selectedNodeIds.length > 0) {
-      deleteNodes(selectedNodeIds);
+      // Filter out any StoryRoot nodes from the deletion set
+      const deletableIds = selectedNodeIds.filter(id => {
+        const node = projectNodes?.find(n => n.id === id);
+        return node?.type !== 'storyRoot';
+      });
+      if (deletableIds.length > 0) {
+        deleteNodes(deletableIds);
+      }
       // React Flow's node state will auto-update (selected nodes gone)
     }
-  }, [selectedNodeIds, deleteNodes]);
+  }, [selectedNodeIds, deleteNodes, projectNodes]);
 
   /**
    * Delete all descendants of the selected node (everything "after" it in the graph).
@@ -770,13 +985,19 @@ function EditorInner() {
 
   /**
    * Cut the selected node (copy + delete)
-   * This allows Ctrl+X to work like cut, so you can paste it back
+   * This allows Ctrl+X to work like cut, so you can paste it back.
+   * StoryRoot nodes cannot be cut (only copied).
    */
   const handleCutNode = useCallback(() => {
     if (selectedNodeId) {
       const proj = useProjectStore.getState().currentProject;
       const nodeToCopy = proj?.nodes.find((n) => n.id === selectedNodeId);
       if (nodeToCopy) {
+        // Prevent cutting the StoryRoot node
+        if (nodeToCopy.type === 'storyRoot') {
+          console.log('[Editor] Cannot cut StoryRoot node');
+          return;
+        }
         // Copy to clipboard first — structuredClone avoids 2x memory
         // spike from intermediate JSON string (B5 fix)
         setCopiedNode(structuredClone(nodeToCopy));
@@ -929,7 +1150,13 @@ function EditorInner() {
         } else if (selectedEdgeId) {
           handleDeleteSelectedEdge();
         } else if (selectedNodeId) {
-          deleteNode(selectedNodeId);
+          // Prevent deletion of StoryRoot via keyboard shortcut
+          const nodeToDelete = useProjectStore.getState().currentProject?.nodes.find(n => n.id === selectedNodeId);
+          if (nodeToDelete?.type === 'storyRoot') {
+            console.log('[Editor] Cannot delete StoryRoot node');
+          } else {
+            deleteNode(selectedNodeId);
+          }
         }
       } else if (event.key === 'Escape') {
         // Deselect (always works)
@@ -1333,11 +1560,24 @@ function EditorInner() {
             onCutNode={handleCutNode}
             onCopyNode={handleCopyNode}
             onPasteNode={handlePasteNode}
+            isCowriteMode={isCowriteMode}
+            activeCanvas={activeCanvas}
+            hasStoryRoot={hasStoryRoot}
           />
         )}
 
-        {/* Canvas */}
-        <div className="flex-1 relative">
+        {/* Canvas — with optional tab bar above in co-write mode */}
+        <div className="flex-1 relative flex flex-col">
+          {/* Canvas tab bar — only shown in co-write mode */}
+          {isCowriteMode && (
+            <CanvasTabBar
+              activeCanvas={activeCanvas}
+              onCanvasChange={setActiveCanvas}
+            />
+          )}
+
+          {/* React Flow canvas container */}
+          <div className="flex-1 relative">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -1351,6 +1591,7 @@ function EditorInner() {
             onDrop={onDrop}
             onDragOver={onDragOver}
             nodeTypes={nodeTypes}
+            {...{ edgeTypes } as any}
             fitView
             snapToGrid={preferences.snapToGrid}
             snapGrid={[preferences.gridSize, preferences.gridSize]}
@@ -1425,6 +1666,12 @@ function EditorInner() {
                       return '#22c55e';
                     case 'comment':
                       return '#6b7280';
+                    case 'storyRoot':
+                      return '#a855f7'; // purple
+                    case 'plot':
+                      return '#f59e0b'; // amber
+                    case 'character':
+                      return '#14b8a6'; // teal
                     default:
                       return '#6b7280';
                   }
@@ -1433,10 +1680,11 @@ function EditorInner() {
               />
             )}
           </ReactFlow>
+          </div>
         </div>
 
         {/* Inspector */}
-        {panels.inspector && selectedNodeId && (
+        {panels.inspector && (selectedNodeId || storeSelectedEdgeId) && (
           <Inspector />
         )}
       </div>
@@ -1470,11 +1718,30 @@ function EditorInner() {
         />
       )}
 
-      {/* Chat Window Modal */}
-      <ChatWindow
-        isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
-      />
+      {/* Chat Window — Modal in game mode, left-side panel in co-write mode */}
+      {isCowriteMode ? (
+        /* CO-WRITE MODE: Fixed left-side panel that slides in from the left.
+         * Width is 40vw to give the author ample room for AI conversation
+         * while still seeing the canvas behind it. The panel has a higher
+         * z-index than the canvas but lower than modals (z-50). */
+        isChatOpen && (
+          <div
+            className="fixed inset-y-0 left-0 w-[40vw] z-40 bg-editor-surface border-r border-editor-border shadow-2xl"
+            style={{ minWidth: '380px', maxWidth: '600px' }}
+          >
+            <ChatWindow
+              isOpen={isChatOpen}
+              onClose={() => setIsChatOpen(false)}
+            />
+          </div>
+        )
+      ) : (
+        /* GAME MODE: Standard near-fullscreen modal (unchanged) */
+        <ChatWindow
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+        />
+      )}
 
       {/* Notes Editor Modal */}
       <NotesEditor

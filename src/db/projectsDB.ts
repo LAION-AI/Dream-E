@@ -365,8 +365,32 @@ export async function createProject(
     let nodes: StoryNode[] = [];
     let edges: never[] = [];
 
-    // If requested, add starter content
-    if (options.addStarterContent !== false) {
+    // If co-write mode, create a StoryRoot node as the starting point
+    // instead of the default Dream Room scene. The StoryRoot holds
+    // high-level story metadata (title, genre, characters) and acts
+    // as the structural anchor from which plot arcs branch out.
+    if (options.mode === 'cowrite') {
+      const rootNode: StoryNode = {
+        id: generateId('node'),
+        type: 'storyRoot',
+        position: { x: 400, y: 100 },
+        label: 'Story Root',
+        data: {
+          title: options.title || '',
+          genre: '',
+          targetAudience: '',
+          punchline: '',
+          mainCharacter: { name: '', role: 'Protagonist' },
+          antagonist: { name: '', role: 'Antagonist' },
+          supportingCharacters: [],
+          protagonistGoal: '',
+          summary: '',
+        },
+      };
+      nodes = [rootNode];
+      settings.startNodeId = rootNode.id;
+    } else if (options.addStarterContent !== false) {
+      // Game mode — add the default Dream Room starter scene
       const startNode = createStarterSceneNode();
       nodes = [startNode];
       settings.startNodeId = startNode.id;
