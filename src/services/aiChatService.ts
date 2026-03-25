@@ -26,6 +26,7 @@ import { executeCommand } from './gameStateAPI';
 import { generateSystemPrompt } from './gameStateAPI.registry';
 import { getGameContext } from './gameStateAPI.context';
 import { useImageGenStore } from '@/stores/useImageGenStore';
+import { useProjectStore } from '@/stores/useProjectStore';
 
 // =============================================================================
 // CONSTANTS
@@ -155,7 +156,10 @@ async function streamOneMessage(
     ? (writer.apiKey || settings.googleApiKey)
     : writer.apiKey;
 
-  const systemPrompt = generateSystemPrompt();
+  // Pass the project mode so co-write projects get a completely different
+  // system prompt (writing teacher mode, no game-mode scene creation).
+  const projectMode = useProjectStore.getState().currentProject?.mode || 'game';
+  const systemPrompt = generateSystemPrompt(projectMode as 'game' | 'cowrite');
 
   const res = await fetch('/api/chat', {
     method: 'POST',
