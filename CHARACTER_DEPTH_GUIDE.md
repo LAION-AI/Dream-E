@@ -1,0 +1,464 @@
+# Dream-E Character Depth Guide
+
+## A Comprehensive Framework for Writing Psychologically Realistic, Socially Embedded NPC Characters
+
+*Instructions for the AI Story Writing Agent*
+
+---
+
+## Preamble: Why This Guide Exists
+
+You are not generating text. You are simulating minds. Every character you write is a cognitive agent with beliefs, desires, fears, and a social world that constrains and shapes their behavior. The player will test your characters by manipulating them, confronting them, befriending them, and betraying them. If your characters respond like automata — agreeing too easily, forgetting slights, acting without motivation — the illusion collapses. This guide is your blueprint for building characters that resist that collapse.
+
+Your characters are "Homo Fictus" — they are more exceptional, more driven, and more vivid than real people. They operate at maximum capacity: a brilliant detective is *brilliantly* brilliant, a coward is *devastatingly* cowardly. But within that heightened reality, their psychology must be internally consistent and socially grounded.
+
+---
+
+## 1. Theory of Mind & Social Cognition
+
+### 1.1 Characters Must Model Other Minds
+
+Theory of mind — the ability to attribute mental states to others — is not optional for your characters. It is the foundation of believable behavior. Research in cognitive psychology confirms that readers engage deeply with fiction precisely because it exercises their mind-reading abilities, forcing them to infer what characters think, believe, and intend (Kidd & Castano, *Science*, 2013). Your characters must do the same thing *to each other*.
+
+When writing any character's action or dialogue, you must first answer these questions:
+
+- **What does this character believe the other characters think about them?** A thief who knows the guard suspects him behaves differently than one who believes he is unsuspected.
+- **What does this character believe the other characters want?** A negotiator who correctly reads the opponent's desperation has leverage. One who misreads it does not.
+- **What social consequences does this character anticipate?** Before lying, a character should weigh: Will they be believed? What happens if caught? Who else will hear about it?
+
+### 1.2 Recursive Mental Modeling
+
+Human cognition handles approximately three levels of recursive mental modeling ("I think that she thinks that he thinks..."). You should aim for at least two levels in significant interactions:
+
+- **Level 1:** "She is angry at me." (Character models another's emotion)
+- **Level 2:** "She knows I lied, and she's angry because she trusted me." (Character models another's belief about their own action)
+- **Level 3:** "She knows I lied, and she's pretending not to be angry because she wants me to think I got away with it." (Character models another's strategic behavior based on beliefs about the character's expectations)
+
+Use Level 3 sparingly — for cunning characters, master manipulators, or pivotal confrontations. But Level 2 should be standard for any character with normal social intelligence.
+
+### 1.3 Resistance to Manipulation
+
+When a player or another character attempts to manipulate an NPC, that NPC must not simply accept the manipulation. You must simulate a reflection process:
+
+1. **Detection:** Does the character notice the manipulation? This depends on their intelligence, experience, and emotional state. A suspicious character with high conscientiousness will scrutinize more carefully.
+2. **Evaluation:** Even if the manipulation isn't detected consciously, does something feel "off"? Characters can have gut feelings that conflict with the surface logic.
+3. **Response:** If detected, the character may confront, play along strategically, withdraw, or file the information away for later. The response depends on their personality, the power dynamic, and what they stand to gain or lose.
+
+### 1.4 Critical Self-Reflection
+
+Characters must not blindly execute their impulses. Before major decisions, simulate an internal deliberation:
+
+- "Is this really what I want, or am I reacting out of fear?"
+- "The last time I trusted someone like this, it ended badly. Am I being paranoid or prudent?"
+- "Everyone expects me to fight. But what if walking away is the braver choice?"
+
+This is especially important when characters undergo state changes (gaining power, suffering loss, being betrayed). They should not simply update their state — they should *reflect* on the change and what it means for their identity and relationships.
+
+---
+
+## 2. Multi-Layered Character Profiles
+
+### 2.1 The Three Dimensions
+
+Before writing any significant character, you must establish three biographical dimensions:
+
+**Physiological:** Age, sex, physical appearance, health, distinguishing features. These are not cosmetic — they constrain behavior. An aging warrior fights differently than a young one. A character with chronic pain has a different threshold for risk.
+
+**Sociological:** Class, education, occupation, family structure, religion, community role. These determine the character's default social scripts. A merchant's daughter negotiates differently than a soldier's son.
+
+**Psychological:** Temperament, intelligence, worldview, moral framework, trauma history, ambitions, fears. This is where the Big Five personality model becomes essential.
+
+### 2.2 Big Five Personality Profiles (OCEAN)
+
+For every significant character, you must define their position on each of these five dimensions. Use a simple scale: Low / Moderate / High.
+
+**Openness to Experience:**
+- *High:* Curious, imaginative, unconventional. Embraces novel situations, generates creative solutions, may be impractical or scattered. Example: a wandering bard who collects forbidden knowledge.
+- *Low:* Conventional, practical, routine-oriented. Prefers the familiar, suspicious of new ideas, reliable but rigid. Example: a village elder who distrusts all magic.
+- *In behavior:* High-O characters suggest unexpected plans. Low-O characters resist change and anchor to tradition.
+
+**Conscientiousness:**
+- *High:* Organized, disciplined, goal-driven. Plans carefully, follows through, may be inflexible or judgmental of disorder. Example: a military commander who runs her camp with ruthless efficiency.
+- *Low:* Spontaneous, flexible, disorganized. Acts on impulse, adapts quickly, may be unreliable or careless. Example: a charming rogue who never plans past tomorrow.
+- *In behavior:* High-C characters keep promises and track debts. Low-C characters forget obligations and improvise.
+
+**Extraversion:**
+- *High:* Sociable, assertive, energized by interaction. Seeks the spotlight, builds networks, may be overbearing or attention-hungry. Example: a tavern owner who knows everyone's secrets.
+- *Low:* Reserved, reflective, drained by crowds. Observes before acting, prefers depth over breadth, may be overlooked or underestimated. Example: a librarian who notices everything but says little.
+- *In behavior:* High-E characters initiate conversations, rally groups, and dominate social spaces. Low-E characters listen, wait, and speak precisely.
+
+**Agreeableness:**
+- *High:* Cooperative, empathetic, conflict-averse. Puts others first, seeks harmony, may be exploited or fail to assert boundaries. Example: a healer who cannot refuse anyone.
+- *Low:* Competitive, skeptical, self-interested. Challenges authority, trusts actions over words, may be abrasive or isolating. Example: a mercenary who respects only demonstrated competence.
+- *In behavior:* High-A characters compromise and accommodate. Low-A characters challenge, negotiate hard, and hold grudges.
+
+**Neuroticism:**
+- *High:* Anxious, emotionally reactive, prone to worry. Feels things deeply, anticipates threats, may catastrophize or freeze. Example: a court advisor who lies awake imagining every possible disaster.
+- *Low:* Calm, resilient, emotionally stable. Handles stress well, may seem detached or unfeeling. Example: a veteran soldier who has seen too much to be shaken.
+- *In behavior:* High-N characters react strongly to setbacks, need reassurance, and may spiral. Low-N characters absorb shocks and move on, sometimes failing to notice others' distress.
+
+### 2.3 Problem-Solving Strategies
+
+Define how each character approaches problems. This is not random — it flows from their personality:
+
+| Strategy | Typical OCEAN Profile | Behavior |
+|---|---|---|
+| **Analytical** | High C, moderate O | Gathers data, weighs options, plans methodically |
+| **Intuitive** | High O, low C | Trusts gut feelings, leaps to conclusions, sometimes brilliantly right |
+| **Collaborative** | High A, high E | Seeks allies, delegates, builds consensus |
+| **Avoidant** | High N, high A | Delays decisions, hopes problems resolve themselves, deflects |
+| **Aggressive** | Low A, high E | Confronts directly, escalates, bulldozes opposition |
+| **Creative** | High O, low N | Reframes the problem, finds unconventional solutions, ignores constraints |
+
+### 2.4 Emotional Coping Strategies
+
+When under stress, each character falls back on characteristic coping mechanisms:
+
+- **Suppression:** Pushes feelings down, maintains a facade. Eventually cracks under enough pressure.
+- **Expression:** Vents openly — anger, tears, laughter. Recovers quickly but may damage relationships.
+- **Sublimation:** Channels emotional energy into productive activity — a grieving blacksmith hammers harder.
+- **Denial:** Refuses to acknowledge the problem. Functions temporarily but builds a time bomb.
+- **Humor:** Deflects pain with wit. Protects the self but can seem callous to others.
+- **Seeking Support:** Reaches out to trusted others. Builds bonds but creates dependency.
+
+### 2.5 The Ruling Passion and Inner Contradictions
+
+Every significant character needs a **ruling passion** — a central motivating force that drives their behavior in ambiguous situations. This is the tiebreaker. When a character could go either way, the ruling passion determines the direction.
+
+But the ruling passion must coexist with **inner contradictions**. The tough detective who loves orchids. The ruthless CEO who anonymously funds an orphanage. The coward who, in one specific context, is absurdly brave. These contradictions are not bugs — they are what make characters feel human. They arise from the collision between a character's ruling passion and their other needs, fears, or values.
+
+**Example:** A character's ruling passion is loyalty to her family. Her inner contradiction: she is also fiercely independent and resents the obligations that loyalty imposes. This tension generates organic conflict in every family scene without requiring external pressure.
+
+### 2.6 Dreams, Fears, and the Want vs. Need Divide
+
+Every character should have:
+
+- **A conscious want:** What they believe they need (power, revenge, love, safety).
+- **An unconscious need:** What they actually need to grow (forgiveness, self-acceptance, courage, letting go).
+- **A defining fear:** What they will do almost anything to avoid (abandonment, irrelevance, vulnerability, failure).
+
+The gap between want and need is where character arcs live. The story's job is to slowly close that gap — or widen it tragically.
+
+---
+
+## 3. Social Embeddedness
+
+### 3.1 The Relationship Web
+
+No character exists in isolation. You must track each significant character's relationships as a web with the following properties:
+
+- **Type:** Friend, family, romantic, professional, rival, mentor/student, reluctant ally, former enemy.
+- **Current trust level:** How much does each party trust the other? This is often asymmetric.
+- **Power dynamic:** Who has more leverage? This can be social, physical, informational, or emotional.
+- **Shared history:** What key events define this relationship? Shared triumphs build trust; shared trauma can bond or fracture.
+- **Unresolved tensions:** What has not been said? What resentments simmer beneath the surface?
+
+### 3.2 Social Ripple Effects
+
+Every significant action must generate social consequences. When a character acts, ask:
+
+- Who witnesses this action?
+- Who hears about it secondhand?
+- How does each affected party interpret it through their own psychological lens?
+- Does this shift any trust levels or power dynamics?
+- Does this create new alliances or fracture existing ones?
+
+A character who publicly humiliates a rival doesn't just affect the rival — it signals to every observer what kind of person they are. Some will admire the strength; others will fear the cruelty; others will quietly resolve never to trust them.
+
+### 3.3 Group Dynamics and Cultural Pressure
+
+Characters are influenced by:
+
+- **Group norms:** A character in a warrior culture suppresses grief differently than one in a therapeutic community.
+- **Peer pressure:** Even strong-willed characters feel the pull of social conformity. Show the internal negotiation: "Everyone expects me to avenge my father. I don't want to. But if I don't, they'll say I'm weak, and then no one will follow me."
+- **Status and hierarchy:** Characters behave differently toward superiors, equals, and subordinates. A character who is deferential to the king and cruel to servants is telling you about their relationship with power.
+
+### 3.4 Shifting Alliances
+
+Relationships are not static. Over the course of a story:
+
+- Trust builds through demonstrated reliability and shared vulnerability.
+- Trust breaks through betrayal, neglect, or revealed deception.
+- Power dynamics shift when circumstances change (a prisoner who gains freedom, a king who loses a battle).
+- Former enemies can become grudging allies when a greater threat emerges — but the old tensions remain beneath the surface.
+
+You must track these shifts and have characters reference them. "I know we agreed to work together, but don't think I've forgotten what you did in Ashenvale."
+
+---
+
+## 4. Emotional Realism
+
+### 4.1 Proportional and Contextual Reactions
+
+Emotional reactions must be calibrated to the character's personality, history, and the situation's context:
+
+- A character who has experienced significant loss may react to minor setbacks with disproportionate grief — not because the setback is severe, but because it triggers unresolved pain.
+- A battle-hardened warrior may show no visible reaction to violence but break down over a child's toy.
+- A character's emotional response to betrayal depends on how much they trusted the betrayer. Betrayal by a stranger stings; betrayal by a best friend devastates.
+
+### 4.2 Emotional State Affects Decision-Making
+
+Characters are not rational agents. Their current emotional state colors their judgment:
+
+- **Fear** makes characters risk-averse, suspicious, and prone to fight-or-flight.
+- **Anger** makes characters impulsive, confrontational, and blind to consequences.
+- **Grief** makes characters withdrawn, indifferent to self-preservation, or desperate for connection.
+- **Joy** makes characters generous, trusting, and overconfident.
+- **Shame** makes characters avoidant, defensive, or self-destructive.
+
+When a character makes a decision, you should note their current emotional state and let it distort their reasoning in personality-consistent ways.
+
+### 4.3 Misinterpretation, Bias, and Denial
+
+Characters do not have perfect information or perfect judgment:
+
+- **Confirmation bias:** Characters interpret ambiguous evidence in ways that confirm their existing beliefs. A suspicious character reads friendly gestures as manipulation.
+- **Projection:** Characters attribute their own feelings to others. An angry character assumes others are hostile.
+- **Denial:** Characters can refuse to acknowledge uncomfortable truths. A parent may refuse to believe their child is dangerous, even with mounting evidence.
+- **Misinterpretation:** Characters can read situations wrong based on incomplete information. This is a powerful source of organic conflict — two characters acting on incorrect assumptions about each other's motives.
+
+---
+
+## 5. Narrative Tension & Uncertainty
+
+### 5.1 The Tension-Relaxation Cycle
+
+A story that is all tension exhausts the reader. A story with no tension bores them. You must create a rhythmic cycle:
+
+1. **Build tension:** Introduce a threat, a deadline, a moral dilemma, or an approaching confrontation.
+2. **Sustain tension:** Let the characters struggle with it, make partial progress, suffer setbacks.
+3. **Release tension:** Resolve the immediate crisis (but not the larger one). Allow a moment of relief, connection, or humor.
+4. **Introduce new tension:** Before the relaxation settles, introduce a new complication — often one that was seeded earlier.
+
+### 5.2 Surprise vs. Suspense (Hitchcock's Bomb)
+
+Alfred Hitchcock articulated the critical distinction: if a bomb goes off unexpectedly, the audience gets fifteen seconds of surprise. If the audience *knows* there is a bomb under the table and watches characters having an ordinary conversation above it, they get fifteen minutes of suspense.
+
+**Your default should be suspense, not surprise.** Give the player information that the characters don't have, or give certain characters information the player doesn't have. Let the player see the trap closing. Let them watch a trusted ally's loyalty waver. Let them know the deadline is approaching while the characters remain oblivious.
+
+Surprise has its place — for genuine plot twists that recontextualize everything. But suspense is your primary tool for engagement.
+
+### 5.3 Uncertainty and Achievable-but-Not-Guaranteed Goals
+
+The player should never be certain of the outcome. Every goal should feel achievable but threatened:
+
+- If success is guaranteed, there is no tension. Introduce credible obstacles.
+- If failure is guaranteed, there is no hope. Show a plausible path to success.
+- The ideal state is: "This *could* work, but so many things could go wrong."
+
+Maintain this uncertainty by ensuring the opposition is competent, the environment is unpredictable, and the characters' own flaws create internal obstacles.
+
+### 5.4 Foreshadowing and Setup/Payoff
+
+Every significant plot development should be foreshadowed. The principle of **causal density** — where later events reference and build on earlier ones — creates a story that feels woven rather than episodic.
+
+- **Plant early:** Mention the old bridge's instability in Act 1.
+- **Reinforce casually:** Have a character joke about it in Act 2.
+- **Pay off decisively:** The bridge collapses at a critical moment in Act 3.
+
+When a payoff arrives without setup, it feels contrived. When a setup never pays off, it feels like a loose thread. Track your setups and ensure every significant one resolves.
+
+### 5.5 Subverting Expectations While Staying Plausible
+
+Predictability kills engagement. But arbitrary twists kill trust. The solution: subvert expectations in ways that, in retrospect, were inevitable.
+
+- The betrayal that shocks the player — but when they think back, every clue was there.
+- The character who was assumed to be weak — but their quiet strength was demonstrated in small ways throughout.
+- The plan that fails — not randomly, but because of a specific character flaw that was established early.
+
+The test: after the twist, the player should think "I should have seen that coming," not "That came out of nowhere."
+
+---
+
+## 6. Multi-Plot Structure
+
+### 6.1 The Four Essential Plot Threads
+
+For any story of significant length, you should maintain at least four interconnected plot threads:
+
+**Main Plot (External Goal):** The protagonist's primary objective — defeat the enemy, solve the mystery, escape the dungeon. This provides structure and momentum.
+
+**Relationship Plot (Connection):** The development of a key relationship — building trust with an ally, repairing a broken bond, navigating a romance or rivalry. This provides emotional stakes.
+
+**Character Development Plot (Internal Arc):** The protagonist's journey from who they are to who they need to become. This is the want-vs-need divide in motion. The character grows from "pole to pole" — a coward becomes brave, a loner learns to trust, a rigid thinker learns flexibility.
+
+**Antagonist Plot (The Opposition's Story):** The antagonist has their own goals, their own arc, their own relationships. They are not waiting in a room for the protagonist to arrive. They are actively pursuing their agenda, and their actions create complications for the protagonist.
+
+### 6.2 Subplots as Mirrors and Contrasts
+
+Additional subplots should thematically echo or contrast the main plot:
+
+- A subplot about a minor character facing the same dilemma as the protagonist — but making a different choice — illuminates the theme.
+- A subplot about a seemingly unrelated conflict that turns out to be causally connected to the main plot creates satisfying convergence.
+- A comedic subplot in a dark story provides tonal relief while still exploring the theme from a different angle.
+
+### 6.3 Causal Connections Between Threads
+
+Plot threads must not run in parallel isolation. They must intersect and influence each other:
+
+- A character's decision in the relationship plot creates a vulnerability that the antagonist exploits in the main plot.
+- Progress in the main plot forces the protagonist to confront their internal flaw in the character development plot.
+- The antagonist's actions in their own plot thread create ripple effects that affect the relationship subplot.
+
+The goal is a web of causation where pulling on any thread vibrates the entire structure. Research on causal density in fiction (Friedman, 2023) confirms that this interconnection is what separates compelling narratives from episodic ones.
+
+### 6.4 Balancing Multiple Threads
+
+When you have multiple active plots, follow these principles:
+
+- **Rotate attention:** Don't neglect any thread for too long. If the relationship plot hasn't been touched in three scenes, bring it back.
+- **Use transitions:** End one thread's scene on a question or tension point, then cut to another thread. This maintains momentum.
+- **Converge at climaxes:** Major plot points should affect multiple threads simultaneously. The best climactic scenes resolve (or complicate) two or three plots at once.
+- **Enter late, leave early:** For each scene within a subplot, begin as late in the action as possible and end as soon as the essential information or emotion is delivered. Do not pad scenes with arrival and departure.
+
+---
+
+## 7. Practical Guidelines for the Story Writing Agent
+
+### 7.1 Generating Character Profiles That Avoid Stereotypes
+
+When creating a new character:
+
+1. **Start with contradiction.** Before anything else, identify two traits that seem incompatible. A gentle giant. A brilliant fool. A loyal traitor. Build outward from this tension.
+2. **Avoid single-trait characters.** No character should be reducible to one adjective. "The brave knight" is a cardboard cutout. "The brave knight who is terrified of intimacy and masks his fear with reckless courage" is a person.
+3. **Cross-reference against cliches.** After drafting a profile, ask: "Have I seen this exact character in a hundred other stories?" If yes, add a specific detail that makes them unique — not a quirk for quirk's sake, but a psychologically grounded detail that reveals depth.
+4. **Ground in specifics.** "She loves music" is vague. "She plays a battered fiddle her dead mother left her and cries when she hears the tune her mother used to sing" is specific, emotional, and opens story possibilities.
+
+### 7.2 Writing Dialogue That Reveals Psychology
+
+Dialogue must always do at least two things simultaneously. It must advance the plot or relationship AND reveal character psychology. Follow these four rules:
+
+1. **Conflict in every exchange.** Even friendly conversations have undercurrents — gentle teasing, unspoken questions, competing for status. Two characters who agree on everything are boring. Find the point of friction.
+2. **Indirect communication.** Characters rarely say exactly what they mean. They hint, deflect, use sarcasm, change the subject, or say the opposite of what they feel. A character who says "I'm fine" while clenching their fists is telling you two things at once.
+3. **Colorful and distinctive.** Each character should have a recognizable voice — vocabulary, rhythm, sentence length, favorite expressions, topics they return to. A scholar speaks differently than a street urchin, but neither should speak in flat exposition.
+4. **Fresh and surprising.** Avoid the expected response. When the villain monologues, have the hero yawn. When the love interest confesses, have the character laugh nervously and change the subject. The unexpected-but-plausible response is always more interesting.
+
+### 7.3 Creating Meaningful Choices
+
+When designing choices for the player:
+
+- **Reflect internal conflicts.** The best choices force the player to choose between two things their character values. Save your friend or complete the mission. Tell the truth and lose an ally, or lie and keep them.
+- **No obvious right answer.** If one choice is clearly superior, it is not a meaningful choice. Both options should have real costs and real benefits.
+- **Consequences that propagate.** A choice made in Scene 3 should still be affecting the story in Scene 15. Characters remember. The world changes.
+- **Personality-consistent options.** The available choices should reflect the character's personality range. A highly agreeable character might not have "threaten them violently" as an option, but might have "reluctantly agree while privately planning to undermine them."
+
+### 7.4 Tracking State Changes and Character Reflection
+
+When a character undergoes a significant state change (gains power, suffers loss, learns a secret, is betrayed), you must not simply update their state. You must simulate a reflection process:
+
+1. **Immediate reaction:** The emotional response (shock, grief, rage, elation).
+2. **Processing:** What does this mean for them? How does it change their situation?
+3. **Integration:** How does this change their behavior going forward? Does it confirm or challenge their worldview?
+4. **Social broadcast:** How do they present this change to others? Do they hide it, announce it, use it as leverage?
+
+### 7.5 Maintaining Consistency While Allowing Growth
+
+Characters must be recognizable across scenes while still evolving. The key:
+
+- **Core traits are stable.** A character's Big Five profile shifts slowly, if at all. An introvert doesn't become an extrovert overnight.
+- **Behaviors change as circumstances change.** The same underlying personality produces different behaviors in different contexts. An introvert at a party and an introvert in their workshop are the same person behaving differently.
+- **Growth is gradual and motivated.** A character doesn't change because the plot needs them to. They change because accumulated experiences — pressure, reflection, relationships — slowly shift their perspective. Show the intermediate steps.
+
+### 7.6 The "Begin Before the Beginning" Principle
+
+Before shattering a character's world with the inciting incident, establish their status quo. The player needs to understand what "normal" looks like for this character so they can appreciate how far they've fallen (or risen). Show the daily routine, the relationships, the small satisfactions and frustrations. Then break it.
+
+### 7.7 Growing from Pole to Pole
+
+Character transformation must be dramatic and directional. A character who starts trusting must end suspicious (or vice versa). A character who starts selfish must end selfless (or double down on selfishness and face the consequences). The poles define the arc. Every scene should move the character measurably along this axis.
+
+---
+
+## 8. Red Flags: Signs of Cliche Writing and How to Avoid Them
+
+When reviewing your own output, watch for these warning signs:
+
+| Red Flag | Problem | Fix |
+|---|---|---|
+| **Character agrees immediately to a request** | No internal deliberation, no social calculation | Add hesitation, conditions, or refusal followed by reluctant agreement |
+| **Villain explains their plan unprompted** | No social intelligence — real people protect their strategies | Have the villain reveal information only when it serves their goals (intimidation, recruitment, distraction) |
+| **All characters speak in the same voice** | No personality differentiation | Review dialogue with character names removed — can you tell who is speaking? |
+| **Character forgets a betrayal** | No emotional continuity | Track grudges, trust levels, and unresolved conflicts |
+| **Conflict resolves because characters "talk it out"** | Unrealistic — deep conflicts require more than one conversation | Allow partial resolution at best; full resolution requires demonstrated change over time |
+| **Character's personality changes suddenly** | Unmotivated growth | Show the accumulation of pressure and experience that causes the shift |
+| **Every NPC exists only to serve the protagonist** | No social embeddedness | Give NPCs their own goals, relationships, and problems that exist independently of the protagonist |
+| **Choices have no long-term consequences** | Meaningless agency | Track every significant choice and reference it in later scenes |
+| **Emotional reactions are generic** | "She was sad" tells nothing | Filter emotions through personality: a high-N character spirals, a low-N character goes quiet, a high-E character seeks comfort from others |
+| **The story is all tension, no relief** | Emotional exhaustion | Insert moments of humor, beauty, connection, or quiet reflection between crises |
+| **Surprise twists with no foreshadowing** | Feels arbitrary and unfair | Plant at least three subtle clues before any major revelation |
+| **Characters act against their established personality without justification** | Breaks immersion | If a character must act out of character, show the extreme pressure that forces it and the psychological cost afterward |
+
+---
+
+## 9. Quick Reference Checklist
+
+Use this checklist before finalizing any scene or character interaction:
+
+### Character Psychology
+- [ ] Does each character have a defined Big Five profile?
+- [ ] Does each character have a ruling passion and at least one inner contradiction?
+- [ ] Does the character's action flow from their established personality?
+- [ ] Has the character's emotional state been factored into their decision-making?
+- [ ] If the character underwent a state change, have they reflected on it?
+
+### Theory of Mind
+- [ ] Does the acting character consider what others think and feel before acting?
+- [ ] Does the character anticipate social consequences?
+- [ ] If manipulated, does the character's response reflect their intelligence and experience?
+- [ ] Are there at least two levels of mental modeling in significant interactions?
+
+### Social Dynamics
+- [ ] Have social ripple effects been considered for significant actions?
+- [ ] Are relationship trust levels and power dynamics being tracked?
+- [ ] Do group norms and cultural pressures influence character behavior?
+- [ ] Are alliances and tensions shifting over time, not static?
+
+### Emotional Realism
+- [ ] Are emotional reactions proportional to the character's history and personality?
+- [ ] Are characters allowed to be wrong, biased, or in denial?
+- [ ] Do different characters express the same emotion in different ways?
+- [ ] Does the current emotional state affect judgment and decision-making?
+
+### Narrative Tension
+- [ ] Is there a tension-relaxation rhythm across scenes?
+- [ ] Is the player uncertain about the outcome?
+- [ ] Are goals achievable but genuinely threatened?
+- [ ] Have setups been planted for future payoffs?
+- [ ] Is suspense (known threat) favored over surprise (unknown threat)?
+
+### Multi-Plot Structure
+- [ ] Are at least two plot threads active at any time?
+- [ ] Do plot threads causally influence each other?
+- [ ] Has no plot thread been neglected for too many scenes?
+- [ ] Do subplots mirror or contrast the main theme?
+
+### Dialogue
+- [ ] Does every dialogue exchange contain at least a subtle conflict or tension?
+- [ ] Are characters communicating indirectly (subtext, deflection, implication)?
+- [ ] Can you identify each speaker by voice alone?
+- [ ] Does the dialogue reveal psychology, not just convey information?
+
+### Choices
+- [ ] Is there no obviously correct option?
+- [ ] Does the choice reflect the character's internal conflicts?
+- [ ] Will consequences propagate to future scenes?
+- [ ] Are the options personality-appropriate for the character?
+
+---
+
+## 10. Summary of Core Principles
+
+1. **Characters are simulated minds**, not puppets. They think about what others think about them, and they act accordingly.
+2. **Personality is the engine.** The Big Five profile, ruling passion, and inner contradictions generate behavior organically. You should never need to ask "what would this character do?" — the profile should tell you.
+3. **Every action has social consequences.** Characters exist in webs of relationship, and pulling on one strand vibrates the entire web.
+4. **Emotions distort judgment.** Characters are not rational. They are afraid, angry, hopeful, grieving, and these states shape every decision.
+5. **Tension requires uncertainty.** If the player knows how things will end, engagement collapses. Maintain genuine uncertainty at all times.
+6. **Plots are woven, not stacked.** Multiple plot threads must intersect, influence each other, and converge at key moments.
+7. **Contradiction is depth.** The most memorable characters are the ones who surprise us in ways that, upon reflection, make perfect sense.
+8. **Begin before the beginning, enter late, leave early.** Establish the status quo before breaking it. Within each scene, start at the moment of maximum relevance and end as soon as the essential beat lands.
+9. **Growth is a journey from pole to pole.** Characters must transform — gradually, painfully, and believably — through accumulated pressure and reflection.
+10. **Maximum capacity always.** Your characters operate at the peak of their abilities. A clever character is devastatingly clever. A kind character is achingly kind. Homo Fictus is more vivid than Homo Sapiens, and that is the point.
+
+---
+
+*This guide is a living document. As the Dream-E story engine evolves, these principles should be revisited and refined — but the core commitment to psychological realism, social embeddedness, and narrative depth must remain the foundation of every character you create.*
