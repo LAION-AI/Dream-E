@@ -122,22 +122,22 @@ function buildCowriteContext(project: Project): string[] {
     const d = rootNode.data as StoryRootNodeData;
     const hasImg = d.image ? ' [img]' : '';
     lines.push(`Story Root: [${rootNode.id}]${hasImg}`);
-    if (d.title) lines.push(`  Title: ${d.title}`);
-    if (d.genre) lines.push(`  Genre: ${d.genre}`);
-    if (d.targetAudience) lines.push(`  Target Audience: ${d.targetAudience}`);
-    if (d.punchline) lines.push(`  Punchline: ${d.punchline}`);
-    if (d.mainCharacter?.name) {
-      lines.push(`  Main Character: ${d.mainCharacter.name} (${d.mainCharacter.role || 'protagonist'})`);
-    }
-    if (d.antagonist?.name) {
-      lines.push(`  Antagonist: ${d.antagonist.name} (${d.antagonist.role || 'antagonist'})`);
-    }
+    // Always show all fields — mark empty ones explicitly so the AI can see
+    // at a glance which fields still need to be filled during the workflow.
+    lines.push(`  Title: ${d.title || '(empty)'}`);
+    lines.push(`  Genre: ${d.genre || '(empty)'}`);
+    lines.push(`  Target Audience: ${d.targetAudience || '(empty)'}`);
+    lines.push(`  Punchline: ${d.punchline || '(empty)'}`);
+    lines.push(`  Main Character: ${d.mainCharacter?.name ? `${d.mainCharacter.name} (${d.mainCharacter.role || 'Protagonist'})` : '(empty)'}`);
+    lines.push(`  Antagonist: ${d.antagonist?.name ? `${d.antagonist.name} (${d.antagonist.role || 'Antagonist'})` : '(empty)'}`);
     if (d.supportingCharacters && d.supportingCharacters.length > 0) {
       const sc = d.supportingCharacters.map(c => `${c.name} (${c.archetype})`).join(', ');
       lines.push(`  Supporting Characters: ${sc}`);
+    } else {
+      lines.push(`  Supporting Characters: (none)`);
     }
-    if (d.protagonistGoal) lines.push(`  Protagonist Goal: ${d.protagonistGoal}`);
-    if (d.summary) lines.push(`  Summary: ${d.summary.slice(0, 200)}${d.summary.length > 200 ? '...' : ''}`);
+    lines.push(`  Protagonist Goal: ${d.protagonistGoal || '(empty)'}`);
+    lines.push(`  Summary: ${d.summary ? `${d.summary.slice(0, 200)}${d.summary.length > 200 ? '...' : ''}` : '(empty)'}`);
   } else {
     lines.push('Story Root: (none)');
   }
