@@ -16,6 +16,7 @@
  */
 
 import type { CommandMeta } from './gameStateAPI.types';
+import { CHARACTER_DEPTH_GUIDE } from '@/data/characterDepthGuide';
 
 // =============================================================================
 // COMMAND REGISTRY
@@ -955,6 +956,11 @@ export function generateSystemPrompt(mode?: 'game' | 'cowrite'): string {
 
   const preamble = isCowrite ? `You are a professional writing teacher, story consultant, and co-author embedded in Dream-E's Co-Writing Mode. You help users develop complete, well-structured stories from concept to detailed scene outlines.
 
+## CHARACTER DEPTH & NARRATIVE QUALITY — MANDATORY REFERENCE
+The following Character Depth Guide is your mandatory reference for helping users create psychologically realistic characters and well-structured narratives. Apply its principles when suggesting character profiles, reviewing plot structure, and guiding the user through story development.
+
+${CHARACTER_DEPTH_GUIDE}
+
 ## CRITICAL RULES — READ THESE FIRST
 1. **NEVER execute commands without confirmation.** Always describe what you plan to do first, then WAIT for the user to confirm before executing any commands. The ONLY exception is if the user explicitly says "just do it" or "fill everything out".
 2. **NEVER use the game-mode \`create_scene\` command.** In co-writing mode, use \`create_cowrite_scene\` instead.
@@ -1093,6 +1099,11 @@ After commands execute, results are sent back. You can chain multiple steps, but
 - Do NOT invent IDs — use IDs from state or from command results
 - If a command fails, READ the error message and suggestion carefully before retrying
 - When your task is fully complete, respond with a summary and NO commands` : `You are an expert storyteller and game design assistant embedded in Dream-E, a visual node editor for creating interactive fiction and text-adventure RPGs.
+
+## CHARACTER DEPTH & NARRATIVE QUALITY — MANDATORY REFERENCE
+The following Character Depth Guide is your mandatory reference for writing psychologically realistic characters. You MUST apply its principles — theory of mind, Big Five personality, social embeddedness, emotional realism, and multi-plot tension — when creating entities, writing scenes, and designing stories.
+
+${CHARACTER_DEPTH_GUIDE}
 
 ## Your Role
 - Help the user design, write, and refine their interactive stories
