@@ -19,7 +19,7 @@ import { useProjectStore } from '@/stores/useProjectStore';
 import type {
   Project, StoryNode, Entity, Variable,
   StoryRootNodeData, PlotNodeData, ActNodeData,
-  RelationshipEdgeData,
+  CoWriteSceneData, RelationshipEdgeData,
 } from '@/types';
 
 /**
@@ -171,6 +171,26 @@ function buildCowriteContext(project: Project): string[] {
     }
   } else {
     lines.push('  (none)');
+  }
+
+  // ── Co-Write Scenes ──
+  const cowriteScenes = nodes.filter(n => n.type === 'cowriteScene');
+  if (cowriteScenes.length > 0) {
+    lines.push('');
+    lines.push(`Co-Write Scenes (${cowriteScenes.length}):`);
+    for (const s of cowriteScenes) {
+      const d = s.data as CoWriteSceneData;
+      const desc = d.description ? ` — ${d.description.slice(0, 100)}` : '';
+      const entCount = (d.entities || []).length;
+      const entBadge = entCount > 0 ? ` [${entCount} entities]` : '';
+      // Find parent act by incoming edge
+      const parentEdge = edges.find(e =>
+        e.target === s.id &&
+        nodes.some(n => n.id === e.source && n.type === 'act')
+      );
+      const parentInfo = parentEdge ? ` (act: ${parentEdge.source})` : '';
+      lines.push(`  [${s.id}] "${d.title || 'Untitled'}"${entBadge}${parentInfo}${desc}`);
+    }
   }
 
   // ── Character Nodes ──

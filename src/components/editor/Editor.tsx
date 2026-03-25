@@ -107,6 +107,7 @@ import StoryRootNodeComponent from '../nodes/StoryRootNode';
 import PlotNodeComponent from '../nodes/PlotNode';
 import CharacterNodeComponent from '../nodes/CharacterNode';
 import ActNodeComponent from '../nodes/ActNode';
+import CoWriteSceneNodeComponent from '../nodes/CoWriteSceneNode';
 
 // Import custom edge components
 import RelationshipEdge from '../edges/RelationshipEdge';
@@ -135,6 +136,7 @@ const nodeTypes: NodeTypes = {
   plot: PlotNodeComponent,
   character: CharacterNodeComponent,
   act: ActNodeComponent,
+  cowriteScene: CoWriteSceneNodeComponent,
 };
 
 /**
@@ -150,7 +152,7 @@ const nodeTypes: NodeTypes = {
  * characters are handled by the edge filtering logic (both endpoints must
  * be in the visible node set).
  */
-const STORY_NODE_TYPES = new Set(['scene', 'comment', 'storyRoot', 'plot', 'act']);
+const STORY_NODE_TYPES = new Set(['scene', 'comment', 'storyRoot', 'plot', 'act', 'cowriteScene']);
 const CHARACTER_NODE_TYPES = new Set(['character']);
 
 /**
@@ -871,17 +873,37 @@ function EditorInner() {
           break;
         }
 
-        case 'act':
+        case 'act': {
+          // Auto-compute the next act number based on existing act nodes.
+          // This gives each new act a sensible sequential number and name
+          // (e.g., if Act 1-3 exist, the next drop creates Act 4).
+          const existingActs = projectNodes?.filter(n => n.type === 'act') || [];
+          const maxActNum = existingActs.reduce((max, n) => {
+            const num = (n.data as any)?.actNumber || 0;
+            return Math.max(max, num);
+          }, 0);
+          const nextActNum = maxActNum + 1;
           newNode = {
             id: generateId('node'),
             type: 'act',
             position,
-            label: 'New Act',
+            label: `Act ${nextActNum}`,
             data: {
-              actNumber: 1,
-              name: '',
+              actNumber: nextActNum,
+              name: `Act ${nextActNum}`,
               description: '',
             },
+          };
+          break;
+        }
+
+        case 'cowriteScene':
+          newNode = {
+            id: generateId('node'),
+            type: 'cowriteScene',
+            position,
+            label: 'New Scene',
+            data: { title: '', description: '', entities: [], sceneAction: '' },
           };
           break;
 

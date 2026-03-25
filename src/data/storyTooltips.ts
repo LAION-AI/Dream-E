@@ -104,5 +104,19 @@ export const STORY_TOOLTIPS = {
 
   // ==================== Turning point tooltip ====================
 
+  // ==================== Co-Write Scene tooltips ====================
+
+  cowriteScene: 'A scene is the basic unit of storytelling. It represents a single continuous event — a conversation, a chase, a discovery. Good scenes have a clear beginning, a turning point, and an end that propels the story forward. Each scene should change at least one thing: a relationship, a piece of information, a character\'s emotional state.',
+
+  sceneStartState: 'Describe how each entity appears at the beginning of this scene. What is their emotional state? Physical condition? What do they know or believe? This establishes the baseline from which the reader measures change. A strong start state makes the transformation visible and emotionally resonant.',
+
+  sceneObjective: 'What does this entity want to achieve in this scene? Every entity in a scene should want something — even if it\'s just to maintain the status quo. Conflicting objectives between entities create dramatic tension. The gap between what a character wants and what they get is the engine of drama.',
+
+  sceneChanges: 'How does this entity transform during the scene? Do they learn something new? Lose something important? Make a difficult choice? Reveal a hidden truth? The best scenes change at least one entity in a meaningful way. If nobody changes, ask yourself why this scene exists.',
+
+  sceneEndState: 'How does this entity leave the scene? Compare this to the start state to see the arc of change within a single scene. The end state of one scene often becomes the start state of the next scene where this entity appears — this is how continuity is maintained across the story.',
+
+  sceneAction: 'A freeform description of everything that happens in this scene — the dialogue beats, the action sequences, the revelations, the emotional shifts. This is where you plan the actual moment-by-moment flow, weaving all entity threads into a unified narrative beat. Think of it as detailed stage directions for a play.',
+
   turningPoint: 'A turning point is the pivotal event at the end of an act that fundamentally changes the direction of the story and propels it into the next act. It\'s the moment where the status quo breaks and there\'s no going back.\n\nIn screenwriting, turning points are called "plot points." In novel writing, they\'re often called "act breaks" or "crisis moments."\n\nExamples by act:\n\n• Act 1 → Act 2 (The Break Into Two): The protagonist commits to the journey. In "The Matrix," Neo takes the red pill. In "Star Wars," Luke\'s family is killed and he joins Obi-Wan. The ordinary world is left behind.\n\n• Act 2 Midpoint (The Shift): A major revelation or reversal that raises the stakes. In "The Empire Strikes Back," Vader reveals he is Luke\'s father. The story pivots from proactive to reactive (or vice versa).\n\n• Act 2 → Act 3 (The Dark Night of the Soul): The lowest point. The protagonist has lost everything, the plan has failed, and all seems hopeless. In "The Lord of the Rings," Frodo is captured and the Ring seems lost.\n\n• Act 3 Climax (The Final Turning Point): The decisive confrontation where the protagonist either achieves their goal or fails. Everything the story has built toward converges in this moment.\n\nA strong turning point has three qualities:\n1. It is IRREVERSIBLE — the character cannot return to how things were\n2. It raises the STAKES — what\'s at risk increases\n3. It forces a CHOICE — the protagonist must decide and act\n\nWithout clear turning points, stories feel aimless. With them, the narrative has momentum and structure that keeps readers engaged.',
 } as const;

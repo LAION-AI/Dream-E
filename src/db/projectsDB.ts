@@ -31,6 +31,7 @@ import type {
   ProjectSummary,
   CreateProjectOptions,
   StoryNode,
+  StoryEdge,
   SceneNode,
 } from '@/types';
 import { createDefaultSettings, createDefaultProjectInfo } from '@/types/project';
@@ -363,17 +364,21 @@ export async function createProject(
 
     // Initialize empty arrays
     let nodes: StoryNode[] = [];
-    let edges: never[] = [];
+    let edges: StoryEdge[] = [];
 
-    // If co-write mode, create a StoryRoot node as the starting point
-    // instead of the default Dream Room scene. The StoryRoot holds
-    // high-level story metadata (title, genre, characters) and acts
-    // as the structural anchor from which plot arcs branch out.
+    // If co-write mode, create a full default story structure:
+    // - 1 Story Root (high-level metadata)
+    // - 4 Plot nodes (Main, Relationship, Character Development, Antagonist)
+    // - 3 Act nodes (Act 1, Act 2, Act 3)
+    // - Edges: root → each plot (4 edges)
+    // - Edges: each plot → each act with relationship data (4×3 = 12 edges)
+    // This gives users an immediate working structure to start fleshing out.
     if (options.mode === 'cowrite') {
+      // Create Story Root node at the top center
       const rootNode: StoryNode = {
         id: generateId('node'),
         type: 'storyRoot',
-        position: { x: 400, y: 100 },
+        position: { x: 550, y: 50 },
         label: 'Story Root',
         data: {
           title: options.title || '',
@@ -387,8 +392,72 @@ export async function createProject(
           summary: '',
         },
       };
-      nodes = [rootNode];
+
+      // Create 4 Plot nodes — each represents a different narrative thread.
+      // Spread horizontally below the Story Root for a clean visual layout.
+      const plotConfigs = [
+        { name: 'Main Plot', plotType: 'Main Plot', x: 100 },
+        { name: 'Relationship', plotType: 'Relationship Plot', x: 400 },
+        { name: 'Character Development', plotType: 'Character Development Plot', x: 700 },
+        { name: 'Antagonist', plotType: 'Antagonist Plot', x: 1000 },
+      ];
+      const plotNodes = plotConfigs.map(cfg => ({
+        id: generateId('node'),
+        type: 'plot' as const,
+        position: { x: cfg.x, y: 280 },
+        label: cfg.name,
+        data: { name: cfg.name, plotType: cfg.plotType, description: '' },
+      }));
+
+      // Create 3 Act nodes — the classical three-act structure.
+      // Positioned in a row below the plot nodes.
+      const actNodes = [1, 2, 3].map((num, i) => ({
+        id: generateId('node'),
+        type: 'act' as const,
+        position: { x: 200 + i * 350, y: 600 },
+        label: `Act ${num}`,
+        data: { actNumber: num, name: `Act ${num}`, description: '' },
+      }));
+
+      nodes = [rootNode, ...plotNodes, ...actNodes] as StoryNode[];
       settings.startNodeId = rootNode.id;
+
+      // Root → Plot edges: connect the Story Root to each plot node
+      const rootToPlotEdges = plotNodes.map(p => ({
+        id: generateId('edge'),
+        source: rootNode.id,
+        target: p.id,
+      }));
+
+      // Plot → Act edges: each plot connects to each act with relationship
+      // metadata describing how that plot thread manifests in that act.
+      // Uses the 'relationship' edge type with plotInvolvement data field.
+      const plotToActEdges: Array<{
+        id: string;
+        source: string;
+        target: string;
+        type: string;
+        data: { relationshipType: string; description: string; status: string; history: string; plotInvolvement: string };
+      }> = [];
+      for (const plot of plotNodes) {
+        for (const act of actNodes) {
+          plotToActEdges.push({
+            id: generateId('edge'),
+            source: plot.id,
+            target: act.id,
+            type: 'relationship',
+            data: {
+              relationshipType: 'Act-Plot',
+              description: '',
+              status: '',
+              history: '',
+              plotInvolvement: '',
+            },
+          });
+        }
+      }
+
+      edges = [...rootToPlotEdges, ...plotToActEdges] as StoryEdge[];
     } else if (options.addStarterContent !== false) {
       // Game mode — add the default Dream Room starter scene
       const startNode = createStarterSceneNode();

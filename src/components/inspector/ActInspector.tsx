@@ -82,7 +82,7 @@ export default function ActInspector({ node }: ActInspectorProps) {
         <input
           type="number"
           min={1}
-          value={node.data.actNumber || 1}
+          value={node.data.actNumber ?? ''}
           onChange={(e) => updateData({ actNumber: parseInt(e.target.value, 10) || 1 })}
           className="input"
           placeholder="1"

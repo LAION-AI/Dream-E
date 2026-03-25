@@ -72,7 +72,7 @@ export interface BaseNode {
    * This is a "discriminated union" - it helps TypeScript
    * narrow down which node type we're working with.
    */
-  type: 'scene' | 'choice' | 'modifier' | 'comment' | 'storyRoot' | 'plot' | 'character' | 'act';
+  type: 'scene' | 'choice' | 'modifier' | 'comment' | 'storyRoot' | 'plot' | 'character' | 'act' | 'cowriteScene';
 
   /**
    * Position on the canvas.
@@ -569,6 +569,50 @@ export interface ActNode extends BaseNode {
   data: ActNodeData;
 }
 
+/**
+ * Entity reference within a co-write scene.
+ * Tracks how each entity participates in a specific scene — their starting
+ * state, what they're trying to achieve, how they change during the scene,
+ * and their ending state. This granular tracking helps writers maintain
+ * continuity and ensures every character arc is accounted for scene by scene.
+ */
+export interface CoWriteSceneEntity {
+  /** ID of the entity being referenced */
+  entityId: string;
+  /** How the entity enters the scene — their condition, mood, appearance */
+  startState: string;
+  /** What the entity wants to achieve or accomplish in this scene */
+  objective: string;
+  /** How the entity transforms during the scene — key shifts */
+  changes: string;
+  /** How the entity leaves the scene — their new condition */
+  endState: string;
+}
+
+/**
+ * Data for a co-writing scene node — a detailed scene plan within an act.
+ * Co-write scenes are the fundamental unit of storytelling in co-write mode.
+ * Each scene belongs to an act and describes what happens, which entities
+ * are involved, and how the story advances through that moment.
+ */
+export interface CoWriteSceneData {
+  /** Scene title — a short, evocative name for this moment */
+  title: string;
+  /** Description of what happens in this scene (overview) */
+  description: string;
+  /** Entities involved in this scene with per-entity state tracking */
+  entities: CoWriteSceneEntity[];
+  /** Freeform text describing what happens and how entities change */
+  sceneAction: string;
+  /** Optional mood/concept image for this scene */
+  image?: string;
+}
+
+export interface CoWriteSceneNode extends BaseNode {
+  type: 'cowriteScene';
+  data: CoWriteSceneData;
+}
+
 /** Data stored on relationship edges between character nodes */
 export interface RelationshipEdgeData {
   relationshipType: string;
@@ -603,7 +647,7 @@ export interface RelationshipEdgeData {
  *   }
  * }
  */
-export type StoryNode = SceneNode | ChoiceNode | ModifierNode | CommentNode | StoryRootNode | PlotNode | CharacterNode | ActNode;
+export type StoryNode = SceneNode | ChoiceNode | ModifierNode | CommentNode | StoryRootNode | PlotNode | CharacterNode | ActNode | CoWriteSceneNode;
 
 /**
  * EDGE INTERFACE

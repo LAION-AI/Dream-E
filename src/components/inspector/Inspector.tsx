@@ -40,8 +40,9 @@ import StoryRootInspector from './StoryRootInspector';
 import PlotInspector from './PlotInspector';
 import CharacterNodeInspector from './CharacterNodeInspector';
 import ActInspector from './ActInspector';
+import CoWriteSceneInspector from './CoWriteSceneInspector';
 import RelationshipInspector from './RelationshipInspector';
-import type { StoryRootNode, PlotNode, CharacterNode, ActNode } from '@/types';
+import type { StoryRootNode, PlotNode, CharacterNode, ActNode, CoWriteSceneNode } from '@/types';
 
 /**
  * INSPECTOR COMPONENT
@@ -110,6 +111,8 @@ export default function Inspector() {
         return <CharacterNodeInspector node={selectedNode as CharacterNode} />;
       case 'act':
         return <ActInspector node={selectedNode as ActNode} />;
+      case 'cowriteScene':
+        return <CoWriteSceneInspector node={selectedNode as CoWriteSceneNode} />;
       default:
         return (
           <div className="p-4 text-editor-muted">
@@ -154,6 +157,8 @@ export default function Inspector() {
           return 'Character';
         case 'act':
           return 'Act';
+        case 'cowriteScene':
+          return 'Scene';
         default:
           return 'Inspector';
       }
@@ -188,6 +193,8 @@ export default function Inspector() {
           return 'border-cyan-500';
         case 'act':
           return 'border-indigo-500';
+        case 'cowriteScene':
+          return 'border-emerald-500';
         default:
           return 'border-editor-border';
       }

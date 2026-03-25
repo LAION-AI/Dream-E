@@ -2018,6 +2018,166 @@ const handleGenerateNodeImage: CommandHandler = async (params, _store, project) 
   return { success: true, targetId, imageGenerated: true };
 };
 
+// ─── Co-Write Scenes ─────────────────────────────────────────────────
+
+/**
+ * Create a new co-write scene node. Co-write scenes are the fundamental
+ * unit of storytelling in co-write mode — each represents a discrete
+ * narrative moment within an act. If actNodeId is provided, the scene
+ * is automatically connected to that act via an edge.
+ */
+const handleCreateCowriteScene: CommandHandler = (params, store, project) => {
+  const title = requireString(params, 'title');
+  const description = (params.description as string) || '';
+  const actNodeId = params.actNodeId as string | undefined;
+
+  // Validate the act node if provided
+  if (actNodeId) {
+    const actNode = project.nodes.find(n => n.id === actNodeId);
+    if (!actNode || actNode.type !== 'act') {
+      const available = project.nodes
+        .filter(n => n.type === 'act')
+        .map(n => `${n.id} ("${n.label}")`)
+        .join(', ');
+      throw new ValidationError(
+        `Act node not found: ${actNodeId}`,
+        available ? `Available acts: ${available}` : 'No act nodes exist. Use create_act first.'
+      );
+    }
+  }
+
+  const sceneNodeId = generateId('node');
+  const nodeCount = project.nodes.length;
+
+  store.addNode({
+    id: sceneNodeId,
+    type: 'cowriteScene',
+    position: { x: 700 + nodeCount * 50, y: 500 + nodeCount * 40 },
+    label: title,
+    data: {
+      title,
+      description,
+      entities: [],
+      sceneAction: '',
+    },
+  } as any);
+
+  // Auto-connect to parent act if provided
+  if (actNodeId) {
+    const edgeId = generateId('edge');
+    store.addEdge({
+      id: edgeId,
+      source: actNodeId,
+      target: sceneNodeId,
+    } as any);
+  }
+
+  return { success: true, sceneNodeId };
+};
+
+/**
+ * Update fields on an existing co-write scene node. Only provided fields
+ * are changed — the rest keep their current values.
+ */
+const handleUpdateCowriteScene: CommandHandler = (params, store, project) => {
+  const sceneNodeId = requireString(params, 'sceneNodeId');
+  const node = project.nodes.find(n => n.id === sceneNodeId);
+  if (!node || node.type !== 'cowriteScene') {
+    const available = project.nodes
+      .filter(n => n.type === 'cowriteScene')
+      .map(n => `${n.id} ("${n.label}")`)
+      .join(', ');
+    throw new ValidationError(
+      `Co-write scene node not found: ${sceneNodeId}`,
+      available ? `Available co-write scenes: ${available}` : 'No co-write scene nodes exist. Use create_cowrite_scene first.'
+    );
+  }
+
+  const updates: Record<string, unknown> = {};
+  const dataUpdates: Record<string, unknown> = {};
+
+  if (params.title !== undefined) {
+    updates.label = params.title;
+    dataUpdates.title = params.title;
+  }
+  if (params.description !== undefined) dataUpdates.description = params.description;
+  if (params.sceneAction !== undefined) dataUpdates.sceneAction = params.sceneAction;
+
+  // Handle entities array update — validate entity IDs exist
+  if (params.entities !== undefined) {
+    const entities = params.entities as Array<{
+      entityId: string;
+      startState?: string;
+      objective?: string;
+      changes?: string;
+      endState?: string;
+    }>;
+    if (Array.isArray(entities)) {
+      dataUpdates.entities = entities.map(e => ({
+        entityId: e.entityId || '',
+        startState: e.startState || '',
+        objective: e.objective || '',
+        changes: e.changes || '',
+        endState: e.endState || '',
+      }));
+    }
+  }
+
+  if (Object.keys(dataUpdates).length > 0) {
+    updates.data = { ...(node.data as any), ...dataUpdates };
+  }
+  store.updateNode(sceneNodeId, updates as any);
+  return {
+    success: true,
+    sceneNodeId,
+    updated: Object.keys(params).filter(k => k !== 'sceneNodeId'),
+  };
+};
+
+/**
+ * Delete a co-write scene node and all edges connected to it.
+ */
+const handleDeleteCowriteScene: CommandHandler = (params, store, project) => {
+  const sceneNodeId = requireString(params, 'sceneNodeId');
+  const node = project.nodes.find(n => n.id === sceneNodeId);
+  if (!node || node.type !== 'cowriteScene') {
+    throw new ValidationError(`Co-write scene node not found: ${sceneNodeId}`);
+  }
+  const connectedEdges = project.edges.filter(
+    e => e.source === sceneNodeId || e.target === sceneNodeId
+  );
+  for (const edge of connectedEdges) store.deleteEdge(edge.id);
+  store.deleteNode(sceneNodeId);
+  return { success: true, sceneNodeId, edgesRemoved: connectedEdges.length };
+};
+
+/**
+ * List all co-write scene nodes in the project with key data.
+ * For each scene, attempts to find a parent act node by looking for
+ * incoming edges from act nodes.
+ */
+const handleListCowriteScenes: CommandHandler = (_params, _store, project) => {
+  const scenes = project.nodes.filter(n => n.type === 'cowriteScene');
+  return {
+    success: true,
+    scenes: scenes.map(s => {
+      const data = s.data as { title: string; description: string; entities: unknown[]; sceneAction?: string };
+      // Find parent act by looking for incoming edges from act nodes
+      const parentEdge = project.edges.find(e =>
+        e.target === s.id &&
+        project.nodes.some(n => n.id === e.source && n.type === 'act')
+      );
+      return {
+        sceneNodeId: s.id,
+        title: data.title,
+        description: data.description?.slice(0, 200),
+        entityCount: (data.entities || []).length,
+        parentActId: parentEdge?.source || null,
+      };
+    }),
+  };
+};
+
 // =============================================================================
 // HANDLER MAP
 // =============================================================================
@@ -2112,6 +2272,11 @@ const handlers: Record<string, CommandHandler> = {
   create_character_node: handleCreateCharacterNode,
   set_character_profile_field: handleSetCharacterProfileField,
   generate_node_image: handleGenerateNodeImage,
+  // Co-Write Scenes
+  create_cowrite_scene: handleCreateCowriteScene,
+  update_cowrite_scene: handleUpdateCowriteScene,
+  delete_cowrite_scene: handleDeleteCowriteScene,
+  list_cowrite_scenes: handleListCowriteScenes,
 };
 
 // =============================================================================

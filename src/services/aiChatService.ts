@@ -78,6 +78,7 @@ function buildResultsMessage(
     'get_scene_details', 'get_entity_details', 'list_scenes', 'list_entities',
     'list_variables', 'search_music', 'get_music_track', 'list_music_genres',
     'get_story_root', 'list_plots', 'list_acts', 'list_relationships',
+    'list_cowrite_scenes',
   ]);
 
   let msg = '[Command Execution Results]\n';

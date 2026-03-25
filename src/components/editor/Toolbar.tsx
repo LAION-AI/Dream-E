@@ -139,6 +139,15 @@ const cowriteStoryExtraTypes: NodeTypeInfo[] = [
     bgColor: 'bg-indigo-500/10',
     borderColor: 'border-indigo-500',
   },
+  {
+    type: 'cowriteScene',
+    label: 'Scene',
+    description: 'Detailed scene within an act',
+    icon: Film,
+    color: '#10b981',
+    bgColor: 'bg-emerald-500/10',
+    borderColor: 'border-emerald-500',
+  },
 ];
 
 /**

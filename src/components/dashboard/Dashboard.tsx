@@ -540,6 +540,7 @@ export default function Dashboard({ mode }: DashboardProps) {
                 <ProjectCard
                   key={project.id}
                   project={project}
+                  mode={mode}
                   onOpen={() => navigate(mode === 'cowrite' ? `/cowrite/edit/${project.id}` : `/edit/${project.id}`)}
                   onPlay={() => navigate(mode === 'cowrite' ? `/cowrite/play/${project.id}` : `/play/${project.id}`)}
                   onPlayOpenWorld={() => navigate(mode === 'cowrite' ? `/cowrite/play/${project.id}?openWorld=1` : `/play/${project.id}?openWorld=1`)}
@@ -633,6 +634,7 @@ export default function Dashboard({ mode }: DashboardProps) {
  */
 interface ProjectCardProps {
   project: ProjectSummary;
+  mode: 'game' | 'cowrite';
   onOpen: () => void;
   onPlay: () => void;
   onPlayOpenWorld: () => void;
@@ -643,6 +645,7 @@ interface ProjectCardProps {
 
 function ProjectCard({
   project,
+  mode,
   onOpen,
   onPlay,
   onPlayOpenWorld,
@@ -692,13 +695,17 @@ function ProjectCard({
           >
             <Play size={20} />
           </button>
-          <button
-            onClick={onPlayOpenWorld}
-            className="p-3 rounded-full bg-pink-500 text-white hover:bg-pink-500/80 transition-colors"
-            title="Play Open World"
-          >
-            <Sparkles size={20} />
-          </button>
+          {/* Open World button is only relevant for game mode projects.
+              Co-writing projects use a different workflow without open world. */}
+          {mode !== 'cowrite' && (
+            <button
+              onClick={onPlayOpenWorld}
+              className="p-3 rounded-full bg-pink-500 text-white hover:bg-pink-500/80 transition-colors"
+              title="Play Open World"
+            >
+              <Sparkles size={20} />
+            </button>
+          )}
         </div>
       </div>
 
