@@ -1593,22 +1593,24 @@ function EditorInner() {
             {pendingUploads > 0 ? 'Uploading...' : 'Play from Start'}
           </Button>
 
-          {/* Play Open World - Auto-saves then launches Open World mode */}
-          <button
-            disabled={pendingUploads > 0}
-            onClick={async () => {
-              if (pendingUploads > 0) {
-                console.log('[Editor] Cannot play while uploads are pending');
-                return;
-              }
-              await saveProject();
-              navigate(isCowriteMode ? `/cowrite/play/${projectId}?openWorld=1` : `/play/${projectId}?openWorld=1`);
-            }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-pink-500 hover:bg-pink-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Sparkles size={16} />
-            Open World
-          </button>
+          {/* Play Open World — only for game mode, not co-writing */}
+          {!isCowriteMode && (
+            <button
+              disabled={pendingUploads > 0}
+              onClick={async () => {
+                if (pendingUploads > 0) {
+                  console.log('[Editor] Cannot play while uploads are pending');
+                  return;
+                }
+                await saveProject();
+                navigate(`/play/${projectId}?openWorld=1`);
+              }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-pink-500 hover:bg-pink-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Sparkles size={16} />
+              Open World
+            </button>
+          )}
         </div>
       </header>
 
