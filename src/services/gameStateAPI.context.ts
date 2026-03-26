@@ -16,6 +16,7 @@
  */
 
 import { useProjectStore } from '@/stores/useProjectStore';
+import { CHARACTER_DEPTH_GUIDE } from '@/data/characterDepthGuide';
 import type {
   Project, StoryNode, Entity, Variable,
   StoryRootNodeData, PlotNodeData, ActNodeData,
@@ -97,8 +98,19 @@ export function getGameContext(): string {
   // When the project is in co-write mode, append the narrative structure
   // (story root, plots, acts, character nodes, relationships) so the AI
   // agent always sees the full co-writing context.
+  //
+  // Also append the Character Depth Guide as reference material. This was
+  // moved out of the system prompt (where it was ~5000 words buried between
+  // the critical rules and operational instructions, causing the AI to lose
+  // track of the rules) into the user message context where it serves as
+  // reference material alongside the project state.
   if (project.mode === 'cowrite') {
     sections.push('', ...buildCowriteContext(project));
+    sections.push(
+      '',
+      '[CHARACTER DEPTH REFERENCE GUIDE — Apply these principles when developing characters and stories]',
+      CHARACTER_DEPTH_GUIDE
+    );
   }
 
   return sections.join('\n');
