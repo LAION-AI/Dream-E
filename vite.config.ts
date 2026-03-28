@@ -21,8 +21,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-// child_process no longer needed — all API calls are direct HTTP
 import fs from 'fs';
+import { createRequire } from 'module';
+
+// createRequire is needed because vite.config.ts runs in ESM context,
+// but the server/*.cjs modules use CommonJS require(). The CJS modules
+// in turn require Express, bcryptjs, etc. which are also CJS.
+const require = createRequire(import.meta.url);
 
 // =============================================================================
 // AGENT SESSION STATE (lives as long as the dev server)
@@ -46,23 +51,43 @@ export default defineConfig({
         // =============================================================
         // MOUNT SERVER-SIDE API (auth, projects, assets)
         // =============================================================
-        // The server app is a full Express application handling user auth,
-        // project persistence (SQLite), and binary asset storage.
-        // It's mounted at /api/v2 so it doesn't conflict with the existing
-        // /api/* endpoints used by the dream-e-agent-bridge middleware.
+        // The server app handles user auth, project persistence (SQLite),
+        // and binary asset storage at /api/v2/.
+        //
+        // IMPORTANT: We intercept /api/v2 requests in the main middleware
+        // handler below (not via server.middlewares.use) because Vite's
+        // connect-based middleware system can interfere with Express sub-apps.
+        // The Express app is used as a handler via app(req, res).
         // =============================================================
+        // Mount the Express server app for /api/v2/* routes.
+        // This is registered as a single middleware handler that checks the URL
+        // and delegates to Express. It's placed INSIDE the same middleware.use
+        // callback as the rest of the API handlers so it has the same priority.
+        let serverApp: any = null;
         try {
           const { createServerApp } = require('./server/index.cjs');
-          const serverApp = createServerApp();
-          server.middlewares.use('/api/v2', serverApp);
-          console.log('[VITE] Dream-E server API mounted at /api/v2');
-        } catch (err) {
-          console.error('[VITE] Failed to mount server API:', err.message);
-          console.error('[VITE] Server-side features (auth, projects) will not be available.');
+          serverApp = createServerApp();
+          console.log('[VITE] Dream-E server API ready at /api/v2');
+        } catch (err: any) {
+          console.error('[VITE] Failed to create server API:', err.message);
         }
 
         server.middlewares.use((req, res, next) => {
           const url = req.url || '';
+
+          // ============================================================
+          // /api/v2/* — Route to the Express server app (auth, projects, assets)
+          // ============================================================
+          // This MUST be first — before any other URL checks — so that
+          // /api/v2/auth/register etc. are handled by Express, not by
+          // the existing /api/* handlers or Vite's SPA fallback.
+          if ((url.startsWith('/api/v2/') || url === '/api/v2') && serverApp) {
+            const strippedUrl = url.replace(/^\/api\/v2/, '') || '/';
+            console.log(`[VITE] Routing ${url} → Express (stripped: ${strippedUrl})`);
+            req.url = strippedUrl;
+            serverApp(req, res);
+            return;
+          }
 
           // ============================================================
           // GET /api/bunny-image — Serve the generated bunny JPG as base64 data URL

@@ -37,6 +37,11 @@ import type {
 import { createDefaultSettings, createDefaultProjectInfo } from '@/types/project';
 import { generateId } from '@/utils/idGenerator';
 import { rehydrateForSave, registerBlob } from '@/utils/blobCache';
+import {
+  syncProjectToServer,
+  deleteProjectFromServer,
+  loadProjectFromServer,
+} from '@/services/syncService';
 
 // =============================================================================
 // ASSET FIELD DEFINITIONS
@@ -507,6 +512,11 @@ export async function createProject(
 
     logDB('Project created', { id: projectId, title: options.title });
 
+    // Sync new project to server (fire-and-forget, non-blocking).
+    // The IndexedDB save has already succeeded, so the project is safe locally.
+    // Server sync runs in the background — failure is logged but never surfaces.
+    syncProjectToServer(project).catch(() => {});
+
     return project;
   } catch (error) {
     console.error('[ProjectsDB] Failed to create project:', error);
@@ -535,9 +545,36 @@ export async function getProject(id: string): Promise<Project | null> {
     // Query database for the project
     const record = await db.projects.get(id);
 
-    // Return null if not found (not an error)
+    // If not in IndexedDB, try fetching from the server.
+    // This handles the case where the user is on a new device or cleared
+    // their browser cache but the project exists on the server.
     if (!record) {
-      logDB('Project not found', id);
+      logDB('Project not found locally, trying server', id);
+
+      const serverProject = await loadProjectFromServer(id);
+      if (serverProject) {
+        logDB('Project fetched from server, caching in IndexedDB', id);
+
+        // Cache in IndexedDB for next time (extract assets to separate records)
+        try {
+          const cacheCopy = structuredClone(serverProject);
+          await extractAndSaveAssets(cacheCopy, serverProject.id);
+          await db.projects.put({
+            id: serverProject.id,
+            data: cacheCopy,
+            updatedAt: Date.now(),
+          });
+        } catch (cacheErr) {
+          // Cache failure is non-fatal — we still have the server copy in memory
+          console.warn('[ProjectsDB] Failed to cache server project in IndexedDB:', cacheErr);
+        }
+
+        // Resolve asset references in the server copy so the caller gets blob URLs
+        await resolveAssetReferences(serverProject);
+        return serverProject;
+      }
+
+      logDB('Project not found on server either', id);
       return null;
     }
 
@@ -636,6 +673,11 @@ export async function saveProject(project: Project): Promise<void> {
 
     logDB('Project saved', { id: lightCopy.id });
 
+    // Sync to remote server API (fire-and-forget, non-blocking).
+    // Uses the lightweight copy with asset:{id} references — the server
+    // stores project metadata/structure, not binary asset data.
+    syncProjectToServer(lightCopy).catch(() => {});
+
     // Fire-and-forget server backup: rehydrate blob URLs → base64 for a
     // self-contained JSON file on disk. This runs asynchronously and won't
     // block the UI. The rehydrateForSave() call works on the ORIGINAL project
@@ -678,6 +720,10 @@ export async function deleteProject(id: string): Promise<void> {
     });
 
     logDB('Project deleted', id);
+
+    // Sync deletion to server (fire-and-forget, non-blocking).
+    // If the project never existed on the server, the 404 is treated as success.
+    deleteProjectFromServer(id).catch(() => {});
   } catch (error) {
     console.error('[ProjectsDB] Failed to delete project:', error);
     throw new Error(`Failed to delete project: ${getErrorMessage(error)}`);

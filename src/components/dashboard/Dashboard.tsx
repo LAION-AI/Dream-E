@@ -50,6 +50,7 @@ import * as projectsDB from '@/db/projectsDB';
 import { Button, Modal } from '@components/common';
 import { useAuthStore } from '@stores/useAuthStore';
 import * as authService from '@services/authService';
+import * as syncService from '@services/syncService';
 
 /**
  * BACKUP SUMMARY TYPE
@@ -150,6 +151,28 @@ export default function Dashboard({ mode }: DashboardProps) {
       // Backwards compatibility: projects without a mode field are treated as 'game'.
       const projectList = allProjects.filter(p => (p.mode || 'game') === mode);
       setProjects(projectList);
+
+      // After showing local projects immediately, sync with the server in
+      // the background. Any projects that exist on the server but not locally
+      // are merged into the display. This is fire-and-forget — server errors
+      // are silently ignored and the local project list is unaffected.
+      syncService.syncProjectList(mode).then((serverProjects) => {
+        if (serverProjects.length > 0) {
+          setProjects((prev) => {
+            const localIds = new Set(prev.map((p) => p.id));
+            const newFromServer = serverProjects.filter((p) => !localIds.has(p.id));
+            if (newFromServer.length > 0) {
+              console.log(
+                `[Dashboard] Merged ${newFromServer.length} project(s) from server`
+              );
+              return [...prev, ...newFromServer];
+            }
+            return prev;
+          });
+        }
+      }).catch(() => {
+        // Server sync failed — not a problem, local projects are already shown
+      });
 
       // When the user has no projects, check if filesystem backups exist.
       // This runs only when projects are empty — not on every load — to
