@@ -923,6 +923,9 @@ export async function duplicateProject(id: string): Promise<Project> {
 
     logDB('Project duplicated', { originalId: id, newId: newProjectId });
 
+    // Sync duplicated project to server so it's immediately persisted
+    syncProjectToServer(duplicate).catch(() => {});
+
     return duplicate;
   } catch (error) {
     console.error('[ProjectsDB] Failed to duplicate project:', error);
@@ -1142,6 +1145,12 @@ export async function importProject(file: File): Promise<Project> {
       title: importedProject.info.title,
       nodeCount: newNodes.length,
     });
+
+    // Sync imported project to server so it's immediately persisted.
+    // The imported project has asset:{id} references (assets were extracted
+    // to IndexedDB). The server stores the lightweight project JSON — asset
+    // binary data stays in IndexedDB for now (server asset sync is separate).
+    syncProjectToServer(importedProject).catch(() => {});
 
     return importedProject;
   } catch (error) {
