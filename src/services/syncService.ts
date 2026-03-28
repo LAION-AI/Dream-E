@@ -30,6 +30,7 @@
 import { useAuthStore } from '@stores/useAuthStore';
 import { authFetch } from '@services/authService';
 import type { ProjectSummary, Project } from '@/types';
+import { db } from '@/db/database';
 
 // =============================================================================
 // CONSTANTS
@@ -89,11 +90,181 @@ export async function syncProjectToServer(project: Project): Promise<void> {
         project.id
       );
     }
+
+    // After syncing project JSON, sync asset binaries in the background.
+    // This is fire-and-forget — asset sync failure never blocks the save path.
+    // Assets are uploaded in small batches to avoid overwhelming the server
+    // and to keep memory usage low (each base64 conversion is ~2x the blob size).
+    syncAssetsToServer(project.id).catch((err) => {
+      console.warn('[Sync] Background asset sync failed (non-blocking):', err);
+    });
   } catch (err) {
     // Network error, server unreachable, etc.
     // This is expected during local-only development or when offline.
     console.warn('[Sync] Failed to sync project to server:', err);
   }
+}
+
+// =============================================================================
+// ASSET SYNC — Upload binary assets to the server
+// =============================================================================
+
+/**
+ * BATCH SIZE FOR ASSET UPLOADS
+ * Controls how many assets are uploaded in parallel. Each upload involves
+ * reading a Blob from IndexedDB and converting it to base64, which temporarily
+ * uses ~2x the blob size in memory. A batch of 3 limits the spike to ~6MB
+ * for typical 1MB images.
+ */
+const ASSET_UPLOAD_BATCH_SIZE = 3;
+
+/**
+ * Tracks asset IDs that have already been synced to the server in this session.
+ * This prevents redundant uploads on every save — once an asset is uploaded,
+ * it only needs re-uploading if its content changes (which gets a new ID
+ * due to the deterministic ID scheme: projectId_nodeId_field).
+ */
+const syncedAssetIds = new Set<string>();
+
+/**
+ * SYNC ASSETS TO SERVER
+ *
+ * Reads all IndexedDB asset records for a project and uploads them to
+ * the server's /api/v2/assets endpoint. Assets that have already been
+ * synced in this session (tracked by syncedAssetIds) are skipped.
+ *
+ * WHY NOT UPLOAD ALL EVERY TIME:
+ * Asset IDs are deterministic (projectId_nodeId_field). Once uploaded, the
+ * same asset ID only changes if the user replaces the image/audio. In that
+ * case, extractAndSaveAssets() overwrites the IndexedDB record (same ID,
+ * new blob), and our session cache misses because the ID is the same but
+ * we can add a size check. For simplicity, we skip assets already synced
+ * this session — if the user changes an image, the next save re-syncs it
+ * because the session set is keyed by ID, and the new blob has the same ID.
+ *
+ * Actually, to handle updates within a session: we key by ID+size so that
+ * a changed asset (same ID, different blob size) triggers a re-upload.
+ *
+ * @param projectId - The project ID whose assets to sync
+ */
+async function syncAssetsToServer(projectId: string): Promise<void> {
+  const { isAuthenticated } = useAuthStore.getState();
+  if (!isAuthenticated) return;
+
+  try {
+    // Get all IndexedDB asset records for this project
+    const assets = await db.assets.where('projectId').equals(projectId).toArray();
+
+    if (assets.length === 0) return;
+
+    // Filter to assets that haven't been synced yet this session.
+    // Key is "assetId:size" so a changed blob (same ID, different size) re-syncs.
+    const toSync = assets.filter((asset) => {
+      const key = `${asset.id}:${asset.size}`;
+      return !syncedAssetIds.has(key);
+    });
+
+    if (toSync.length === 0) {
+      console.log(`[Sync] All ${assets.length} assets already synced this session for project ${projectId}`);
+      return;
+    }
+
+    console.log(`[Sync] Syncing ${toSync.length} asset(s) to server for project ${projectId} (${assets.length - toSync.length} already synced)`);
+
+    // Upload in batches to avoid memory spikes and server overload.
+    // Each batch uploads ASSET_UPLOAD_BATCH_SIZE assets in parallel.
+    let uploaded = 0;
+    let failed = 0;
+
+    for (let i = 0; i < toSync.length; i += ASSET_UPLOAD_BATCH_SIZE) {
+      const batch = toSync.slice(i, i + ASSET_UPLOAD_BATCH_SIZE);
+
+      const results = await Promise.allSettled(
+        batch.map((asset) => uploadSingleAsset(asset, projectId))
+      );
+
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === 'fulfilled') {
+          const asset = batch[j];
+          const key = `${asset.id}:${asset.size}`;
+          syncedAssetIds.add(key);
+          uploaded++;
+        } else {
+          failed++;
+          console.warn(`[Sync] Failed to upload asset ${batch[j].id}:`, (results[j] as PromiseRejectedResult).reason);
+        }
+      }
+    }
+
+    console.log(`[Sync] Asset sync complete: ${uploaded} uploaded, ${failed} failed`);
+  } catch (err) {
+    console.warn('[Sync] Asset sync failed:', err);
+  }
+}
+
+/**
+ * UPLOAD SINGLE ASSET
+ *
+ * Converts an IndexedDB asset record's Blob to a base64 data URL and
+ * PUTs it to the server's /api/v2/assets/:id endpoint.
+ *
+ * The server expects:
+ * - URL: PUT /api/v2/assets/:id?projectId=xxx
+ * - Body: JSON with { data: "data:mime;base64,...", mimeType, name, type, size }
+ *
+ * @param asset - The IndexedDB asset record (with .blob)
+ * @param projectId - The project ID (used as query parameter)
+ */
+async function uploadSingleAsset(
+  asset: { id: string; blob: Blob; mimeType: string; name: string; type: string; size: number },
+  projectId: string
+): Promise<void> {
+  if (!asset.blob) {
+    throw new Error(`Asset ${asset.id} has no blob data`);
+  }
+
+  // Convert Blob to base64 data URL via FileReader
+  const base64 = await blobToBase64(asset.blob);
+  if (!base64) {
+    throw new Error(`Failed to convert asset ${asset.id} blob to base64`);
+  }
+
+  const res = await authFetch(
+    `${API_BASE}/assets/${asset.id}?projectId=${encodeURIComponent(projectId)}`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: base64,
+        mimeType: asset.mimeType,
+        name: asset.name,
+        type: asset.type,
+        size: asset.size,
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error(`Server returned HTTP ${res.status} for asset ${asset.id}`);
+  }
+}
+
+/**
+ * BLOB TO BASE64 HELPER
+ *
+ * Converts a Blob to a base64 data URL string using FileReader.
+ * Returns null if the conversion fails.
+ *
+ * @param blob - The Blob to convert
+ * @returns The base64 data URL string, or null on failure
+ */
+function blobToBase64(blob: Blob): Promise<string | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
 }
 
 /**

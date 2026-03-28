@@ -390,12 +390,23 @@ function processRefreshQueue(token: string | null, error: Error | null): void {
  * 4. If the response is 401 (token expired):
  *    a. Attempts to refresh the token using the httpOnly cookie
  *    b. If refresh succeeds, retries the original request with the new token
- *    c. If refresh fails, logs the user out and redirects to /login
+ *    c. If refresh fails, logs the user out (React router handles redirect)
  * 5. Returns the response for the caller to handle
  *
  * CONCURRENCY:
  * Uses a refresh queue to prevent multiple simultaneous refresh requests.
  * The first 401 triggers the refresh; subsequent 401s wait for it to complete.
+ *
+ * SOFT LOGOUT (NO HARD RELOAD):
+ * When token refresh fails, we clear the auth state via store.logout() but
+ * do NOT call window.location.href = '/login'. A hard page reload would:
+ * - Kill all blob URLs in memory (they're session-scoped browser objects)
+ * - Destroy the blobStore/blobCache Maps, making rehydrateForSave() unable
+ *   to convert blob URLs back to base64, causing permanent asset data loss
+ * - Force a full React re-mount, losing any unsaved editor state
+ * Instead, we just clear the Zustand auth state. The AuthGuard component
+ * detects isAuthenticated=false and renders the login page via React Router,
+ * preserving in-memory state and blob URLs.
  *
  * @param url - The URL to fetch (can be relative, e.g., '/api/v2/projects')
  * @param options - Standard fetch options (method, body, headers, etc.)
@@ -443,9 +454,9 @@ export async function authFetch(
       retryHeaders.set('Authorization', `Bearer ${newToken}`);
       return fetch(url, { ...options, headers: retryHeaders, credentials: 'include' });
     } catch {
-      // Refresh failed -- redirect to login
+      // Refresh failed -- clear auth state, let React handle redirect.
+      // NO hard reload (window.location.href) — that kills blob URLs and causes data loss.
       store.logout();
-      window.location.href = '/login';
       return response;
     }
   }
@@ -466,19 +477,19 @@ export async function authFetch(
       retryHeaders.set('Authorization', `Bearer ${newToken}`);
       return fetch(url, { ...options, headers: retryHeaders, credentials: 'include' });
     } else {
-      // Refresh failed -- session expired
+      // Refresh failed -- session expired. Clear auth state only.
+      // NO hard reload — React AuthGuard handles the redirect to /login.
       const error = new Error('Session expired. Please log in again.');
       processRefreshQueue(null, error);
       store.logout();
-      window.location.href = '/login';
       return response;
     }
   } catch (err) {
-    // Network error during refresh
+    // Network error during refresh. Clear auth state only.
+    // NO hard reload — preserves blob URLs and in-memory project state.
     const error = err instanceof Error ? err : new Error('Token refresh failed');
     processRefreshQueue(null, error);
     store.logout();
-    window.location.href = '/login';
     return response;
   } finally {
     isRefreshing = false;

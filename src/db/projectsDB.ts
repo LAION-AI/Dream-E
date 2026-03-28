@@ -214,18 +214,8 @@ async function resolveAssetReferences(project: Project): Promise<number> {
       const val = data[field];
       if (typeof val === 'string' && val.startsWith('asset:')) {
         const assetId = val.slice(6); // Remove 'asset:' prefix
-        const record = await db.assets.get(assetId);
-        if (record?.blob) {
-          const blobUrl = URL.createObjectURL(record.blob);
-          // Register in blobCache so rehydrateForSave() and export can
-          // convert back to base64 when needed.
-          registerBlob(blobUrl, record.blob);
-          data[field] = blobUrl;
-          resolved++;
-        } else {
-          console.warn(`[ProjectsDB] Asset not found in DB: ${assetId} (node ${node.id}.${field})`);
-          data[field] = '';
-        }
+        const success = await resolveOneAsset(assetId, project.id, data, field);
+        if (success) resolved++;
       }
     }
   }
@@ -237,16 +227,8 @@ async function resolveAssetReferences(project: Project): Promise<number> {
       const val = e[field];
       if (typeof val === 'string' && val.startsWith('asset:')) {
         const assetId = val.slice(6);
-        const record = await db.assets.get(assetId);
-        if (record?.blob) {
-          const blobUrl = URL.createObjectURL(record.blob);
-          registerBlob(blobUrl, record.blob);
-          e[field] = blobUrl;
-          resolved++;
-        } else {
-          console.warn(`[ProjectsDB] Asset not found in DB: ${assetId} (entity ${entity.id}.${field})`);
-          e[field] = '';
-        }
+        const success = await resolveOneAsset(assetId, project.id, e, field);
+        if (success) resolved++;
       }
     }
   }
@@ -254,19 +236,140 @@ async function resolveAssetReferences(project: Project): Promise<number> {
   // Cover image
   if (project.info.coverImage?.startsWith('asset:')) {
     const assetId = project.info.coverImage.slice(6);
-    const record = await db.assets.get(assetId);
-    if (record?.blob) {
-      const blobUrl = URL.createObjectURL(record.blob);
-      registerBlob(blobUrl, record.blob);
-      project.info.coverImage = blobUrl;
+    // Use a wrapper object so resolveOneAsset can assign to it
+    const wrapper: Record<string, unknown> = { coverImage: project.info.coverImage };
+    const success = await resolveOneAsset(assetId, project.id, wrapper, 'coverImage');
+    if (success) {
+      project.info.coverImage = wrapper.coverImage as string;
       resolved++;
     } else {
-      console.warn(`[ProjectsDB] Cover image asset not found: ${assetId}`);
       project.info.coverImage = '';
     }
   }
 
   return resolved;
+}
+
+/**
+ * RESOLVE ONE ASSET (with server fallback)
+ *
+ * Attempts to resolve a single asset:{id} reference:
+ * 1. First tries IndexedDB (fast, local)
+ * 2. If not in IndexedDB, tries fetching from the server API (recovery path)
+ * 3. If recovered from server, caches in IndexedDB for next time
+ * 4. Creates a blob URL and registers it in blobCache
+ *
+ * WHY SERVER FALLBACK:
+ * IndexedDB can be evicted by the browser under storage pressure, or the user
+ * may be on a new device/browser. If assets were previously synced to the server
+ * (by syncAssetsToServer in syncService.ts), this fallback can recover them
+ * transparently — the user never sees a broken image.
+ *
+ * @param assetId - The asset ID (without the "asset:" prefix)
+ * @param projectId - The project ID (for caching recovered assets)
+ * @param target - The object to write the blob URL into
+ * @param field - The field name on the target object
+ * @returns true if the asset was resolved, false if not found anywhere
+ */
+async function resolveOneAsset(
+  assetId: string,
+  projectId: string,
+  target: Record<string, unknown>,
+  field: string
+): Promise<boolean> {
+  // 1. Try IndexedDB first (fast, local)
+  let blob: Blob | undefined;
+  const record = await db.assets.get(assetId);
+  if (record?.blob) {
+    blob = record.blob;
+  }
+
+  // 2. If not in IndexedDB, try recovering from the server
+  if (!blob) {
+    const recovered = await recoverAssetFromServer(assetId, projectId);
+    if (recovered) {
+      blob = recovered.blob;
+    }
+  }
+
+  // 3. Create blob URL and register
+  if (blob) {
+    const blobUrl = URL.createObjectURL(blob);
+    registerBlob(blobUrl, blob);
+    target[field] = blobUrl;
+    return true;
+  }
+
+  // 4. Asset not found anywhere
+  console.warn(`[ProjectsDB] Asset not found (local or server): ${assetId}`);
+  target[field] = '';
+  return false;
+}
+
+/**
+ * RECOVER ASSET FROM SERVER
+ *
+ * Fetches an asset's binary data from the server API and caches it in
+ * IndexedDB for future use. This handles the case where IndexedDB was
+ * evicted but the asset was previously synced to the server.
+ *
+ * The server GET /api/v2/assets/:id returns the raw binary with the correct
+ * Content-Type header. We fetch it as a blob, then cache it locally.
+ *
+ * @param assetId - The asset ID to recover
+ * @param projectId - The project ID (for the IndexedDB cache record)
+ * @returns The asset record if recovered, or null if the server doesn't have it
+ */
+async function recoverAssetFromServer(
+  assetId: string,
+  projectId: string
+): Promise<{ blob: Blob } | null> {
+  try {
+    // Dynamic imports to avoid circular dependencies — authService and
+    // useAuthStore are imported lazily only when needed.
+    const { authFetch } = await import('@/services/authService');
+    const { useAuthStore } = await import('@/stores/useAuthStore');
+
+    if (!useAuthStore.getState().isAuthenticated) return null;
+
+    // The server's GET /assets/:id streams the raw binary file with
+    // the correct Content-Type header. We fetch it as a blob directly.
+    const res = await authFetch(`/api/v2/assets/${assetId}`);
+    if (!res.ok) return null;
+
+    const blob = await res.blob();
+    if (!blob || blob.size === 0) return null;
+
+    const mimeType = blob.type || 'application/octet-stream';
+    const type = mimeType.startsWith('image/') ? 'image' as const : 'audio' as const;
+
+    // Cache in IndexedDB so we don't need to fetch from server next time
+    const assetRecord = {
+      id: assetId,
+      projectId,
+      type,
+      name: assetId,
+      mimeType,
+      blob,
+      size: blob.size,
+      createdAt: Date.now(),
+    };
+
+    try {
+      await db.assets.put(assetRecord);
+      console.log(`[ProjectsDB] Recovered asset from server and cached locally: ${assetId} (${blob.size} bytes)`);
+    } catch (cacheErr) {
+      // Cache failure is non-fatal — we still have the blob in memory
+      console.warn(`[ProjectsDB] Recovered asset from server but failed to cache: ${assetId}`, cacheErr);
+    }
+
+    return { blob };
+  } catch (err) {
+    // Network error, server down, auth expired, etc.
+    // This is expected when offline or when assets were never synced.
+    console.warn(`[ProjectsDB] Server asset recovery failed for ${assetId}:`, err);
+    return null;
+  }
 }
 
 // =============================================================================
