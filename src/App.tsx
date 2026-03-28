@@ -7,18 +7,26 @@
  * 1. React Router for navigation between pages
  * 2. Global providers (context providers for state)
  * 3. The main layout structure
+ * 4. Authentication routing (login, register, password reset, etc.)
  *
  * COMPONENT HIERARCHY:
  * App
  * ├── BrowserRouter (handles URL-based navigation)
  * │   ├── Routes (defines which component shows for which URL)
- * │   │   ├── "/" -> StartMenu (mode selection)
- * │   │   ├── "/game" -> Dashboard (Game Mode projects)
- * │   │   ├── "/cowrite" -> Dashboard (Co-Writing Mode projects)
- * │   │   ├── "/edit/:id" -> Editor (node canvas)
- * │   │   ├── "/play/:id" -> Player (game runtime)
- * │   │   ├── "/cowrite/edit/:id" -> Editor (co-writing canvas)
- * │   │   └── "/cowrite/play/:id" -> Player (co-writing playback)
+ * │   │   ├── PUBLIC ROUTES (no auth required):
+ * │   │   │   ├── "/login" -> LoginPage
+ * │   │   │   ├── "/register" -> RegisterPage
+ * │   │   │   ├── "/confirm-email" -> ConfirmEmailPage
+ * │   │   │   ├── "/forgot-password" -> ForgotPasswordPage
+ * │   │   │   └── "/reset-password" -> ResetPasswordPage
+ * │   │   ├── PROTECTED ROUTES (wrapped with AuthGuard):
+ * │   │   │   ├── "/" -> StartMenu (mode selection)
+ * │   │   │   ├── "/game" -> Dashboard (Game Mode projects)
+ * │   │   │   ├── "/cowrite" -> Dashboard (Co-Writing Mode projects)
+ * │   │   │   ├── "/edit/:id" -> Editor (node canvas)
+ * │   │   │   ├── "/play/:id" -> Player (game runtime)
+ * │   │   │   ├── "/cowrite/edit/:id" -> Editor (co-writing canvas)
+ * │   │   │   └── "/cowrite/play/:id" -> Player (co-writing playback)
  *
  * =============================================================================
  */
@@ -51,6 +59,17 @@ const StartMenu = lazy(() => import('@components/startmenu/StartMenu'));
 const Dashboard = lazy(() => import('@components/dashboard/Dashboard'));
 const Editor = lazy(() => import('@components/editor/Editor'));
 const Player = lazy(() => import('@components/player/AdventureEngine'));
+
+// Auth pages -- lazy-loaded since they're only needed before login
+const LoginPage = lazy(() => import('@components/auth/LoginPage'));
+const RegisterPage = lazy(() => import('@components/auth/RegisterPage'));
+const ConfirmEmailPage = lazy(() => import('@components/auth/ConfirmEmailPage'));
+const ForgotPasswordPage = lazy(() => import('@components/auth/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('@components/auth/ResetPasswordPage'));
+
+// AuthGuard is NOT lazy-loaded because it's used on every protected route
+// and needs to be available immediately to prevent route flicker.
+import AuthGuard from '@components/auth/AuthGuard';
 
 /**
  * LOADING FALLBACK COMPONENT
@@ -129,6 +148,15 @@ function NotFound() {
 /**
  * MAIN APP COMPONENT
  * Sets up routing and wraps the application with necessary providers.
+ *
+ * ROUTE ORGANIZATION:
+ * Routes are split into two groups:
+ * 1. PUBLIC routes: Auth pages accessible without login (login, register, etc.)
+ * 2. PROTECTED routes: App pages that require authentication (wrapped in AuthGuard)
+ *
+ * AuthGuard checks the auth store and redirects to /login if the user
+ * is not authenticated. It also shows a loading spinner during token refresh
+ * to prevent a flash of the login page on page reload.
  */
 function App() {
   return (
@@ -162,29 +190,75 @@ function App() {
          * - Renders that Route's element
          */}
         <Routes>
+          {/* ============================================================
+              PUBLIC ROUTES - Authentication Pages
+              These routes are accessible without being logged in.
+              ============================================================ */}
+
+          {/**
+           * LOGIN PAGE
+           * URL: /login
+           * Sign-in form with email/password and Google OAuth.
+           */}
+          <Route path="/login" element={<LoginPage />} />
+
+          {/**
+           * REGISTER PAGE
+           * URL: /register
+           * Account creation form with validation.
+           */}
+          <Route path="/register" element={<RegisterPage />} />
+
+          {/**
+           * CONFIRM EMAIL PAGE
+           * URL: /confirm-email?token=xxx
+           * Validates the email confirmation token from the registration email.
+           */}
+          <Route path="/confirm-email" element={<ConfirmEmailPage />} />
+
+          {/**
+           * FORGOT PASSWORD PAGE
+           * URL: /forgot-password
+           * Requests a password reset email.
+           */}
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+
+          {/**
+           * RESET PASSWORD PAGE
+           * URL: /reset-password?token=xxx
+           * Sets a new password using the reset token from email.
+           */}
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+          {/* ============================================================
+              PROTECTED ROUTES - Require Authentication
+              All routes below are wrapped with AuthGuard, which checks
+              for a valid session and redirects to /login if needed.
+              ============================================================ */}
+
           {/**
            * START MENU ROUTE (Landing Page)
            * URL: /
            * Shows the mode selection screen (Game Mode vs Co-Writing Mode).
            */}
-          <Route path="/" element={<StartMenu />} />
+          <Route path="/" element={<AuthGuard><StartMenu /></AuthGuard>} />
 
           {/**
            * GAME MODE DASHBOARD
            * URL: /game
            * Shows the project manager filtered to Game Mode projects.
            */}
-          <Route path="/game" element={<Dashboard mode="game" />} />
+          <Route path="/game" element={<AuthGuard><Dashboard mode="game" /></AuthGuard>} />
 
           {/**
            * CO-WRITING MODE DASHBOARD
            * URL: /cowrite
            * Shows the project manager filtered to Co-Writing Mode projects.
            */}
-          <Route path="/cowrite" element={<Dashboard mode="cowrite" />} />
+          <Route path="/cowrite" element={<AuthGuard><Dashboard mode="cowrite" /></AuthGuard>} />
 
           {/**
-           * LEGACY REDIRECT: /dashboard → /game
+           * LEGACY REDIRECT: /dashboard -> /game
            * Maintains backwards compatibility for bookmarks or hardcoded links.
            */}
           <Route path="/dashboard" element={<Navigate to="/game" replace />} />
@@ -200,14 +274,14 @@ function App() {
            *
            * The Editor component can access this ID using useParams()
            */}
-          <Route path="/edit/:projectId" element={<Editor />} />
+          <Route path="/edit/:projectId" element={<AuthGuard><Editor /></AuthGuard>} />
 
           {/**
            * GAME MODE PLAYER ROUTE
            * URL: /play/:projectId
            * Runs the game for the specified project.
            */}
-          <Route path="/play/:projectId" element={<Player />} />
+          <Route path="/play/:projectId" element={<AuthGuard><Player /></AuthGuard>} />
 
           {/**
            * CO-WRITING MODE EDITOR ROUTE
@@ -215,14 +289,14 @@ function App() {
            * Same Editor component, but the /cowrite prefix tells navigation
            * to return to the Co-Writing dashboard instead of Game dashboard.
            */}
-          <Route path="/cowrite/edit/:projectId" element={<Editor />} />
+          <Route path="/cowrite/edit/:projectId" element={<AuthGuard><Editor /></AuthGuard>} />
 
           {/**
            * CO-WRITING MODE PLAYER ROUTE
            * URL: /cowrite/play/:projectId
            * Same Player component, with /cowrite prefix for correct back-nav.
            */}
-          <Route path="/cowrite/play/:projectId" element={<Player />} />
+          <Route path="/cowrite/play/:projectId" element={<AuthGuard><Player /></AuthGuard>} />
 
           {/**
            * CATCH-ALL ROUTE (404)

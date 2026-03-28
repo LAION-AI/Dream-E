@@ -29,6 +29,10 @@ import './index.css';
 // Import the database to ensure it's initialized
 import { initializeDatabase } from '@db/database';
 
+// Authentication store and service for session restoration
+import { useAuthStore } from '@stores/useAuthStore';
+import * as authService from '@services/authService';
+
 // Performance diagnostics — exposes window.__perfDiag for console debugging
 import './utils/performanceDiagnostics';
 
@@ -57,6 +61,55 @@ function debugLog(message: string, data?: unknown): void {
 }
 
 /**
+ * RESTORE AUTH SESSION
+ * Attempts to restore the user's authentication session on app startup.
+ *
+ * HOW IT WORKS:
+ * 1. Checks if user info exists in localStorage (persisted by useAuthStore)
+ * 2. If yes, sets isLoading=true so AuthGuard shows a spinner (not a redirect)
+ * 3. Calls refreshToken() to get a new access token using the httpOnly cookie
+ * 4. If refresh succeeds: updates the store with user + new token
+ * 5. If refresh fails: clears the store (user must log in again)
+ *
+ * WHY BEFORE RENDER?
+ * If we rendered first, AuthGuard would see isAuthenticated=false and
+ * redirect to /login before the refresh completes. Running this before
+ * render ensures the correct auth state is available on first paint.
+ */
+async function restoreAuthSession(): Promise<void> {
+  const authStore = useAuthStore.getState();
+
+  // No user in localStorage -- nothing to restore
+  if (!authStore.user) {
+    debugLog('No stored user found, skipping auth restore');
+    return;
+  }
+
+  debugLog('Found stored user, attempting token refresh...', authStore.user.email);
+
+  // Signal that auth is being checked (AuthGuard will show spinner)
+  authStore.setLoading(true);
+
+  try {
+    const token = await authService.refreshToken();
+
+    if (token) {
+      // Token refresh succeeded -- user is authenticated
+      authStore.setAuth(authStore.user!, token);
+      debugLog('Auth session restored successfully');
+    } else {
+      // Refresh failed -- session expired, user needs to log in again
+      authStore.logout();
+      debugLog('Token refresh returned null, session cleared');
+    }
+  } catch (err) {
+    // Network error or server unreachable -- clear auth state
+    authStore.logout();
+    debugLog('Auth restore failed:', err);
+  }
+}
+
+/**
  * APPLICATION INITIALIZATION
  * This async function handles all startup tasks before rendering.
  *
@@ -79,6 +132,14 @@ async function initializeApp(): Promise<void> {
     // (Theme, language, etc.)
     debugLog('Loading user preferences...');
     // Preferences are handled by Zustand stores with persistence
+
+    // Step 2.5: Restore auth session
+    // If user info exists in localStorage (from a previous session), try to
+    // refresh the access token using the httpOnly refresh cookie. This runs
+    // BEFORE rendering so AuthGuard has the correct state on first paint.
+    debugLog('Restoring auth session...');
+    await restoreAuthSession();
+    debugLog('Auth session restore complete');
 
     // Step 3: Render the application
     debugLog('Mounting React application...');

@@ -43,6 +43,24 @@ export default defineConfig({
     {
       name: 'dream-e-agent-bridge',
       configureServer(server) {
+        // =============================================================
+        // MOUNT SERVER-SIDE API (auth, projects, assets)
+        // =============================================================
+        // The server app is a full Express application handling user auth,
+        // project persistence (SQLite), and binary asset storage.
+        // It's mounted at /api/v2 so it doesn't conflict with the existing
+        // /api/* endpoints used by the dream-e-agent-bridge middleware.
+        // =============================================================
+        try {
+          const { createServerApp } = require('./server/index.cjs');
+          const serverApp = createServerApp();
+          server.middlewares.use('/api/v2', serverApp);
+          console.log('[VITE] Dream-E server API mounted at /api/v2');
+        } catch (err) {
+          console.error('[VITE] Failed to mount server API:', err.message);
+          console.error('[VITE] Server-side features (auth, projects) will not be available.');
+        }
+
         server.middlewares.use((req, res, next) => {
           const url = req.url || '';
 

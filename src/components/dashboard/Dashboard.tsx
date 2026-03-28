@@ -48,6 +48,8 @@ import {
 import type { ProjectSummary, CreateProjectOptions, Project } from '@/types';
 import * as projectsDB from '@/db/projectsDB';
 import { Button, Modal } from '@components/common';
+import { useAuthStore } from '@stores/useAuthStore';
+import * as authService from '@services/authService';
 
 /**
  * BACKUP SUMMARY TYPE
@@ -84,6 +86,21 @@ interface DashboardProps {
 export default function Dashboard({ mode }: DashboardProps) {
   // Navigation hook for routing
   const navigate = useNavigate();
+
+  // Auth state -- user info for the header, logout action for the button
+  const authUser = useAuthStore((s) => s.user);
+  const authLogout = useAuthStore((s) => s.logout);
+
+  /**
+   * HANDLE LOGOUT
+   * Clears the server-side refresh token, then clears client-side auth state
+   * and redirects to the login page.
+   */
+  async function handleLogout() {
+    await authService.logout();
+    authLogout();
+    navigate('/login');
+  }
 
   // State for projects list
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -411,10 +428,20 @@ export default function Dashboard({ mode }: DashboardProps) {
             </h2>
           </div>
           <div className="flex items-center gap-4">
+            {/* Display the authenticated user's name or email */}
+            <span className="text-editor-muted text-sm">
+              {authUser?.displayName || authUser?.email || 'User'}
+            </span>
             <div className="w-10 h-10 rounded-full bg-editor-surface flex items-center justify-center">
-              <span className="text-editor-muted">U</span>
+              <span className="text-editor-muted">
+                {(authUser?.displayName || authUser?.email || 'U').charAt(0).toUpperCase()}
+              </span>
             </div>
-            <button className="text-editor-muted hover:text-editor-text">
+            <button
+              onClick={handleLogout}
+              className="text-editor-muted hover:text-editor-text"
+              title="Sign out"
+            >
               <LogOut size={20} />
             </button>
           </div>
