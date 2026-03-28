@@ -1006,6 +1006,18 @@ export async function importProject(file: File): Promise<Project> {
       settings.startNodeId = idMap.get(settings.startNodeId)!;
     }
 
+    // ROBUSTNESS FIX: If startNodeId is empty/missing or doesn't map to any
+    // new node, fall back to the first scene node. This prevents "Node not found"
+    // errors when importing old ZIPs that lack a settings field or have an
+    // unmapped startNodeId.
+    if (!settings.startNodeId || !newNodes.some(n => n.id === settings.startNodeId)) {
+      const firstScene = newNodes.find(n => n.type === 'scene');
+      settings.startNodeId = firstScene?.id || newNodes[0]?.id || '';
+      if (settings.startNodeId) {
+        logDB('Import: repaired missing startNodeId', { fallback: settings.startNodeId });
+      }
+    }
+
     // Regenerate entity IDs and remap any entity references in scene nodes
     const entityIdMap = new Map<string, string>();
     const newEntities = (projectData.entities || []).map((entity) => {

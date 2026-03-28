@@ -1004,34 +1004,101 @@ export default function AdventureEngine() {
         // When entering Open World mode without explicit params, attempt to
         // resume from the most recent save for this project. This lets
         // players jump straight back into their adventure from the Dashboard.
+        // ── Helper: find the scene node with the longest path from start ──
+        // Used as a fallback for OW mode when the start node is invalid.
+        // BFS from startNodeId, returns the farthest reachable scene node.
+        const findDeepestScene = (proj: typeof projectForPlayer): string | null => {
+          const startId = proj.settings?.startNodeId;
+          if (!startId || !proj.nodes.some(n => n.id === startId)) {
+            // startNodeId itself is invalid — just return the last scene node
+            const scenes = proj.nodes.filter(n => n.type === 'scene');
+            return scenes.length > 0 ? scenes[scenes.length - 1].id : null;
+          }
+          const adjacency = new Map<string, string[]>();
+          for (const edge of proj.edges) {
+            if (!adjacency.has(edge.source)) adjacency.set(edge.source, []);
+            adjacency.get(edge.source)!.push(edge.target);
+          }
+          const visited = new Set<string>();
+          const queue: Array<{ id: string; depth: number }> = [{ id: startId, depth: 0 }];
+          visited.add(startId);
+          let deepest: { id: string; depth: number } | null = null;
+          while (queue.length > 0) {
+            const { id, depth } = queue.shift()!;
+            const node = proj.nodes.find(n => n.id === id);
+            if (node?.type === 'scene' && (!deepest || depth > deepest.depth)) {
+              deepest = { id, depth };
+            }
+            for (const next of adjacency.get(id) || []) {
+              if (!visited.has(next)) { visited.add(next); queue.push({ id: next, depth: depth + 1 }); }
+            }
+          }
+          return deepest?.id || null;
+        };
+
+        // ── Helper: resolve a valid scene node ID with robust fallback ──
+        const resolveStartNode = (proj: typeof projectForPlayer, preferredId?: string): string | null => {
+          // 1. Try the preferred ID
+          if (preferredId && proj.nodes.some(n => n.id === preferredId)) return preferredId;
+          // 2. Try project's startNodeId
+          const settingsId = proj.settings?.startNodeId;
+          if (settingsId && proj.nodes.some(n => n.id === settingsId)) return settingsId;
+          // 3. Try the deepest scene (for OW mode — continue from farthest point)
+          const deepest = findDeepestScene(proj);
+          if (deepest) return deepest;
+          // 4. Try first scene node
+          const firstScene = proj.nodes.find(n => n.type === 'scene');
+          if (firstScene) return firstScene.id;
+          // 5. Any node at all
+          return proj.nodes[0]?.id || null;
+        };
+
         if (startNodeParam && modeParam === 'continue') {
-          continueFromNode(projectForPlayer, startNodeParam);
+          // Validate the explicit start node exists
+          const validId = resolveStartNode(projectForPlayer, startNodeParam);
+          if (validId) {
+            continueFromNode(projectForPlayer, validId);
+          } else {
+            setError('No valid scene node found in this project');
+            return;
+          }
         } else if (startNodeParam && modeParam === 'fresh') {
-          startGameFromNode(projectForPlayer, startNodeParam);
+          const validId = resolveStartNode(projectForPlayer, startNodeParam);
+          if (validId) {
+            startGameFromNode(projectForPlayer, validId);
+          } else {
+            setError('No valid scene node found in this project');
+            return;
+          }
         } else if (openWorldParam && !startNodeParam) {
-          // Auto-resume: find the most recent save for this project
+          // OW mode: try auto-resume from save, then deepest scene, then start
           const { saveSlots } = usePlayerStore.getState();
           const projectSaves = saveSlots
             .filter(s => s.gameState.projectId === projectId)
             .sort((a, b) => b.savedAt - a.savedAt);
 
           if (projectSaves.length > 0) {
-            // Resume from the most recent save's node
             const latestSave = projectSaves[0];
             const resumeNodeId = latestSave.gameState.currentNodeId;
-            // Verify the node still exists in the project
-            const nodeExists = projectForPlayer.nodes.some(n => n.id === resumeNodeId);
-            if (nodeExists) {
-              console.log(`[AdventureEngine] OW auto-resume: continuing from save (node ${resumeNodeId}, slot ${latestSave.id})`);
-              continueFromNode(projectForPlayer, resumeNodeId);
+            const validId = resolveStartNode(projectForPlayer, resumeNodeId);
+            if (validId) {
+              console.log(`[AdventureEngine] OW auto-resume: node ${validId}`);
+              continueFromNode(projectForPlayer, validId);
             } else {
-              console.log('[AdventureEngine] OW auto-resume: saved node no longer exists, starting fresh');
-              startGame(projectForPlayer);
+              setError('No valid scene node found in this project');
+              return;
             }
           } else {
-            // No saves — start from the start node
-            console.log('[AdventureEngine] OW mode: no saves found, starting from start node');
-            startGame(projectForPlayer);
+            // No saves — start from the deepest scene (longest path from start)
+            const deepestId = findDeepestScene(projectForPlayer);
+            const validId = resolveStartNode(projectForPlayer, deepestId || undefined);
+            if (validId) {
+              console.log(`[AdventureEngine] OW mode: starting from deepest scene ${validId}`);
+              startGameFromNode(projectForPlayer, validId);
+            } else {
+              setError('No valid scene node found in this project');
+              return;
+            }
           }
         } else {
           startGame(projectForPlayer);
@@ -1061,8 +1128,18 @@ export default function AdventureEngine() {
       const node = proj.nodes.find((n) => n.id === nodeId);
 
       if (!node) {
-        console.error('[AdventureEngine] Node not found:', nodeId);
-        setError('Node not found');
+        // Attempt recovery: find any valid scene node to jump to instead of crashing.
+        // This handles corrupted startNodeIds from ZIP imports and old saves.
+        console.warn(`[AdventureEngine] Node not found: "${nodeId}" — attempting recovery`);
+        const fallbackScene = proj.nodes.find(n => n.type === 'scene');
+        if (fallbackScene && fallbackScene.id !== nodeId) {
+          console.log(`[AdventureEngine] Recovered: jumping to fallback scene "${fallbackScene.label}" (${fallbackScene.id})`);
+          usePlayerStore.getState().setCurrentNodeId(fallbackScene.id);
+          return; // The useEffect watching session.currentNodeId will re-trigger processNode
+        }
+        // No scene nodes at all — show error
+        console.error('[AdventureEngine] No scene nodes found in project — cannot recover');
+        setError('No scene nodes found in this project. Add a scene in the editor first.');
         return;
       }
 

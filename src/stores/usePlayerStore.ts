@@ -224,10 +224,23 @@ export const usePlayerStore = create<PlayerState>()(
           variables[v.name] = v.defaultValue;
         });
 
+        // Resolve start node: use project setting, but VALIDATE it exists.
+        // If invalid/empty (common after ZIP import or old saves), fall back to
+        // the first scene node, or any node at all. This prevents "Node not found".
+        let startNodeId = project.settings?.startNodeId || '';
+        if (!startNodeId || !project.nodes.some(n => n.id === startNodeId)) {
+          const fallbackScene = project.nodes.find(n => n.type === 'scene');
+          const fallbackAny = project.nodes[0];
+          startNodeId = fallbackScene?.id || fallbackAny?.id || '';
+          if (startNodeId) {
+            console.warn(`[PlayerStore] startNodeId was invalid/empty, falling back to: ${startNodeId}`);
+          }
+        }
+
         // Create initial session
         const session: GameSession = {
           projectId: project.id,
-          currentNodeId: project.settings.startNodeId || '',
+          currentNodeId: startNodeId,
           variables,
           inventory: [],
           history: [],
