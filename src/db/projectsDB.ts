@@ -108,10 +108,15 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
     const data = node.data as Record<string, unknown>;
     for (const field of SCENE_ASSET_FIELDS) {
       const val = data[field];
-      // Skip empty, short strings, already-extracted refs, and static paths (e.g. "/dreamroom.jpg")
-      if (typeof val !== 'string' || val.length <= 200) continue;
+      if (typeof val !== 'string') continue;
       if (val.startsWith('asset:')) continue;
-      if (!val.startsWith('blob:') && !val.startsWith('data:')) continue;
+      // Blob URLs are short (~63 chars) but ARE real assets that need extraction.
+      // Data URLs are long (100KB+). Static paths like "/dreamroom.jpg" are neither.
+      if (val.startsWith('blob:') || (val.startsWith('data:') && val.length > 200)) {
+        // valid asset — continue to extraction below
+      } else {
+        continue;
+      }
 
       const assetId = `${projectId}_${node.id}_${field}`;
       const blob = await resolveToBlob(val);
@@ -137,9 +142,14 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
     const e = entity as unknown as Record<string, unknown>;
     for (const field of ENTITY_ASSET_FIELDS) {
       const val = e[field];
-      if (typeof val !== 'string' || val.length <= 200) continue;
+      if (typeof val !== 'string') continue;
       if (val.startsWith('asset:')) continue;
-      if (!val.startsWith('blob:') && !val.startsWith('data:')) continue;
+      // Blob URLs are short (~63 chars) but ARE real assets that need extraction.
+      if (val.startsWith('blob:') || (val.startsWith('data:') && val.length > 200)) {
+        // valid asset — continue to extraction below
+      } else {
+        continue;
+      }
 
       const assetId = `${projectId}_${entity.id}_${field}`;
       const blob = await resolveToBlob(val as string);
@@ -161,10 +171,10 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
   }
 
   // Cover image on project info
+  // Blob URLs are short (~63 chars) but ARE real assets that need extraction.
   if (project.info.coverImage &&
-      project.info.coverImage.length > 200 &&
       !project.info.coverImage.startsWith('asset:') &&
-      (project.info.coverImage.startsWith('blob:') || project.info.coverImage.startsWith('data:'))) {
+      (project.info.coverImage.startsWith('blob:') || (project.info.coverImage.startsWith('data:') && project.info.coverImage.length > 200))) {
     const assetId = `${projectId}_coverImage`;
     const blob = await resolveToBlob(project.info.coverImage);
     if (blob) {
