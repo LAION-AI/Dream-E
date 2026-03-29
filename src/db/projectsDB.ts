@@ -618,7 +618,7 @@ export async function createProject(
     // Sync new project to server (fire-and-forget, non-blocking).
     // The IndexedDB save has already succeeded, so the project is safe locally.
     // Server sync runs in the background — failure is logged but never surfaces.
-    syncProjectToServer(project).catch(() => {});
+    syncProjectToServer(project).catch((err) => console.warn('[ProjectsDB] Server sync failed:', err));
 
     return project;
   } catch (error) {
@@ -779,7 +779,7 @@ export async function saveProject(project: Project): Promise<void> {
     // Sync to remote server API (fire-and-forget, non-blocking).
     // Uses the lightweight copy with asset:{id} references — the server
     // stores project metadata/structure, not binary asset data.
-    syncProjectToServer(lightCopy).catch(() => {});
+    syncProjectToServer(lightCopy).catch((err) => console.warn('[ProjectsDB] Server sync failed:', err));
 
     // Fire-and-forget server backup: rehydrate blob URLs → base64 for a
     // self-contained JSON file on disk. This runs asynchronously and won't
@@ -826,7 +826,7 @@ export async function deleteProject(id: string): Promise<void> {
 
     // Sync deletion to server (fire-and-forget, non-blocking).
     // If the project never existed on the server, the 404 is treated as success.
-    deleteProjectFromServer(id).catch(() => {});
+    deleteProjectFromServer(id).catch((err) => console.warn('[ProjectsDB] Server sync failed:', err));
   } catch (error) {
     console.error('[ProjectsDB] Failed to delete project:', error);
     throw new Error(`Failed to delete project: ${getErrorMessage(error)}`);
@@ -1027,7 +1027,7 @@ export async function duplicateProject(id: string): Promise<Project> {
     logDB('Project duplicated', { originalId: id, newId: newProjectId });
 
     // Sync duplicated project to server so it's immediately persisted
-    syncProjectToServer(duplicate).catch(() => {});
+    syncProjectToServer(duplicate).catch((err) => console.warn('[ProjectsDB] Server sync failed:', err));
 
     return duplicate;
   } catch (error) {
@@ -1253,7 +1253,7 @@ export async function importProject(file: File): Promise<Project> {
     // The imported project has asset:{id} references (assets were extracted
     // to IndexedDB). The server stores the lightweight project JSON — asset
     // binary data stays in IndexedDB for now (server asset sync is separate).
-    syncProjectToServer(importedProject).catch(() => {});
+    syncProjectToServer(importedProject).catch((err) => console.warn('[ProjectsDB] Server sync failed:', err));
 
     return importedProject;
   } catch (error) {

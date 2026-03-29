@@ -85,11 +85,16 @@ export async function syncProjectToServer(project: Project): Promise<void> {
     });
 
     if (!res.ok) {
+      const errText = await res.text().catch(() => '');
       console.warn(
         `[Sync] Failed to sync project to server (HTTP ${res.status}):`,
-        project.id
+        project.id, errText
       );
+      // Don't try to sync assets if the project itself failed to sync
+      return;
     }
+
+    console.log(`[Sync] Project synced to server: ${project.id}`);
 
     // After syncing project JSON, sync asset binaries in the background.
     // This is fire-and-forget — asset sync failure never blocks the save path.

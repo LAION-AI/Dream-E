@@ -240,8 +240,6 @@ router.put('/:id', async (req, res) => {
     }
 
     const db = await getDb();
-    const row = verifyProjectOwnership(db, req.params.id, req.userId, res);
-    if (!row) return;
 
     let dataStr;
     if (typeof data === 'string') {
@@ -256,14 +254,37 @@ router.put('/:id', async (req, res) => {
     }
 
     const now = Date.now();
-    db.run(
-      'UPDATE projects SET data = ?, updated_at = ? WHERE id = ?',
-      [dataStr, now, req.params.id]
+
+    // UPSERT: Check if the project exists. If it does, verify ownership
+    // and update. If it doesn't, create it for this user.
+    // This is critical for syncProjectToServer() which uses PUT for both
+    // initial sync and subsequent saves.
+    const existingResult = db.exec(
+      'SELECT user_id FROM projects WHERE id = ?',
+      [req.params.id]
     );
+
+    if (existingResult.length > 0 && existingResult[0].values.length > 0) {
+      // Project exists — verify ownership before updating
+      const ownerId = existingResult[0].values[0][0];
+      if (ownerId !== req.userId) {
+        return res.status(403).json({ error: 'Not your project.' });
+      }
+      db.run(
+        'UPDATE projects SET data = ?, updated_at = ? WHERE id = ?',
+        [dataStr, now, req.params.id]
+      );
+      console.log(`[PROJECTS] Updated project ${req.params.id}`);
+    } else {
+      // Project doesn't exist yet — create it for this user
+      db.run(
+        'INSERT INTO projects (id, user_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+        [req.params.id, req.userId, dataStr, now, now]
+      );
+      console.log(`[PROJECTS] Created project ${req.params.id} (via PUT upsert)`);
+    }
+
     saveDb();
-
-    console.log(`[PROJECTS] Updated project ${req.params.id}`);
-
     res.json({ success: true, updatedAt: now });
   } catch (err) {
     console.error('[PROJECTS] Update error:', err);
