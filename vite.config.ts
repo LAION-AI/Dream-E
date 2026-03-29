@@ -245,19 +245,64 @@ export default defineConfig({
                   // Single POST → response with b64_json or url
                   const apiUrl = `${endpoint.replace(/\/+$/, '')}/images/generations`;
 
+                  // Build the request body. Most OpenAI-compatible APIs use
+                  // the standard { model, prompt, size, n, response_format }
+                  // shape. However, HyprLab's nano-banana / imagen models
+                  // use a different parameter set: aspect_ratio, resolution,
+                  // output_format, and image_input (for reference images).
+                  // We detect these models and build the appropriate body.
+                  const isNanoBananaModel = model.includes('nano-banana') || model.includes('imagen');
+
+                  let imgBody: Record<string, unknown>;
+                  if (isNanoBananaModel) {
+                    // ─── HyprLab nano-banana / imagen format ────────────
+                    // These models use aspect_ratio (e.g. "16:9") and
+                    // resolution ("1K", "2K", "4K") instead of pixel size.
+                    const isSquare = Math.abs(width - height) < 64;
+                    const aspectRatio = isSquare ? '1:1' : (width > height ? '16:9' : '9:16');
+                    const resolution = (width >= 2048 || height >= 2048) ? '4K'
+                      : (width >= 1024 || height >= 1024) ? '2K' : '1K';
+
+                    imgBody = {
+                      model,
+                      prompt,
+                      aspect_ratio: aspectRatio,
+                      resolution,
+                      response_format: 'b64_json',
+                      output_format: 'png',
+                    };
+
+                    // Add reference images via image_input if provided.
+                    // nano-banana accepts a single string or array of up to 8.
+                    const validRefs = (referenceImages as string[]).filter(
+                      (r: string) => r && r.startsWith('data:')
+                    );
+                    if (validRefs.length > 0) {
+                      imgBody.image_input = validRefs.length === 1
+                        ? validRefs[0]   // single image as string
+                        : validRefs.slice(0, 8);  // multiple images as array (max 8)
+                      console.log(`[generate-image] nano-banana: added ${Math.min(validRefs.length, 8)} reference image(s) via image_input`);
+                    }
+
+                    console.log(`[generate-image] nano-banana request: model=${model}, aspect_ratio=${aspectRatio}, resolution=${resolution}`);
+                  } else {
+                    // ─── Standard OpenAI-compatible format ──────────────
+                    imgBody = {
+                      model,
+                      prompt,
+                      size: `${width}x${height}`,
+                      n: 1,
+                      response_format: 'b64_json',
+                    };
+                  }
+
                   const genRes = await fetch(apiUrl, {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',
                       'Authorization': `Bearer ${resolvedKey}`,
                     },
-                    body: JSON.stringify({
-                      model,
-                      prompt,
-                      size: `${width}x${height}`,
-                      n: 1,
-                      response_format: 'b64_json',
-                    }),
+                    body: JSON.stringify(imgBody),
                   });
 
                   if (!genRes.ok) {

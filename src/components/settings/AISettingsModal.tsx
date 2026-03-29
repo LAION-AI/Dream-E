@@ -40,10 +40,33 @@ const GEMINI_MODEL_PRESETS = [
   { value: 'imagen-3.0-generate-002', label: 'Imagen 3.0' },
 ];
 
-/** OpenAI-compatible model presets */
+/** OpenAI-compatible image model presets (includes HyprLab nano-banana models) */
 const OPENAI_MODEL_PRESETS = [
+  { value: 'nano-banana-2', label: 'Nano Banana 2 (HyprLab)' },
+  { value: 'nano-banana-pro', label: 'Nano Banana Pro (HyprLab)' },
   { value: 'dall-e-3', label: 'DALL-E 3' },
   { value: 'dall-e-2', label: 'DALL-E 2' },
+];
+
+/**
+ * Writer model presets per provider. These populate the combobox dropdown
+ * so users can quickly pick a known-good model while still typing custom names.
+ */
+const GEMINI_WRITER_PRESETS = [
+  { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview' },
+  { value: 'gemini-3.1-flash-preview', label: 'Gemini 3.1 Flash Preview' },
+  { value: 'gemini-2.5-flash-preview', label: 'Gemini 2.5 Flash Preview' },
+  { value: 'gemini-2.5-pro-preview', label: 'Gemini 2.5 Pro Preview' },
+];
+
+const OPENAI_WRITER_PRESETS = [
+  { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro (HyprLab)' },
+  { value: 'gemini-3-flash', label: 'Gemini 3 Flash (HyprLab)' },
+  { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite (HyprLab)' },
+  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6 (HyprLab)' },
+  { value: 'kimi-k2.5', label: 'Kimi K2.5 (HyprLab)' },
+  { value: 'gpt-4o', label: 'GPT-4o' },
+  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
 ];
 
 // =============================================================================
@@ -601,20 +624,19 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
           />
         </div>
 
-        {/* Writer Model */}
+        {/* Writer Model — editable combobox with presets per provider */}
         <div>
           <label style={labelStyle}>Model</label>
-          <input
-            type="text"
+          <ModelComboBox
             value={writerModel}
-            onChange={(e) => setWriterModel(e.target.value)}
+            onChange={setWriterModel}
+            options={writerProvider === 'gemini' ? GEMINI_WRITER_PRESETS : OPENAI_WRITER_PRESETS}
             placeholder={writerProvider === 'gemini' ? 'gemini-3-flash-preview' : 'gpt-4o'}
-            style={inputStyle}
           />
           <p style={hintStyle}>
             {writerProvider === 'gemini'
-              ? 'Gemini models: gemini-3-flash-preview, gemini-2.5-flash-preview, gemini-2.5-pro-preview'
-              : 'Any model supported by the endpoint'}
+              ? 'Select a Gemini model or type a custom name'
+              : 'Select a preset (incl. HyprLab models) or type a custom name'}
           </p>
         </div>
 
