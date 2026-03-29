@@ -708,14 +708,15 @@ export function generateOpenWorldScene(
                   }
                 } else {
                   const errText = await res.text().catch(() => 'unknown');
-                  console.warn(`[OpenWorld] Step 1.5: Failed to generate ref image for ${entity.name}:`, errText);
+                  console.error(`[OpenWorld] Step 1.5: Failed to generate ref image for ${entity.name} (HTTP ${res.status}):`, errText);
                   onStatus({
                     phase: 'generating_entity_images',
-                    detail: `Could not generate image for ${entity.name} (continuing)`,
+                    detail: `Could not generate image for ${entity.name}: ${errText.slice(0, 100)}`,
                   });
                 }
               } catch (err) {
-                console.warn(`[OpenWorld] Step 1.5: Error generating ref image for ${entity.name}:`, err);
+                const errMsg = err instanceof Error ? err.message : String(err);
+                console.error(`[OpenWorld] Step 1.5: Error generating ref image for ${entity.name}:`, errMsg);
               }
             }
 
@@ -989,14 +990,15 @@ export function generateOpenWorldScene(
                   }
                 } else {
                   const errText = await res.text().catch(() => 'unknown');
-                  console.warn(`[OpenWorld] Failed to generate ref image for ${entity.name}:`, errText);
+                  console.error(`[OpenWorld] Failed to generate ref image for ${entity.name} (HTTP ${res.status}):`, errText);
                   onStatus({
                     phase: 'generating_entity_images',
-                    detail: `Could not generate image for ${entity.name} (continuing)`,
+                    detail: `Could not generate image for ${entity.name}: ${errText.slice(0, 100)}`,
                   });
                 }
               } catch (err) {
-                console.warn(`[OpenWorld] Error generating ref image for ${entity.name}:`, err);
+                const errMsg = err instanceof Error ? err.message : String(err);
+                console.error(`[OpenWorld] Error generating ref image for ${entity.name}:`, errMsg);
               }
             }
           }
