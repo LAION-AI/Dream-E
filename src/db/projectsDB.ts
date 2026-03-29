@@ -684,6 +684,30 @@ export async function getProject(id: string): Promise<Project | null> {
 
         // Resolve asset references in the server copy so the caller gets blob URLs
         await resolveAssetReferences(serverProject);
+
+        // Count how many asset fields ended up as empty strings — these are
+        // assets that could not be recovered from either IndexedDB or the server.
+        // Log a warning so the user knows some content may be missing and need
+        // regeneration.
+        let lostAssets = 0;
+        for (const node of serverProject.nodes) {
+          if (node.type === 'scene') {
+            const data = node.data as Record<string, unknown>;
+            for (const field of SCENE_ASSET_FIELDS) {
+              if (data[field] === '') lostAssets++;
+            }
+          }
+        }
+        for (const entity of (serverProject.entities || [])) {
+          const e = entity as unknown as Record<string, unknown>;
+          for (const field of ENTITY_ASSET_FIELDS) {
+            if (e[field] === '') lostAssets++;
+          }
+        }
+        if (lostAssets > 0) {
+          console.warn(`[ProjectsDB] ${lostAssets} assets could not be recovered from server project. They may need to be regenerated.`);
+        }
+
         return serverProject;
       }
 

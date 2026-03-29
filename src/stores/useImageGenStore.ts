@@ -116,7 +116,18 @@ export interface ASRSettings {
   deviceId: string;
 }
 
+/**
+ * Top-level provider preset that auto-configures all AI settings at once.
+ * - 'gemini': Google Gemini (Direct) — uses Google's API directly
+ * - 'hyprlab': HyprLab (OpenAI Compatible) — proxy with unfiltered models
+ * - 'custom': Custom (OpenAI Compatible) — manual endpoint/key entry
+ */
+export type ProviderPreset = 'gemini' | 'hyprlab' | 'custom';
+
 export interface AISettingsStore extends ImageGenSettings {
+  /** Top-level provider preset — controls which provider/endpoint/model defaults are used */
+  providerPreset: ProviderPreset;
+
   /** Google AI API key (shared by Gemini image gen + TTS + writer when provider=gemini) */
   googleApiKey: string;
 
@@ -161,6 +172,12 @@ export interface AISettingsStore extends ImageGenSettings {
 
   /** Reset writer prompts (systemPrompt + instruction) to defaults */
   resetWriterPrompts: () => void;
+
+  /**
+   * Set the top-level provider preset and auto-configure all relevant fields.
+   * Preserves existing API keys — only changes provider, endpoints, and models.
+   */
+  setProviderPreset: (preset: ProviderPreset) => void;
 
   /** Reset to defaults */
   resetSettings: () => void;
@@ -336,6 +353,7 @@ export const useImageGenStore = create<AISettingsStore>()(
   persist(
     (set) => ({
       ...DEFAULT_IMAGE_SETTINGS,
+      providerPreset: 'custom' as ProviderPreset,
       googleApiKey: '',
       geminiImageModel: 'gemini-3.1-flash-image-preview',
       defaultImageStyle: 'aesthetic blockbuster movie style movie still with hq color grading. Make sure all images have a movie-like depth of field and a soft, hollywood movie-like lighting',
@@ -369,9 +387,75 @@ export const useImageGenStore = create<AISettingsStore>()(
           },
         })),
 
+      /**
+       * SET PROVIDER PRESET
+       * Auto-configures all provider, endpoint, and model fields based on the
+       * selected preset. Preserves existing API keys so the user doesn't lose
+       * them when switching presets.
+       *
+       * - 'gemini': Google Gemini direct — uses Google AI Studio endpoints
+       * - 'hyprlab': HyprLab OpenAI-compatible proxy — single key for Claude,
+       *   Gemini, Kimi, FLUX, and more
+       * - 'custom': No auto-fill — user configures everything manually
+       */
+      setProviderPreset: (preset: ProviderPreset) =>
+        set((state) => {
+          if (preset === 'hyprlab') {
+            return {
+              providerPreset: preset,
+              // Image gen: OpenAI-compatible via HyprLab
+              provider: 'openai-compatible' as ImageGenProvider,
+              endpoint: 'https://api.hyprlab.io/v1',
+              model: 'nano-banana-2',
+              // Writer: OpenAI-compatible via HyprLab
+              writer: {
+                ...state.writer,
+                provider: 'openai-compatible' as WriterProvider,
+                endpoint: 'https://api.hyprlab.io/v1',
+                model: 'claude-sonnet-4-6',
+                maxContextTokens: 2_200_000,
+              },
+              // ASR: via HyprLab
+              asr: {
+                ...state.asr,
+                model: 'gemini-3.1-flash-lite',
+              },
+              // TTS stays on Google API (HyprLab doesn't proxy TTS yet)
+            };
+          } else if (preset === 'gemini') {
+            return {
+              providerPreset: preset,
+              // Image gen: Gemini native
+              provider: 'gemini' as ImageGenProvider,
+              geminiImageModel: 'gemini-2.0-flash-image',
+              // Writer: Gemini native
+              writer: {
+                ...state.writer,
+                provider: 'gemini' as WriterProvider,
+                model: 'gemini-2.5-flash-preview-05-20',
+                endpoint: '',
+                maxContextTokens: 1_000_000,
+              },
+              // TTS: Gemini (already default)
+              tts: {
+                ...state.tts,
+                model: 'gemini-2.5-flash-preview-tts',
+              },
+              // ASR: Gemini
+              asr: {
+                ...state.asr,
+                model: 'gemini-2.5-flash-lite',
+              },
+            };
+          }
+          // 'custom' — don't change anything, user configures manually
+          return { providerPreset: preset };
+        }),
+
       resetSettings: () =>
         set({
           ...DEFAULT_IMAGE_SETTINGS,
+          providerPreset: 'custom' as ProviderPreset,
           googleApiKey: '',
           geminiImageModel: 'gemini-3.1-flash-image-preview',
           defaultImageStyle: 'aesthetic blockbuster movie style movie still with hq color grading. Make sure all images have a movie-like depth of field and a soft, hollywood movie-like lighting',
@@ -382,9 +466,9 @@ export const useImageGenStore = create<AISettingsStore>()(
     }),
     {
       name: 'storyweaver-image-gen-settings',
-      // Version 6: Added narrativeTensionAnalysis, floatingGoals, entity profile growth,
-      // user-uploaded images, and rich entity profile requirements.
-      version: 6,
+      // Version 7: Added providerPreset field for top-level provider selection
+      // (gemini / hyprlab / custom).
+      version: 7,
       migrate: (persisted: any, version: number) => {
         if (version < 3 && persisted?.writer) {
           // Auto-upgrade system prompt if it lacks the new relevantEntityTraits
@@ -419,6 +503,22 @@ export const useImageGenStore = create<AISettingsStore>()(
             console.log('[ImageGenStore] Migrating to v6: adding narrativeTensionAnalysis, floatingGoals, entity profile growth, user-uploaded images');
             persisted.writer.systemPrompt = DEFAULT_WRITER_SYSTEM_PROMPT;
             persisted.writer.instruction = DEFAULT_WRITER_INSTRUCTION;
+          }
+        }
+        if (version < 7) {
+          // Add providerPreset field. Infer from existing configuration:
+          // - If endpoint is HyprLab, set to 'hyprlab'
+          // - If image provider is 'gemini', set to 'gemini'
+          // - Otherwise, default to 'custom'
+          if (!persisted.providerPreset) {
+            if (persisted.endpoint?.includes('hyprlab.io') || persisted.writer?.endpoint?.includes('hyprlab.io')) {
+              persisted.providerPreset = 'hyprlab';
+            } else if (persisted.provider === 'gemini') {
+              persisted.providerPreset = 'gemini';
+            } else {
+              persisted.providerPreset = 'custom';
+            }
+            console.log(`[ImageGenStore] Migrating to v7: providerPreset = '${persisted.providerPreset}'`);
           }
         }
         return persisted;

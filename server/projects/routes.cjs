@@ -199,6 +199,69 @@ router.post('/', async (req, res) => {
 // GET /:id — Get a single project (full data)
 // ---------------------------------------------------------------------------
 
+/**
+ * Strip dead blob URLs from project data before returning to the client.
+ *
+ * WHY THIS IS NEEDED:
+ * Blob URLs (blob:http://...) are session-scoped browser objects that don't
+ * survive page reloads, server restarts, or device changes. If they were
+ * accidentally stored in the database (from before the blob-URL extraction
+ * fix), they become dead pointers that the browser can never resolve.
+ * Sending them to the client would cause broken images/audio.
+ *
+ * This function walks all known asset fields and replaces any blob: URLs
+ * with empty strings so the client sees "no asset" rather than a broken
+ * reference. The client's asset recovery system can then attempt to
+ * recover the asset from IndexedDB or regenerate it.
+ *
+ * @param {object} data - The parsed project data object (mutated in place)
+ * @returns {object} The cleaned data (same reference, mutated)
+ */
+function cleanBlobUrls(data) {
+  if (!data || typeof data !== 'object') return data;
+
+  const assetFields = [
+    'backgroundImage', 'backgroundMusic', 'voiceoverAudio',
+    'referenceImage', 'referenceVoice', 'defaultMusic', 'image',
+  ];
+
+  let cleaned = 0;
+
+  // Clean scene node assets
+  for (const node of data.nodes || []) {
+    if (node.data) {
+      for (const field of assetFields) {
+        if (typeof node.data[field] === 'string' && node.data[field].startsWith('blob:')) {
+          node.data[field] = '';
+          cleaned++;
+        }
+      }
+    }
+  }
+
+  // Clean entity assets
+  for (const entity of data.entities || []) {
+    for (const field of assetFields) {
+      if (typeof entity[field] === 'string' && entity[field].startsWith('blob:')) {
+        entity[field] = '';
+        cleaned++;
+      }
+    }
+  }
+
+  // Clean cover image
+  if (data.info && typeof data.info.coverImage === 'string' && data.info.coverImage.startsWith('blob:')) {
+    data.info.coverImage = '';
+    cleaned++;
+  }
+
+  if (cleaned > 0) {
+    console.log(`[PROJECTS] Cleaned ${cleaned} dead blob URL(s) from project data`);
+  }
+
+  return data;
+}
+
 router.get('/:id', async (req, res) => {
   try {
     const db = await getDb();
@@ -213,6 +276,12 @@ router.get('/:id', async (req, res) => {
       parsedData = JSON.parse(data);
     } catch {
       parsedData = data; // Fall back to raw string if parse fails
+    }
+
+    // Strip any dead blob URLs before returning to the client.
+    // Blob URLs are session-scoped and never valid across sessions.
+    if (typeof parsedData === 'object' && parsedData !== null) {
+      cleanBlobUrls(parsedData);
     }
 
     res.json({
@@ -241,17 +310,22 @@ router.put('/:id', async (req, res) => {
 
     const db = await getDb();
 
+    // Clean blob URLs before storing — blob URLs are session-scoped browser
+    // objects that become dead pointers after page reload. Strip them on
+    // save to prevent accumulating stale references in the database.
+    let dataObj;
     let dataStr;
     if (typeof data === 'string') {
       try {
-        JSON.parse(data); // Validate
-        dataStr = data;
+        dataObj = JSON.parse(data);
       } catch {
         return res.status(400).json({ error: 'Project data must be valid JSON.' });
       }
     } else {
-      dataStr = JSON.stringify(data);
+      dataObj = data;
     }
+    cleanBlobUrls(dataObj);
+    dataStr = JSON.stringify(dataObj);
 
     const now = Date.now();
 

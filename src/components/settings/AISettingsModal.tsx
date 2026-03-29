@@ -16,7 +16,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Modal } from '../common/Modal';
-import { useImageGenStore, type ImageGenProvider, type WriterProvider, DEFAULT_WRITER_SYSTEM_PROMPT, DEFAULT_WRITER_INSTRUCTION } from '@/stores/useImageGenStore';
+import { useImageGenStore, type ImageGenProvider, type WriterProvider, type ProviderPreset, DEFAULT_WRITER_SYSTEM_PROMPT, DEFAULT_WRITER_INSTRUCTION } from '@/stores/useImageGenStore';
 
 // =============================================================================
 // MODEL PRESETS — editable, user can also type custom model names
@@ -40,12 +40,31 @@ const GEMINI_MODEL_PRESETS = [
   { value: 'imagen-3.0-generate-002', label: 'Imagen 3.0' },
 ];
 
-/** OpenAI-compatible image model presets (includes HyprLab nano-banana models) */
+/** OpenAI-compatible image model presets (generic — used for custom preset) */
 const OPENAI_MODEL_PRESETS = [
   { value: 'nano-banana-2', label: 'Nano Banana 2 (HyprLab)' },
   { value: 'nano-banana-pro', label: 'Nano Banana Pro (HyprLab)' },
   { value: 'dall-e-3', label: 'DALL-E 3' },
   { value: 'dall-e-2', label: 'DALL-E 2' },
+];
+
+/** HyprLab-specific image model presets — curated for the HyprLab proxy */
+const HYPRLAB_IMAGE_PRESETS = [
+  { value: 'nano-banana-2', label: 'Nano Banana 2 (Fast, high quality)' },
+  { value: 'nano-banana-pro', label: 'Nano Banana Pro (Best quality)' },
+  { value: 'gpt-image-1', label: 'GPT Image 1 (OpenAI native)' },
+  { value: 'flux-2-pro', label: 'FLUX 2 Pro (Photorealistic)' },
+  { value: 'flux-2-max', label: 'FLUX 2 Max (Up to 8 ref images)' },
+];
+
+/** HyprLab-specific writer model presets */
+const HYPRLAB_WRITER_PRESETS = [
+  { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Best for writing)' },
+  { value: 'claude-opus-4-6', label: 'Claude Opus 4.6 (Most capable)' },
+  { value: 'kimi-k2.5', label: 'Kimi K2.5 (265K context, reasoning)' },
+  { value: 'kimi-k2-thinking', label: 'Kimi K2 Thinking (Deep reasoning)' },
+  { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro (1M context)' },
+  { value: 'gemini-3-flash', label: 'Gemini 3 Flash (Fast, cost-effective)' },
 ];
 
 /**
@@ -80,6 +99,9 @@ interface AISettingsModalProps {
 
 export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
   const store = useImageGenStore();
+
+  // Top-level provider preset — controls auto-fill behavior
+  const [providerPreset, setProviderPresetLocal] = useState<ProviderPreset>(store.providerPreset || 'custom');
 
   // Local form state — synced from store on open
   const [provider, setProvider] = useState<ImageGenProvider>(store.provider);
@@ -121,6 +143,7 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
   // Sync from store when modal opens
   useEffect(() => {
     if (isOpen) {
+      setProviderPresetLocal(store.providerPreset || 'custom');
       setProvider(store.provider);
       setApiKey(store.apiKey);
       setModel(store.model);
@@ -147,6 +170,44 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
       setSaved(false);
     }
   }, [isOpen]);
+
+  /**
+   * Handle top-level provider preset change.
+   * When the user selects a preset, auto-fill all the relevant local form
+   * state so the UI reflects the new configuration immediately (before save).
+   */
+  const handlePresetChange = (preset: ProviderPreset) => {
+    setProviderPresetLocal(preset);
+
+    if (preset === 'hyprlab') {
+      // Image gen: OpenAI-compatible via HyprLab
+      setProvider('openai-compatible');
+      setEndpoint('https://api.hyprlab.io/v1');
+      setModel('nano-banana-2');
+      // Writer: OpenAI-compatible via HyprLab
+      setWriterProvider('openai-compatible');
+      setWriterEndpoint('https://api.hyprlab.io/v1');
+      setWriterModel('claude-sonnet-4-6');
+      setWriterMaxContextTokens(2_200_000);
+      // ASR model via HyprLab
+      setAsrModel('gemini-3.1-flash-lite');
+      // Note: TTS stays on Google API — HyprLab doesn't proxy TTS yet
+    } else if (preset === 'gemini') {
+      // Image gen: Gemini native
+      setProvider('gemini');
+      setGeminiImageModel('gemini-2.0-flash-image');
+      // Writer: Gemini native
+      setWriterProvider('gemini');
+      setWriterModel('gemini-2.5-flash-preview-05-20');
+      setWriterEndpoint('');
+      setWriterMaxContextTokens(1_000_000);
+      // TTS: Gemini
+      setTtsModel('gemini-2.5-flash-preview-tts');
+      // ASR: Gemini
+      setAsrModel('gemini-2.5-flash-lite');
+    }
+    // 'custom' — don't change anything, user configures manually
+  };
 
   // ── Microphone enumeration + test ──────────────────────────────
 
@@ -244,6 +305,8 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
   };
 
   const handleSave = () => {
+    // Save provider preset first (sets the top-level preset field in the store)
+    store.setProviderPreset(providerPreset);
     store.updateSettings({ provider, apiKey, model, endpoint });
     store.setGoogleApiKey(googleApiKey);
     store.setGeminiImageModel(geminiImageModel);
@@ -268,53 +331,186 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
     setWriterInstruction(DEFAULT_WRITER_INSTRUCTION);
   };
 
+  // Determine which image model presets to show based on provider preset + provider
+  const imageModelPresets = providerPreset === 'hyprlab'
+    ? HYPRLAB_IMAGE_PRESETS
+    : provider === 'bfl' ? BFL_MODEL_PRESETS
+    : provider === 'gemini' ? GEMINI_MODEL_PRESETS
+    : OPENAI_MODEL_PRESETS;
+
+  // Determine which writer model presets to show
+  const writerModelPresets = providerPreset === 'hyprlab' && writerProvider === 'openai-compatible'
+    ? HYPRLAB_WRITER_PRESETS
+    : writerProvider === 'gemini' ? GEMINI_WRITER_PRESETS
+    : OPENAI_WRITER_PRESETS;
+
+  // Whether this is a HyprLab preset (endpoint is locked)
+  const isHyprlab = providerPreset === 'hyprlab';
+  const isGeminiPreset = providerPreset === 'gemini';
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="AI Settings" size="xl">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '4px 0' }}>
 
-        {/* ── Google API Key (shared by Gemini image + TTS) ── */}
+        {/* ── PROVIDER PRESET SELECTOR ── */}
+        {/* Top-level selector that auto-configures all fields below */}
         <div>
-          <label style={sectionTitleStyle}>Google AI API Key</label>
-          <input
-            type="password"
-            value={googleApiKey}
-            onChange={(e) => setGoogleApiKey(e.target.value)}
-            placeholder="AIza..."
-            style={inputStyle}
-          />
-          <p style={hintStyle}>
-            Used for Gemini image generation and TTS. Get yours at aistudio.google.com
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <label style={sectionTitleStyle}>Provider</label>
+            <InfoTooltip text="Choose your AI provider. Google Gemini uses Google's API directly. HyprLab provides access to multiple models (Claude, Gemini, Kimi) through a single API key with unfiltered content. Custom lets you configure everything manually." />
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <PresetButton
+              active={providerPreset === 'gemini'}
+              onClick={() => handlePresetChange('gemini')}
+              label="Google Gemini"
+              sub="Direct API"
+              color="#34a853"
+            />
+            <PresetButton
+              active={providerPreset === 'hyprlab'}
+              onClick={() => handlePresetChange('hyprlab')}
+              label="HyprLab"
+              sub="Multi-model proxy"
+              color="#a855f7"
+            />
+            <PresetButton
+              active={providerPreset === 'custom'}
+              onClick={() => handlePresetChange('custom')}
+              label="Custom"
+              sub="Manual setup"
+              color="#6c8aff"
+            />
+          </div>
+
+          {/* Provider-specific info notes */}
+          {isHyprlab && (
+            <div style={providerNoteStyle}>
+              HyprLab provides access to Claude, Gemini, Kimi, and more through a single API key.
+              Get yours at <strong style={{ color: '#a855f7' }}>hyprlab.io</strong>
+            </div>
+          )}
+          {isGeminiPreset && (
+            <div style={providerNoteStyle}>
+              Uses Google's API directly. Get your API key from <strong style={{ color: '#34a853' }}>aistudio.google.com</strong>
+            </div>
+          )}
         </div>
+
+        <div style={dividerStyle} />
+
+        {/* ── API KEY(S) ── */}
+        {/* Show the right key fields based on preset */}
+        {isGeminiPreset && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <label style={sectionTitleStyle}>Google API Key</label>
+              <InfoTooltip text="Your Google AI Studio API key. Used for image generation, TTS, ASR, and story writing. Get it free at aistudio.google.com" />
+            </div>
+            <input
+              type="password"
+              value={googleApiKey}
+              onChange={(e) => setGoogleApiKey(e.target.value)}
+              placeholder="AIza..."
+              style={inputStyle}
+            />
+            <p style={hintStyle}>
+              Powers all AI features: image generation, text-to-speech, voice input, and story writing.
+            </p>
+          </div>
+        )}
+
+        {isHyprlab && (
+          <>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <label style={sectionTitleStyle}>HyprLab API Key</label>
+                <InfoTooltip text="Your HyprLab API key. Used for image generation, story writing, and ASR. One key for all models. Get it at hyprlab.io" />
+              </div>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  // Sync the same key to writer (HyprLab uses one key for everything)
+                  setWriterApiKey(e.target.value);
+                }}
+                placeholder="sk-..."
+                style={inputStyle}
+              />
+              <p style={hintStyle}>
+                One key for image generation, writing (Claude, Gemini, Kimi), and ASR.
+              </p>
+            </div>
+            {/* Google API Key for TTS (HyprLab doesn't proxy TTS yet) */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <label style={labelStyle}>Google API Key (for TTS)</label>
+                <InfoTooltip text="HyprLab doesn't proxy text-to-speech yet. Enter your Google API key here to enable voiceover narration." />
+              </div>
+              <input
+                type="password"
+                value={googleApiKey}
+                onChange={(e) => setGoogleApiKey(e.target.value)}
+                placeholder="AIza... (optional, for TTS only)"
+                style={inputStyle}
+              />
+              <p style={{ ...hintStyle, color: '#a855f7' }}>
+                TTS requires a Google API key. HyprLab doesn't proxy TTS yet.
+              </p>
+            </div>
+          </>
+        )}
+
+        {providerPreset === 'custom' && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <label style={sectionTitleStyle}>Google AI API Key</label>
+              <InfoTooltip text="Used for Gemini image generation, TTS, and writer (when Gemini is selected). Get it at aistudio.google.com" />
+            </div>
+            <input
+              type="password"
+              value={googleApiKey}
+              onChange={(e) => setGoogleApiKey(e.target.value)}
+              placeholder="AIza..."
+              style={inputStyle}
+            />
+            <p style={hintStyle}>
+              Used for Gemini image generation and TTS. Get yours at aistudio.google.com
+            </p>
+          </div>
+        )}
 
         <div style={dividerStyle} />
 
         {/* ── IMAGE GENERATION SECTION ── */}
         <label style={sectionTitleStyle}>Image Generation</label>
 
-        {/* Provider Select — clear dropdown */}
-        <div>
-          <label style={labelStyle}>Provider</label>
-          <select
-            value={provider}
-            onChange={(e) => handleProviderChange(e.target.value as ImageGenProvider)}
-            style={{ ...inputStyle, cursor: 'pointer', appearance: 'auto' }}
-          >
-            <option value="bfl">Black Forest Labs (FLUX)</option>
-            <option value="gemini">Google Gemini (Nano Banana)</option>
-            <option value="openai-compatible">OpenAI-Compatible</option>
-          </select>
-        </div>
+        {/* Provider Select — only show in custom mode */}
+        {providerPreset === 'custom' && (
+          <div>
+            <label style={labelStyle}>Provider</label>
+            <select
+              value={provider}
+              onChange={(e) => handleProviderChange(e.target.value as ImageGenProvider)}
+              style={{ ...inputStyle, cursor: 'pointer', appearance: 'auto' }}
+            >
+              <option value="bfl">Black Forest Labs (FLUX)</option>
+              <option value="gemini">Google Gemini (Nano Banana)</option>
+              <option value="openai-compatible">OpenAI-Compatible</option>
+            </select>
+          </div>
+        )}
 
         {/* Active provider indicator — always visible */}
         <div style={activeProviderStyle}>
-          <span style={{ color: '#4ade80', marginRight: 6 }}>●</span>
+          <span style={{ color: '#4ade80', marginRight: 6 }}>&#9679;</span>
           <span>
             Images will be generated using{' '}
             <strong style={{ color: '#e2e4ea' }}>
-              {provider === 'bfl' ? 'Black Forest Labs' : provider === 'gemini' ? 'Google Gemini' : 'OpenAI-Compatible'}
+              {isHyprlab ? 'HyprLab' : provider === 'bfl' ? 'Black Forest Labs' : provider === 'gemini' ? 'Google Gemini' : 'OpenAI-Compatible'}
             </strong>
-            {' — '}
+            {' \u2014 '}
             <span style={{ fontFamily: "'Cascadia Code', monospace", color: '#6c8aff' }}>
               {provider === 'gemini' ? geminiImageModel : model}
             </span>
@@ -323,37 +519,33 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
 
         {/* Model — editable combobox with presets per provider */}
         <div>
-          <label style={labelStyle}>Model</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>Image Model</label>
+            <InfoTooltip text={
+              isHyprlab
+                ? 'Nano Banana 2 is fast and high quality. GPT Image 1 is OpenAI\'s model. FLUX 2 Pro/Max are photorealistic with reference image support.'
+                : 'Select a preset or type a custom model name. The model determines quality, speed, and features.'
+            } />
+          </div>
           <ModelComboBox
             value={provider === 'gemini' ? geminiImageModel : model}
             onChange={(val) => {
               if (provider === 'gemini') setGeminiImageModel(val);
               else setModel(val);
             }}
-            options={
-              provider === 'bfl' ? BFL_MODEL_PRESETS
-                : provider === 'gemini' ? GEMINI_MODEL_PRESETS
-                : OPENAI_MODEL_PRESETS
-            }
+            options={imageModelPresets}
             placeholder={
-              provider === 'bfl' ? 'flux-2-pro-preview'
+              isHyprlab ? 'nano-banana-2'
+                : provider === 'bfl' ? 'flux-2-pro-preview'
                 : provider === 'gemini' ? 'gemini-3.1-flash-image-preview'
                 : 'dall-e-3'
             }
           />
-          <p style={hintStyle}>
-            Select a preset or type a custom model name. The model determines quality, speed, and features.
-          </p>
         </div>
 
-        {/* Provider-specific fields (API key, endpoint) */}
-        {provider === 'gemini' ? (
-          <p style={hintStyle}>
-            Uses your Google AI API Key above.
-          </p>
-        ) : (
+        {/* Provider-specific fields (API key, endpoint) — only for custom preset */}
+        {providerPreset === 'custom' && provider !== 'gemini' && (
           <>
-            {/* BFL / OpenAI API Key */}
             <div>
               <label style={labelStyle}>API Key</label>
               <input
@@ -370,8 +562,6 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
                 }
               </p>
             </div>
-
-            {/* Endpoint */}
             <div>
               <label style={labelStyle}>Endpoint</label>
               <input
@@ -383,12 +573,35 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
               />
               <p style={hintStyle}>
                 {provider === 'bfl'
-                  ? 'Base URL — model name is appended as path segment'
-                  : 'Base URL — /images/generations is appended'
+                  ? 'Base URL \u2014 model name is appended as path segment'
+                  : 'Base URL \u2014 /images/generations is appended'
                 }
               </p>
             </div>
           </>
+        )}
+
+        {/* HyprLab: show read-only endpoint */}
+        {isHyprlab && (
+          <div>
+            <label style={labelStyle}>Endpoint</label>
+            <input
+              type="text"
+              value={endpoint}
+              readOnly
+              style={{ ...inputStyle, background: '#1a1d2e', color: '#8b8fa4', cursor: 'not-allowed' }}
+            />
+            <p style={hintStyle}>
+              Pre-configured for HyprLab. Not editable.
+            </p>
+          </div>
+        )}
+
+        {/* Gemini preset: note about API key */}
+        {isGeminiPreset && (
+          <p style={hintStyle}>
+            Uses your Google AI API Key above.
+          </p>
         )}
 
         {/* Default Image Style */}
@@ -425,7 +638,9 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
             </label>
           </div>
           <p style={{ ...hintStyle, marginTop: 4, marginBottom: 12 }}>
-            Uses your Google AI API Key. Generates voiceover audio for scenes.
+            {isHyprlab
+              ? 'Uses your Google AI API Key (above). HyprLab doesn\'t proxy TTS yet.'
+              : 'Uses your Google AI API Key. Generates voiceover audio for scenes.'}
           </p>
         </div>
 
@@ -494,7 +709,9 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
             </label>
           </div>
           <p style={{ ...hintStyle, marginTop: 4, marginBottom: 12 }}>
-            Uses Gemini multimodal to transcribe voice to text in Open World mode. Uses your Google AI API Key.
+            {isHyprlab
+              ? 'Speech-to-text via HyprLab. Uses your HyprLab API key.'
+              : 'Uses Gemini multimodal to transcribe voice to text in Open World mode. Uses your Google AI API Key.'}
           </p>
         </div>
 
@@ -506,11 +723,11 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
                 type="text"
                 value={asrModel}
                 onChange={(e) => setAsrModel(e.target.value)}
-                placeholder="gemini-2.5-flash-lite"
+                placeholder={isHyprlab ? 'gemini-3.1-flash-lite' : 'gemini-2.5-flash-lite'}
                 style={inputStyle}
               />
               <p style={hintStyle}>
-                Any Gemini model with multimodal audio input. Recommended: gemini-2.5-flash-lite (fast &amp; cheap)
+                Any Gemini model with multimodal audio input. Recommended: {isHyprlab ? 'gemini-3.1-flash-lite' : 'gemini-2.5-flash-lite'} (fast &amp; cheap)
               </p>
             </div>
 
@@ -601,43 +818,51 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
           External LLM used to generate scene text in Open World mode.
         </p>
 
-        {/* Writer Provider */}
-        <div style={{ display: 'flex', gap: 8 }}>
-          <ProviderButton
-            active={writerProvider === 'gemini'}
-            onClick={() => {
-              setWriterProvider('gemini');
-              if (!writerModel || writerModel === 'gpt-4o') setWriterModel('gemini-3-flash-preview');
-            }}
-            label="Google Gemini"
-            sub="AI Studio API"
-          />
-          <ProviderButton
-            active={writerProvider === 'openai-compatible'}
-            onClick={() => {
-              setWriterProvider('openai-compatible');
-              if (!writerModel || writerModel.startsWith('gemini')) setWriterModel('gpt-4o');
-              if (!writerEndpoint) setWriterEndpoint('https://api.openai.com/v1');
-            }}
-            label="OpenAI-Compatible"
-            sub="/chat/completions"
-          />
-        </div>
+        {/* Writer Provider — only show toggle in custom mode */}
+        {providerPreset === 'custom' && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <ProviderButton
+              active={writerProvider === 'gemini'}
+              onClick={() => {
+                setWriterProvider('gemini');
+                if (!writerModel || writerModel === 'gpt-4o') setWriterModel('gemini-3-flash-preview');
+              }}
+              label="Google Gemini"
+              sub="AI Studio API"
+            />
+            <ProviderButton
+              active={writerProvider === 'openai-compatible'}
+              onClick={() => {
+                setWriterProvider('openai-compatible');
+                if (!writerModel || writerModel.startsWith('gemini')) setWriterModel('gpt-4o');
+                if (!writerEndpoint) setWriterEndpoint('https://api.openai.com/v1');
+              }}
+              label="OpenAI-Compatible"
+              sub="/chat/completions"
+            />
+          </div>
+        )}
 
         {/* Writer Model — editable combobox with presets per provider */}
         <div>
-          <label style={labelStyle}>Model</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>Writer Model</label>
+            <InfoTooltip text={
+              isHyprlab
+                ? 'Claude Sonnet 4.6 is best for creative writing. Claude Opus 4.6 is the most capable. Kimi K2.5 has 265K context with reasoning. Gemini 3.1 Pro has 1M context.'
+                : 'Select a model for story text generation. Larger models write better but cost more.'
+            } />
+          </div>
           <ModelComboBox
             value={writerModel}
             onChange={setWriterModel}
-            options={writerProvider === 'gemini' ? GEMINI_WRITER_PRESETS : OPENAI_WRITER_PRESETS}
-            placeholder={writerProvider === 'gemini' ? 'gemini-3-flash-preview' : 'gpt-4o'}
+            options={writerModelPresets}
+            placeholder={
+              isHyprlab ? 'claude-sonnet-4-6'
+                : writerProvider === 'gemini' ? 'gemini-3-flash-preview'
+                : 'gpt-4o'
+            }
           />
-          <p style={hintStyle}>
-            {writerProvider === 'gemini'
-              ? 'Select a Gemini model or type a custom name'
-              : 'Select a preset (incl. HyprLab models) or type a custom name'}
-          </p>
         </div>
 
         {/* Max Context Tokens */}
@@ -653,15 +878,19 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
           />
           <p style={hintStyle}>
             Token budget for the assembled context. Everything is included in full detail until this limit is reached.
-            Only then are older scenes compressed to summaries. Gemini supports up to ~1M tokens; 500K is a good default.
+            {isHyprlab
+              ? ' HyprLab supports up to 2.2M tokens with Claude/Kimi models.'
+              : isGeminiPreset
+                ? ' Gemini supports up to 1M tokens.'
+                : ' Gemini supports up to ~1M tokens; 500K is a good default.'}
           </p>
         </div>
 
-        {/* Writer API Key — only show for openai-compatible or when user wants a separate key */}
-        {writerProvider === 'openai-compatible' ? (
+        {/* Writer API Key + Endpoint — only show for custom openai-compatible */}
+        {providerPreset === 'custom' && writerProvider === 'openai-compatible' && (
           <>
             <div>
-              <label style={labelStyle}>API Key</label>
+              <label style={labelStyle}>Writer API Key</label>
               <input
                 type="password"
                 value={writerApiKey}
@@ -671,7 +900,7 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
               />
             </div>
             <div>
-              <label style={labelStyle}>Endpoint</label>
+              <label style={labelStyle}>Writer Endpoint</label>
               <input
                 type="text"
                 value={writerEndpoint}
@@ -684,7 +913,26 @@ export function AISettingsModal({ isOpen, onClose }: AISettingsModalProps) {
               </p>
             </div>
           </>
-        ) : (
+        )}
+
+        {/* HyprLab: show read-only writer endpoint */}
+        {isHyprlab && (
+          <div>
+            <label style={labelStyle}>Writer Endpoint</label>
+            <input
+              type="text"
+              value={writerEndpoint}
+              readOnly
+              style={{ ...inputStyle, background: '#1a1d2e', color: '#8b8fa4', cursor: 'not-allowed' }}
+            />
+            <p style={hintStyle}>
+              Pre-configured for HyprLab. Uses the same API key as image generation.
+            </p>
+          </div>
+        )}
+
+        {/* Gemini preset or custom+gemini writer: note about API key */}
+        {(isGeminiPreset || (providerPreset === 'custom' && writerProvider === 'gemini')) && (
           <p style={hintStyle}>
             Uses your Google AI API Key above.{' '}
             {writerApiKey && <span style={{ color: '#6c8aff' }}>Override key is set.</span>}
@@ -767,6 +1015,97 @@ function ProviderButton({ active, onClick, label, sub }: {
       <div style={{ fontWeight: 600, fontSize: '0.9em' }}>{label}</div>
       <div style={{ fontSize: '0.75em', opacity: 0.7, marginTop: 2 }}>{sub}</div>
     </button>
+  );
+}
+
+/**
+ * PresetButton — top-level provider preset selector button.
+ * Larger and more prominent than ProviderButton, with a color accent
+ * that matches each provider's brand identity.
+ */
+function PresetButton({ active, onClick, label, sub, color }: {
+  active: boolean; onClick: () => void; label: string; sub: string; color: string;
+}) {
+  const borderColor = active ? color : '#2d3148';
+  const bgColor = active ? `${color}15` : '#171923';
+  const textColor = active ? color : '#8b8fa4';
+
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1,
+        padding: '14px 16px',
+        borderRadius: 10,
+        border: `2px solid ${borderColor}`,
+        background: bgColor,
+        color: textColor,
+        cursor: 'pointer',
+        textAlign: 'center',
+        transition: 'all 0.2s',
+      }}
+    >
+      <div style={{ fontWeight: 700, fontSize: '0.92em' }}>{label}</div>
+      <div style={{ fontSize: '0.72em', opacity: 0.7, marginTop: 3 }}>{sub}</div>
+    </button>
+  );
+}
+
+/**
+ * InfoTooltip — small "i" icon that shows a tooltip on hover.
+ * Used next to field labels to provide contextual help without
+ * cluttering the UI with permanent help text.
+ */
+function InfoTooltip({ text }: { text: string }) {
+  const [show, setShow] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  return (
+    <span
+      ref={ref}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 16,
+        height: 16,
+        borderRadius: '50%',
+        border: '1px solid #2d3148',
+        background: '#171923',
+        color: '#8b8fa4',
+        fontSize: '0.65em',
+        fontWeight: 700,
+        cursor: 'help',
+        position: 'relative',
+        flexShrink: 0,
+      }}
+    >
+      i
+      {show && (
+        <div style={{
+          position: 'absolute',
+          bottom: '120%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: 280,
+          padding: '10px 12px',
+          borderRadius: 8,
+          background: '#1a1d2e',
+          border: '1px solid #2d3148',
+          color: '#c4c7d4',
+          fontSize: '11.5px',
+          fontWeight: 400,
+          lineHeight: '1.5',
+          zIndex: 200,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          pointerEvents: 'none',
+        }}>
+          {text}
+        </div>
+      )}
+    </span>
   );
 }
 
@@ -928,6 +1267,18 @@ const activeProviderStyle: React.CSSProperties = {
   border: '1px solid rgba(74, 222, 128, 0.2)',
   fontSize: '0.82em',
   color: '#8b8fa4',
+};
+
+/** Info note that appears below the provider preset selector */
+const providerNoteStyle: React.CSSProperties = {
+  marginTop: 10,
+  padding: '8px 12px',
+  borderRadius: 8,
+  background: 'rgba(108, 138, 255, 0.06)',
+  border: '1px solid rgba(108, 138, 255, 0.15)',
+  fontSize: '0.8em',
+  color: '#8b8fa4',
+  lineHeight: '1.5',
 };
 
 const primaryBtnStyle: React.CSSProperties = {
