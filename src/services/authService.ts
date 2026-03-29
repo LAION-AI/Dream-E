@@ -205,6 +205,62 @@ export async function refreshToken(): Promise<string | null> {
   }
 }
 
+// =============================================================================
+// PROACTIVE TOKEN REFRESH
+// =============================================================================
+// Refresh the token periodically so the user never gets logged out during
+// long creative sessions. The access token lasts 24h, so we refresh every
+// 12h (well before expiry). Also refreshes when the tab regains focus after
+// being inactive (common during multi-tab usage or switching to other apps).
+
+let refreshTimerId: ReturnType<typeof setInterval> | null = null;
+
+/** Start periodic token refresh (called after successful login/restore). */
+export function startProactiveRefresh(): void {
+  stopProactiveRefresh();
+
+  // Refresh every 12 hours (well before the 24h token expiry)
+  refreshTimerId = setInterval(async () => {
+    const store = (await import('@/stores/useAuthStore')).useAuthStore.getState();
+    if (!store.isAuthenticated) return;
+    const newToken = await refreshToken();
+    if (newToken) {
+      store.setAuth(store.user!, newToken);
+      console.log('[Auth] Proactive token refresh succeeded');
+    }
+  }, 12 * 60 * 60 * 1000);
+
+  // Also refresh when the tab regains focus (handles tab-away scenarios)
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+}
+
+/** Stop periodic refresh (called on logout). */
+export function stopProactiveRefresh(): void {
+  if (refreshTimerId) {
+    clearInterval(refreshTimerId);
+    refreshTimerId = null;
+  }
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+}
+
+/** When tab becomes visible again, try to refresh the token */
+async function handleVisibilityChange(): Promise<void> {
+  if (document.visibilityState !== 'visible') return;
+  const { useAuthStore } = await import('@/stores/useAuthStore');
+  const store = useAuthStore.getState();
+  if (!store.isAuthenticated || !store.user) return;
+
+  try {
+    const newToken = await refreshToken();
+    if (newToken) {
+      store.setAuth(store.user, newToken);
+      console.log('[Auth] Token refreshed on tab focus');
+    }
+  } catch {
+    // Silent — authFetch will handle 401 if needed
+  }
+}
+
 /**
  * LOGOUT
  * Ends the user session on both client and server.

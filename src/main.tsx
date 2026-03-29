@@ -96,6 +96,9 @@ async function restoreAuthSession(): Promise<void> {
     if (token) {
       // Token refresh succeeded -- user is authenticated
       authStore.setAuth(authStore.user!, token);
+      // Start proactive refresh timer so the token stays fresh during
+      // long creative sessions (refreshes every 12h and on tab focus)
+      authService.startProactiveRefresh();
       debugLog('Auth session restored successfully');
     } else {
       // Refresh failed -- session expired, user needs to log in again

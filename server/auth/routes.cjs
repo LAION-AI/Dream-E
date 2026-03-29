@@ -55,6 +55,35 @@ const RESET_TOKEN_LIFETIME_MS = 60 * 60 * 1000;
  */
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
+/**
+ * Sets the refresh token as an httpOnly cookie on the response.
+ * The cookie is:
+ *   - httpOnly: JavaScript cannot read it (XSS protection)
+ *   - sameSite: 'lax' (sent with same-site requests, not cross-site)
+ *   - secure: true in production (HTTPS only)
+ *   - path: '/api/v2/auth' (only sent to auth endpoints)
+ *   - maxAge: 30 days
+ */
+function setRefreshCookie(res, refreshToken) {
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: !IS_DEV,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: REFRESH_TOKEN_LIFETIME_MS,
+  });
+}
+
+/** Clears the refresh token cookie. */
+function clearRefreshCookie(res) {
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: !IS_DEV,
+    sameSite: 'lax',
+    path: '/',
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Validation Helpers
 // ---------------------------------------------------------------------------
@@ -298,11 +327,14 @@ router.post('/login', async (req, res) => {
     // --- Create session and return tokens ---
     const { accessToken, refreshToken } = createSession(db, userId);
 
+    // Set refresh token as httpOnly cookie for secure, automatic renewal
+    setRefreshCookie(res, refreshToken);
+
     console.log(`[AUTH] User logged in: ${userEmail} (id: ${userId})`);
 
     res.json({
       accessToken,
-      refreshToken,
+      refreshToken, // Also in body for backwards compat
       user: {
         id: userId,
         email: userEmail,
@@ -397,6 +429,9 @@ router.post('/google', async (req, res) => {
     // --- Create session and return tokens ---
     const { accessToken, refreshToken } = createSession(db, userId);
 
+    // Set refresh token as httpOnly cookie
+    setRefreshCookie(res, refreshToken);
+
     res.json({
       accessToken,
       refreshToken,
@@ -418,7 +453,8 @@ router.post('/google', async (req, res) => {
 
 router.post('/refresh', async (req, res) => {
   try {
-    const { refreshToken } = req.body || {};
+    // Read refresh token from httpOnly cookie (primary) or body (fallback)
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
     if (!refreshToken) {
       return res.status(400).json({ error: 'Refresh token is required.' });
@@ -464,17 +500,17 @@ router.post('/refresh', async (req, res) => {
 
 router.post('/logout', async (req, res) => {
   try {
-    const { refreshToken } = req.body || {};
+    // Read refresh token from httpOnly cookie (primary) or body (fallback)
+    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
-    if (!refreshToken) {
-      return res.status(400).json({ error: 'Refresh token is required.' });
+    if (refreshToken) {
+      const db = await getDb();
+      db.run('DELETE FROM sessions WHERE refresh_token = ?', [refreshToken]);
+      saveDb();
     }
 
-    const db = await getDb();
-
-    // Delete the session (idempotent — if the token doesn't exist, that's fine).
-    db.run('DELETE FROM sessions WHERE refresh_token = ?', [refreshToken]);
-    saveDb();
+    // Clear the httpOnly cookie
+    clearRefreshCookie(res);
 
     console.log('[AUTH] User logged out (session invalidated)');
 

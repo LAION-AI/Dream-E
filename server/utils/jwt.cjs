@@ -82,8 +82,9 @@ function getSecret() {
 // Token Generation
 // ---------------------------------------------------------------------------
 
-/** Access token lifetime: 15 minutes. Short-lived to limit damage from token theft. */
-const ACCESS_TOKEN_EXPIRY = '15m';
+/** Access token lifetime: 24 hours. Extended for creative sessions that
+ *  can last hours (OW play, co-writing). Refresh cookie handles renewal. */
+const ACCESS_TOKEN_EXPIRY = '24h';
 
 /**
  * Generates a signed JWT access token for the given user.
