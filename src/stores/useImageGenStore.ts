@@ -413,7 +413,7 @@ export const useImageGenStore = create<AISettingsStore>()(
                 provider: 'openai-compatible' as WriterProvider,
                 endpoint: 'https://api.hyprlab.io/v1',
                 model: 'claude-sonnet-4-6',
-                maxContextTokens: 2_200_000,
+                maxContextTokens: 200_000,
               },
               // ASR: via HyprLab
               asr: {
