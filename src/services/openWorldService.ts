@@ -280,12 +280,15 @@ async function generateImage(
     return undefined;
   }
 
+  const genStart = Date.now();
+
   for (let attempt = 1; attempt <= MAX_IMAGE_RETRIES; attempt++) {
+    const attemptStart = Date.now();
     onStatus({
       phase: 'generating_image',
       detail: attempt === 1
-        ? `Generating scene image (${settings.provider})...`
-        : `Retrying image (attempt ${attempt}/${MAX_IMAGE_RETRIES})...`,
+        ? `Generating scene image (${settings.provider}, ${settings.model || 'default'})...`
+        : `Retry ${attempt}/${MAX_IMAGE_RETRIES} (${settings.provider})...`,
       attempt,
     });
 
@@ -311,6 +314,8 @@ async function generateImage(
         }),
       });
 
+      const attemptElapsed = ((Date.now() - attemptStart) / 1000).toFixed(1);
+
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ error: 'Unknown error' }));
         const errMsg = errData.error || `HTTP ${res.status}`;
@@ -321,10 +326,10 @@ async function generateImage(
           return undefined;
         }
 
-        console.warn(`[OpenWorld] Image gen attempt ${attempt}/${MAX_IMAGE_RETRIES} failed:`, errMsg);
+        console.warn(`[OpenWorld] Image gen attempt ${attempt}/${MAX_IMAGE_RETRIES} failed (${attemptElapsed}s):`, errMsg);
         onStatus({
           phase: 'generating_image',
-          detail: `Attempt ${attempt} failed: ${errMsg.slice(0, 80)}. Retrying...`,
+          detail: `Attempt ${attempt} failed (${attemptElapsed}s): ${errMsg.slice(0, 60)}. ${attempt < MAX_IMAGE_RETRIES ? 'Retrying...' : 'Giving up.'}`,
           attempt,
         });
 
@@ -337,17 +342,24 @@ async function generateImage(
 
       const data = await res.json();
       if (data.dataUrl) {
-        console.log(`[OpenWorld] Image generated on attempt ${attempt} (${settings.provider}, ${referenceImages.length} ref images sent)`);
+        const totalElapsed = ((Date.now() - genStart) / 1000).toFixed(1);
+        console.log(`[OpenWorld] Image generated on attempt ${attempt} in ${totalElapsed}s (${settings.provider}, ${referenceImages.length} ref images sent)`);
+        onStatus({
+          phase: 'generating_image',
+          detail: `Scene image ready (${totalElapsed}s${attempt > 1 ? `, attempt ${attempt}` : ''})`,
+          attempt,
+        });
         return data.dataUrl;
       }
 
-      console.warn(`[OpenWorld] Image gen attempt ${attempt}: response OK but no dataUrl`);
+      console.warn(`[OpenWorld] Image gen attempt ${attempt}: response OK but no dataUrl (${attemptElapsed}s)`);
     } catch (err) {
+      const attemptElapsed = ((Date.now() - attemptStart) / 1000).toFixed(1);
       const errMsg = err instanceof Error ? err.message : 'Network error';
-      console.warn(`[OpenWorld] Image gen attempt ${attempt}/${MAX_IMAGE_RETRIES} error:`, errMsg);
+      console.warn(`[OpenWorld] Image gen attempt ${attempt}/${MAX_IMAGE_RETRIES} error (${attemptElapsed}s):`, errMsg);
       onStatus({
         phase: 'generating_image',
-        detail: `Attempt ${attempt} error: ${errMsg.slice(0, 80)}. Retrying...`,
+        detail: `Attempt ${attempt} failed (${attemptElapsed}s): ${errMsg.slice(0, 60)}. ${attempt < MAX_IMAGE_RETRIES ? 'Retrying...' : 'Giving up.'}`,
         attempt,
       });
 
@@ -358,7 +370,8 @@ async function generateImage(
     }
   }
 
-  onStatus({ phase: 'error', detail: `Image generation failed after ${MAX_IMAGE_RETRIES} attempts (continuing without image)` });
+  const totalElapsed = ((Date.now() - genStart) / 1000).toFixed(1);
+  onStatus({ phase: 'error', detail: `Image generation failed after ${MAX_IMAGE_RETRIES} attempts (${totalElapsed}s, continuing without image)` });
   return undefined;
 }
 
@@ -395,6 +408,7 @@ async function searchAndAssignMusic(
   query: string,
   onStatus: (status: OpenWorldStatus) => void
 ): Promise<{ dataUrl: string; metadata: { row_id: number; title: string; duration?: number } } | undefined> {
+  const musicFnStart = Date.now();
   onStatus({ phase: 'searching_music', detail: `Searching music: "${query}"...` });
 
   try {
@@ -458,7 +472,9 @@ async function searchAndAssignMusic(
     // Register in blobCache so rehydrateForSave can convert back to base64 for persistence
     registerBlob(blobUrl, blob);
 
-    console.log(`[OpenWorld] Music ready: "${trackMeta.title}" (${Math.round(blob.size / 1024)}KB) — stored as blob URL`);
+    const musicFnMs = Date.now() - musicFnStart;
+    console.log(`[OpenWorld] Music ready in ${musicFnMs}ms: "${trackMeta.title}" (${Math.round(blob.size / 1024)}KB) — stored as blob URL`);
+    onStatus({ phase: 'searching_music', detail: `Music ready: "${trackMeta.title}" (${musicFnMs}ms)` });
 
     return {
       dataUrl: blobUrl,
@@ -591,19 +607,23 @@ export function generateOpenWorldScene(
   const controller = new AbortController();
 
   (async () => {
+    const pipelineStart = Date.now();
+
     try {
       // ── Step 1: Build context ────────────────────────────────────
+      const contextStart = Date.now();
       onStatus({ phase: 'building_context', detail: 'Gathering story context...' });
 
       let context = buildOpenWorldContext(project, session, userAction);
+      const contextMs = Date.now() - contextStart;
       console.log(
-        `[OpenWorld] Context built: ~${context.estimatedTokens} tokens (${context.userMessage.length} chars), ` +
+        `[OpenWorld] Context built in ${contextMs}ms: ~${context.estimatedTokens} tokens (${context.userMessage.length} chars), ` +
         `${context.fullProfileEntityIds.length} full profiles, ` +
         `path: ${context.pathStats.full} full + ${context.pathStats.summarized} summarized scenes`
       );
       onStatus({
         phase: 'building_context',
-        detail: `Context: ~${context.estimatedTokens} tokens, ${context.fullProfileEntityIds.length} entity profiles`,
+        detail: `Context built (${contextMs}ms, ~${context.estimatedTokens} tokens, ${context.fullProfileEntityIds.length} profiles)`,
       });
 
       // ── Step 1.5: AUTO-GENERATE MISSING ENTITY REFERENCE IMAGES ──
@@ -628,6 +648,7 @@ export function generateOpenWorldScene(
           const entitiesNeedingImages = allEntities.filter(e => !e.referenceImage);
 
           if (entitiesNeedingImages.length > 0) {
+            const step15Start = Date.now();
             console.log(`[OpenWorld] Step 1.5: ${entitiesNeedingImages.length} entities missing reference images: ${entitiesNeedingImages.map(e => e.name).join(', ')}`);
 
             // Get the current scene image as a style reference for Gemini
@@ -640,14 +661,18 @@ export function generateOpenWorldScene(
               }
             }
 
-            // Generate reference images sequentially (one at a time to avoid memory spikes)
-            for (const entity of entitiesNeedingImages) {
-              if (controller.signal.aborted) break;
+            // Generate ALL entity portraits in parallel (previously sequential).
+            // Each portrait takes 10-20s, so parallel execution reduces wall time
+            // from N*15s to ~15s regardless of entity count.
+            onStatus({
+              phase: 'generating_entity_images',
+              detail: `Generating ${entitiesNeedingImages.length} portrait(s) in parallel...`,
+            });
 
-              onStatus({
-                phase: 'generating_entity_images',
-                detail: `Generating reference image for ${entity.name} (${entity.category})...`,
-              });
+            const portraitPromises = entitiesNeedingImages.map(async (entity) => {
+              if (controller.signal.aborted) return null;
+
+              const startTime = Date.now();
 
               // Build prompt from entity profile
               const profile = entity.profile || {};
@@ -691,34 +716,62 @@ export function generateOpenWorldScene(
                   }),
                 });
 
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
                 if (res.ok) {
                   const data = await res.json();
                   const imageDataUrl = data.dataUrl || data.imageUrl;
                   if (imageDataUrl) {
-                    // Persist the reference image on the entity immediately
-                    onEntityImageReady(entity.id, imageDataUrl);
-                    // Also update the in-memory project so Step 1b and Step 5
-                    // can see this entity now has a reference image
-                    entity.referenceImage = imageDataUrl;
                     onStatus({
                       phase: 'generating_entity_images',
-                      detail: `Reference image for ${entity.name} ready`,
+                      detail: `Portrait ready: ${entity.name} (${elapsed}s)`,
                     });
-                    console.log(`[OpenWorld] Step 1.5: Generated reference image for ${entity.name} [${entity.id}]`);
+                    console.log(`[OpenWorld] Step 1.5: Generated reference image for ${entity.name} [${entity.id}] in ${elapsed}s`);
+                    return { entityId: entity.id, imageDataUrl, entity };
                   }
-                } else {
-                  const errText = await res.text().catch(() => 'unknown');
-                  console.error(`[OpenWorld] Step 1.5: Failed to generate ref image for ${entity.name} (HTTP ${res.status}):`, errText);
-                  onStatus({
-                    phase: 'generating_entity_images',
-                    detail: `Could not generate image for ${entity.name}: ${errText.slice(0, 100)}`,
-                  });
                 }
+
+                const errText = await res.text().catch(() => 'unknown');
+                console.error(`[OpenWorld] Step 1.5: Failed to generate ref image for ${entity.name} (HTTP ${res.status}, ${elapsed}s):`, errText);
+                onStatus({
+                  phase: 'generating_entity_images',
+                  detail: `Failed: ${entity.name} (${elapsed}s): ${errText.slice(0, 80)}`,
+                });
+                return null;
               } catch (err) {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 const errMsg = err instanceof Error ? err.message : String(err);
-                console.error(`[OpenWorld] Step 1.5: Error generating ref image for ${entity.name}:`, errMsg);
+                console.error(`[OpenWorld] Step 1.5: Error generating ref image for ${entity.name} (${elapsed}s):`, errMsg);
+                onStatus({
+                  phase: 'generating_entity_images',
+                  detail: `Error: ${entity.name} (${elapsed}s): ${errMsg.slice(0, 60)}`,
+                });
+                return null;
+              }
+            });
+
+            const results = await Promise.allSettled(portraitPromises);
+
+            // Process successful results — update entities and notify caller
+            let successCount = 0;
+            for (const result of results) {
+              if (result.status === 'fulfilled' && result.value) {
+                const { entityId, imageDataUrl, entity } = result.value;
+                // Persist the reference image on the entity (triggers debounced auto-save)
+                onEntityImageReady(entityId, imageDataUrl);
+                // Also update the in-memory project so Step 1b and Step 5
+                // can see this entity now has a reference image
+                entity.referenceImage = imageDataUrl;
+                successCount++;
               }
             }
+
+            const step15Ms = Date.now() - step15Start;
+            onStatus({
+              phase: 'generating_entity_images',
+              detail: `Portraits: ${successCount}/${entitiesNeedingImages.length} generated (${(step15Ms / 1000).toFixed(1)}s)`,
+            });
+            console.log(`[OpenWorld] Step 1.5: ${successCount}/${entitiesNeedingImages.length} portraits in ${(step15Ms / 1000).toFixed(1)}s (parallel)`);
 
             // Rebuild context now that entities have reference images,
             // so the writer LLM sees updated entity summaries without warnings
@@ -782,7 +835,9 @@ export function generateOpenWorldScene(
       }
 
       // ── Step 2: Stream AI response ───────────────────────────────
-      onStatus({ phase: 'generating_text', detail: 'Writing the next scene...' });
+      const writerModel = writerSettings.model || 'unknown';
+      const textStart = Date.now();
+      onStatus({ phase: 'generating_text', detail: `Writing the next scene (${writerModel})...` });
 
       const fullText = await streamOpenWorldResponse(
         context.systemPrompt,
@@ -793,10 +848,22 @@ export function generateOpenWorldScene(
         userUploadedImages || []
       );
 
+      const textMs = Date.now() - textStart;
+      onStatus({ phase: 'generating_text', detail: `Scene text generated (${(textMs / 1000).toFixed(1)}s, ${Math.round(fullText.length / 1024)}KB)` });
+      console.log(`[OpenWorld] Step 2: Text generated in ${(textMs / 1000).toFixed(1)}s (${fullText.length} chars)`);
+
       // ── Step 3: Parse response ───────────────────────────────────
+      const parseStart = Date.now();
       onStatus({ phase: 'parsing_response', detail: 'Processing scene data...' });
 
       const { sceneText, metadata } = parseOpenWorldResponse(fullText);
+      const parseMs = Date.now() - parseStart;
+
+      onStatus({
+        phase: 'parsing_response',
+        detail: `Parsed (${parseMs}ms) — ${metadata.choices?.length || 0} choices, ${metadata.presentEntityIds?.length || 0} entities`,
+      });
+      console.log(`[OpenWorld] Step 3: Parsed in ${parseMs}ms — ${metadata.choices?.length || 0} choices, ${metadata.presentEntityIds?.length || 0} entities`);
 
       if (!sceneText) {
         throw new Error('AI did not generate scene text');
@@ -852,7 +919,13 @@ export function generateOpenWorldScene(
       }
 
       // Deliver text result IMMEDIATELY — don't wait for image or music.
-      onStatus({ phase: 'ready', detail: shouldReuseImage ? 'Scene ready (reusing image)' : 'New scene is ready!' });
+      const textReadyMs = Date.now() - pipelineStart;
+      onStatus({
+        phase: 'ready',
+        detail: shouldReuseImage
+          ? `Scene ready (reusing image, ${(textReadyMs / 1000).toFixed(1)}s)`
+          : `Scene text ready (${(textReadyMs / 1000).toFixed(1)}s) — generating image...`,
+      });
 
       onComplete({
         sceneText,
@@ -933,7 +1006,8 @@ export function generateOpenWorldScene(
           }
 
           if (entitiesMissingImages.length > 0) {
-            console.log(`[OpenWorld] ${entitiesMissingImages.length} entities missing reference images: ${entitiesMissingImages.map(e => e.entity.name).join(', ')}`);
+            const step45Start = Date.now();
+            console.log(`[OpenWorld] Step 4.5: ${entitiesMissingImages.length} entities missing reference images: ${entitiesMissingImages.map(e => e.entity.name).join(', ')}`);
 
             // Get the current scene image as a style reference for Gemini
             let styleRefBase64: string | null = null;
@@ -945,12 +1019,17 @@ export function generateOpenWorldScene(
               }
             }
 
-            // Generate reference images sequentially (one at a time to avoid memory spikes)
-            for (const { id, entity, prompt } of entitiesMissingImages) {
-              onStatus({
-                phase: 'generating_entity_images',
-                detail: `Generating reference image for ${entity.name} (${entity.category})...`,
-              });
+            // Generate ALL entity portraits in parallel (previously sequential).
+            // Same optimization as Step 1.5 — reduces wall time from N*15s to ~15s.
+            onStatus({
+              phase: 'generating_entity_images',
+              detail: `Generating ${entitiesMissingImages.length} portrait(s) in parallel...`,
+            });
+
+            const portraitPromises45 = entitiesMissingImages.map(async ({ id, entity, prompt }) => {
+              if (controller.signal.aborted) return null;
+
+              const startTime = Date.now();
 
               try {
                 const styleTag = imgSettings.defaultImageStyle?.trim();
@@ -976,31 +1055,59 @@ export function generateOpenWorldScene(
                   }),
                 });
 
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
                 if (res.ok) {
                   const data = await res.json();
                   const imageDataUrl = data.dataUrl || data.imageUrl;
                   if (imageDataUrl) {
-                    onEntityImageReady(id, imageDataUrl);
-                    newlyGeneratedRefImages.set(id, imageDataUrl);
                     onStatus({
                       phase: 'generating_entity_images',
-                      detail: `Reference image for ${entity.name} ready`,
+                      detail: `Portrait ready: ${entity.name} (${elapsed}s)`,
                     });
-                    console.log(`[OpenWorld] Generated reference image for ${entity.name} [${id}]`);
+                    console.log(`[OpenWorld] Step 4.5: Generated reference image for ${entity.name} [${id}] in ${elapsed}s`);
+                    return { id, imageDataUrl, entity };
                   }
-                } else {
-                  const errText = await res.text().catch(() => 'unknown');
-                  console.error(`[OpenWorld] Failed to generate ref image for ${entity.name} (HTTP ${res.status}):`, errText);
-                  onStatus({
-                    phase: 'generating_entity_images',
-                    detail: `Could not generate image for ${entity.name}: ${errText.slice(0, 100)}`,
-                  });
                 }
+
+                const errText = await res.text().catch(() => 'unknown');
+                console.error(`[OpenWorld] Step 4.5: Failed to generate ref image for ${entity.name} (HTTP ${res.status}, ${elapsed}s):`, errText);
+                onStatus({
+                  phase: 'generating_entity_images',
+                  detail: `Failed: ${entity.name} (${elapsed}s): ${errText.slice(0, 80)}`,
+                });
+                return null;
               } catch (err) {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 const errMsg = err instanceof Error ? err.message : String(err);
-                console.error(`[OpenWorld] Error generating ref image for ${entity.name}:`, errMsg);
+                console.error(`[OpenWorld] Step 4.5: Error generating ref image for ${entity.name} (${elapsed}s):`, errMsg);
+                onStatus({
+                  phase: 'generating_entity_images',
+                  detail: `Error: ${entity.name} (${elapsed}s): ${errMsg.slice(0, 60)}`,
+                });
+                return null;
+              }
+            });
+
+            const results45 = await Promise.allSettled(portraitPromises45);
+
+            // Process successful results — update entities and track for Step 5
+            let successCount45 = 0;
+            for (const result of results45) {
+              if (result.status === 'fulfilled' && result.value) {
+                const { id, imageDataUrl } = result.value;
+                onEntityImageReady(id, imageDataUrl);
+                newlyGeneratedRefImages.set(id, imageDataUrl);
+                successCount45++;
               }
             }
+
+            const step45Ms = Date.now() - step45Start;
+            onStatus({
+              phase: 'generating_entity_images',
+              detail: `Portraits: ${successCount45}/${entitiesMissingImages.length} generated (${(step45Ms / 1000).toFixed(1)}s)`,
+            });
+            console.log(`[OpenWorld] Step 4.5: ${successCount45}/${entitiesMissingImages.length} portraits in ${(step45Ms / 1000).toFixed(1)}s (parallel)`);
           }
         }
       }
@@ -1109,24 +1216,48 @@ export function generateOpenWorldScene(
         }
         console.groupEnd();
 
+        const imgStart = Date.now();
+        const imgSettings = useImageGenStore.getState();
+        onStatus({
+          phase: 'generating_image',
+          detail: `Generating scene image (${imgSettings.provider}, ${imgSettings.model || 'default'})...`,
+        });
+
         generateImage(imagePrompt, onStatus, refImages).then((url) => {
+          const imgMs = Date.now() - imgStart;
           if (url && onImageReady) {
+            const totalMs = Date.now() - pipelineStart;
+            onStatus({
+              phase: 'ready',
+              detail: `Scene complete (image: ${(imgMs / 1000).toFixed(1)}s, total: ${(totalMs / 1000).toFixed(1)}s)`,
+            });
+            console.log(`[OpenWorld] Step 5: Scene image generated in ${(imgMs / 1000).toFixed(1)}s`);
             onImageReady(url);
+          } else {
+            console.log(`[OpenWorld] Step 5: Scene image generation failed after ${(imgMs / 1000).toFixed(1)}s`);
           }
         }).catch((err) => {
-          console.warn('[OpenWorld] Background image gen failed:', err);
+          const imgMs = Date.now() - imgStart;
+          console.warn(`[OpenWorld] Background image gen failed after ${(imgMs / 1000).toFixed(1)}s:`, err);
         });
       }
 
       // ── Step 6: Search and assign music in background ─────────────
       // Only search when the AI provides a musicQuery (mood/location changed)
       if (metadata.musicQuery) {
+        const musicStart = Date.now();
         searchAndAssignMusic(metadata.musicQuery, onStatus).then((result) => {
+          const musicMs = Date.now() - musicStart;
           if (result && onMusicReady) {
+            onStatus({ phase: 'searching_music', detail: `Music found: "${result.metadata.title}" (${musicMs}ms)` });
+            console.log(`[OpenWorld] Step 6: Music found in ${musicMs}ms: "${result.metadata.title}"`);
             onMusicReady(result.dataUrl, result.metadata);
+          } else {
+            console.log(`[OpenWorld] Step 6: No music match (${musicMs}ms)`);
           }
         }).catch((err) => {
-          console.warn('[OpenWorld] Background music search failed:', err);
+          const musicMs = Date.now() - musicStart;
+          console.warn(`[OpenWorld] Background music search failed after ${musicMs}ms:`, err);
         });
       }
     } catch (err: unknown) {
