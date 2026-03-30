@@ -623,7 +623,14 @@ export async function createProject(
     // Save to database
     await db.projects.add(record);
 
-    logDB('Project created', { id: projectId, title: options.title });
+    logDB('Project created', {
+      id: projectId,
+      title: options.title,
+      mode: options.mode || 'game',
+      nodeCount: nodes.length,
+      nodeTypes: nodes.map(n => n.type),
+      edgeCount: edges.length,
+    });
 
     // Sync new project to server (fire-and-forget, non-blocking).
     // The IndexedDB save has already succeeded, so the project is safe locally.
