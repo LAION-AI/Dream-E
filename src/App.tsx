@@ -59,6 +59,7 @@ const StartMenu = lazy(() => import('@components/startmenu/StartMenu'));
 const Dashboard = lazy(() => import('@components/dashboard/Dashboard'));
 const Editor = lazy(() => import('@components/editor/Editor'));
 const Player = lazy(() => import('@components/player/AdventureEngine'));
+const PhotoStoryPlayer = lazy(() => import('@components/player/PhotoStoryPlayer'));
 
 // Auth pages -- lazy-loaded since they're only needed before login
 const LoginPage = lazy(() => import('@components/auth/LoginPage'));
@@ -297,6 +298,14 @@ function App() {
            * Same Player component, with /cowrite prefix for correct back-nav.
            */}
           <Route path="/cowrite/play/:projectId" element={<AuthGuard><Player /></AuthGuard>} />
+
+          {/**
+           * CO-WRITING MODE PHOTO STORY ROUTE
+           * URL: /cowrite/story/:projectId
+           * Slideshow-style walkthrough of co-write canvas nodes (root -> plots -> acts -> scenes).
+           * Supports ?startNode=nodeId to begin from a specific node.
+           */}
+          <Route path="/cowrite/story/:projectId" element={<AuthGuard><PhotoStoryPlayer /></AuthGuard>} />
 
           {/**
            * CATCH-ALL ROUTE (404)

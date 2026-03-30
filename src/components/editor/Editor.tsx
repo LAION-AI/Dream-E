@@ -75,6 +75,7 @@ import {
   Trash2,
   Sparkles,
   X,
+  Presentation,
 } from 'lucide-react';
 import { useProjectStore } from '@stores/useProjectStore';
 import { useEditorStore } from '@stores/useEditorStore';
@@ -1592,6 +1593,25 @@ function EditorInner() {
           >
             {pendingUploads > 0 ? 'Uploading...' : 'Play from Start'}
           </Button>
+
+          {/* Photo Story — slideshow walkthrough, only for co-writing mode */}
+          {isCowriteMode && (
+            <button
+              disabled={pendingUploads > 0}
+              onClick={async () => {
+                if (pendingUploads > 0) {
+                  console.log('[Editor] Cannot start Photo Story while uploads are pending');
+                  return;
+                }
+                await saveProject();
+                navigate(`/cowrite/story/${projectId}`);
+              }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-purple-500 hover:bg-purple-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Presentation size={16} />
+              Photo Story
+            </button>
+          )}
 
           {/* Play Open World — only for game mode, not co-writing */}
           {!isCowriteMode && (

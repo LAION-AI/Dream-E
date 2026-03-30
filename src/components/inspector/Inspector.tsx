@@ -27,8 +27,8 @@
  */
 
 import React from 'react';
-import { X } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { X, Presentation } from 'lucide-react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useProjectStore } from '@stores/useProjectStore';
 import { useEditorStore } from '@stores/useEditorStore';
 import { IconButton } from '@components/common';
@@ -56,6 +56,9 @@ import type { StoryRootNode, PlotNode, CharacterNode, ActNode, CoWriteSceneNode 
  * This priority order matters because selecting a node automatically
  * deselects any edge (and vice versa) in the project store.
  */
+/** Set of co-write node types that support the "Photo Story from here" action */
+const PHOTO_STORY_NODE_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene']);
+
 export default function Inspector() {
   // Use targeted selectors to avoid re-rendering on unrelated store changes
   const selectedNodeId = useProjectStore(s => s.selectedNodeId);
@@ -65,6 +68,8 @@ export default function Inspector() {
   const selectNode = useProjectStore(s => s.selectNode);
   const selectEdge = useProjectStore(s => s.selectEdge);
   const { closePanel } = useEditorStore();
+  const navigate = useNavigate();
+  const { projectId } = useParams<{ projectId: string }>();
 
   /**
    * Detect co-write mode from the URL path.
@@ -246,13 +251,25 @@ export default function Inspector() {
         <h3 className="font-semibold text-editor-text">
           {getTitle()}
         </h3>
-        <IconButton
-          icon={<X size={18} />}
-          label="Close inspector"
-          variant="ghost"
-          size="sm"
-          onClick={handleClose}
-        />
+        <div className="flex items-center gap-1">
+          {/* Photo Story from here — only for co-write node types */}
+          {isCowriteMode && selectedNode && PHOTO_STORY_NODE_TYPES.has(selectedNode.type) && projectId && (
+            <button
+              onClick={() => navigate(`/cowrite/story/${projectId}?startNode=${selectedNode.id}`)}
+              className="p-1.5 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded transition-colors"
+              title="Photo Story from here"
+            >
+              <Presentation size={16} />
+            </button>
+          )}
+          <IconButton
+            icon={<X size={18} />}
+            label="Close inspector"
+            variant="ghost"
+            size="sm"
+            onClick={handleClose}
+          />
+        </div>
       </div>
 
       {/* Content */}

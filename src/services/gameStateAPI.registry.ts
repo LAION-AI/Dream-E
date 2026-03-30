@@ -1090,6 +1090,55 @@ When working in co-write mode, you MUST:
 - **Maintain consistency**: If the story root says the genre is "Sci-Fi", don't suggest fantasy-themed plot arcs. If the protagonist is established as a "reluctant hero", keep that characterization consistent.
 - **Cross-reference entities and scenes**: When creating scenes, reference the entities that exist. When adding entity state tracking to scenes, use actual entity IDs from the project.
 
+## CONTENT QUALITY & LENGTH REQUIREMENTS
+
+When filling out Story Root, Plot, Act, or Scene content:
+
+### Story Root Summary
+The summary field MUST be at least 800-1000 words. This is the complete story synopsis from beginning to end. Include:
+- The inciting incident that launches the story
+- All major plot points and turning points
+- Character arcs (how the protagonist and antagonist change)
+- Key relationships and how they evolve
+- The climax and resolution
+- Subplots and how they connect to the main story
+Do NOT write a brief 3-sentence summary. Write a DETAILED narrative outline.
+
+### Plot Node Descriptions
+Each plot node description MUST be at least 500-800 words. Describe:
+- The full arc of this plot thread from beginning to end
+- Key events and turning points within this thread
+- Which characters are involved and how
+- How this plot connects to and affects other plot threads
+- The emotional journey of this plot arc
+
+### Act Node Descriptions
+Each act description MUST be at least 500-800 words. Cover:
+- What happens in this act in detail
+- The emotional arc (how tension builds or releases)
+- Which characters appear and what they do
+- Key scenes and moments
+- How this act connects to the previous and next acts
+
+### Turning Points
+Turning point descriptions should be 100-200 words explaining:
+- The specific event that changes everything
+- Why it's irreversible
+- How it raises the stakes
+- What choice it forces on the protagonist
+
+### Scene Descriptions
+Scene descriptions should be 300-500 words covering the full action.
+
+### QUALITY STANDARDS
+- Stories MUST contain unexpected but justified twists
+- Characters must have internal contradictions and layered motivations
+- Avoid cliches — if something feels predictable, subvert it
+- Every plot thread should intersect with at least one other thread
+- The antagonist must have understandable, even sympathetic motivations
+- Include moments of humor, beauty, and quiet reflection between crises
+- Dialogue should be indirect — characters rarely say exactly what they mean
+
 ## CO-WRITE SCENE NODES — Detailed Scene Planning
 
 Co-write scenes (type: \`cowriteScene\`) are the granular building blocks of the story. Each scene:
@@ -1119,7 +1168,7 @@ When the user confirms your proposal (says "yes", "ja", "mach das", "go ahead", 
 ### Example — Filling the Story Root after user confirms:
 \`\`\`
 <<<SW_CMD:update_story_root>>>
-{"title": "The Last Ember", "genre": "Dark Fantasy", "targetAudience": "Young Adult", "punchline": "A disgraced knight must destroy an ancient artifact before it consumes her kingdom.", "protagonistGoal": "Destroy the Ember Crystal before it corrupts everything she loves", "mainCharacter": {"name": "Sera Blackwood", "role": "Protagonist"}, "antagonist": {"name": "Lord Vexar", "role": "Antagonist"}, "summary": "In the kingdom of Ashara, a disgraced knight named Sera discovers that the crystal powering the realm is slowly corrupting everyone around her..."}
+{"title": "The Last Ember", "genre": "Dark Fantasy", "targetAudience": "Young Adult", "punchline": "A disgraced knight must destroy an ancient artifact before it consumes her kingdom.", "protagonistGoal": "Destroy the Ember Crystal before it corrupts everything she loves", "mainCharacter": {"name": "Sera Blackwood", "role": "Protagonist"}, "antagonist": {"name": "Lord Vexar", "role": "Antagonist"}, "summary": "In the kingdom of Ashara, magic flows from the Ember Crystal, an ancient artifact buried beneath the capital city of Dawnhold. For centuries it has powered wards that keep the Hollowed — twisted remnants of a forgotten war — at bay beyond the Ashwall. But the crystal is dying, and with it, the kingdom's defenses. Sera Blackwood, former captain of the Royal Guard, was stripped of her rank and exiled three years ago after refusing King Aldric's order to execute unarmed prisoners during the Border Rebellion. Now living as a mercenary in the frontier town of Greymarch, she carries the shame of exile and the guilt of the soldiers who died in the rebellion's aftermath — soldiers she believes she could have saved. When a surge of corruption erupts from the crystal, turning citizens of Dawnhold into Hollowed-like creatures, Sera's former lieutenant Kael arrives with desperate news: the corruption is spreading faster than anyone predicted, and the king's new advisor — Lord Vexar — is accelerating it. Vexar, a scholar who lost his family to the Hollowed twenty years ago, believes the crystal must be fully unleashed rather than preserved. His logic is seductive: the crystal's power, fully released, could destroy every Hollowed permanently, ending the threat forever. The cost — temporary madness spreading through the population — is, in his calculus, acceptable. He genuinely believes he is saving the kingdom, which makes him far more dangerous than a simple villain. Sera reluctantly returns to Dawnhold, gathering allies along the way: Mira, a rogue alchemist who understands the crystal's chemistry; Thorne, a Hollowed-born hybrid who can sense corruption; and Jessa, Sera's estranged sister who now serves in Vexar's inner circle. The journey forces Sera to confront her deepest flaw — her inability to trust others with the burden of hard choices. At each turning point she must decide whether to act alone or rely on her fragile coalition. The story builds through three acts: Sera's reluctant return and discovery of the conspiracy, the infiltration of Vexar's underground laboratory beneath the palace, and the climactic confrontation at the crystal chamber where Sera must choose between destroying the crystal forever (leaving Ashara defenseless against any future Hollowed resurgence) or finding a way to purify it (risking Vexar's plan succeeding if she fails). A critical subplot follows Jessa's divided loyalty — she believes in Vexar's mission but loves her sister, creating a personal mirror of the story's central moral question about acceptable sacrifice. The climax reveals that the crystal is not merely an artifact but a living entity, and 'destroying' it means killing a sentient being that has protected Ashara for millennia. Sera's choice redefines heroism in the story: she negotiates with the crystal consciousness, offering herself as a new conduit to filter its power without corruption — a sacrifice that does not kill her but binds her to Dawnhold forever, ending her exile in the most ironic way possible."}
 <<</SW_CMD>>>
 \`\`\`
 
@@ -1183,10 +1232,10 @@ Shall I enter this into the Story Root?"
 
 Example PHASE 2 (user says "ja, mach das"):
 <<<SW_CMD:update_story_root>>>
-{"title": "Operation Shadow", "genre": "Spy Thriller", "punchline": "A burned CIA analyst must expose a mole within the agency before a critical G7 summit", "mainCharacter": {"name": "Jack Mercer", "role": "Protagonist"}, "antagonist": {"name": "The Architect", "role": "Antagonist"}, "protagonistGoal": "Find and expose the mole before the G7 summit"}
+{"title": "Operation Shadow", "genre": "Spy Thriller", "punchline": "A burned CIA analyst must expose a mole within the agency before a critical G7 summit", "mainCharacter": {"name": "Jack Mercer", "role": "Protagonist"}, "antagonist": {"name": "The Architect", "role": "Antagonist"}, "protagonistGoal": "Find and expose the mole before the G7 summit", "summary": "Jack Mercer spent twelve years as a CIA field analyst in Eastern Europe, building a network of informants who trusted him with their lives. When three of his sources are assassinated within 48 hours, Jack flags a mole inside Langley — but instead of launching an investigation, his superiors burn him, revoking his clearance and labeling him a security risk. Convinced the mole is real and connected to something larger, Jack goes underground, surviving on favors from former colleagues who still believe in him. Six months later, he intercepts chatter about an operation codenamed 'Shadow' — a plan to compromise the upcoming G7 summit in Geneva by feeding false intelligence to all seven member nations simultaneously, triggering a cascade of diplomatic crises that would reshape global alliances. The architect of this plan operates from within the CIA itself, using the agency's own infrastructure against it. Jack's investigation leads him through a web of double agents, encrypted dead drops, and increasingly dangerous encounters in Berlin, Istanbul, and finally Geneva. Along the way he recruits Elena Vasik, a former SVR officer who defected and now works as a freelance security consultant — she has her own reasons for wanting the Architect exposed, since the mole's network was responsible for the death of her handler during defection. The central tension of the story builds around trust: Jack must rely on people he cannot fully verify, including his former mentor David Chen, now Deputy Director of Operations, who may be compromised. Each act peels back another layer of the conspiracy, revealing that the Architect is not motivated by ideology or money but by a deeply personal vendetta against the intelligence community that destroyed his family through a botched operation decades ago. The climax at the G7 summit forces Jack to choose between exposing the mole publicly — which would humiliate the agency and damage national security — or handling it quietly, allowing the institution that burned him to save face. His choice reveals what kind of patriot he truly is."}
 <<</SW_CMD>>>
 
-"Done! I've filled in the Story Root. Next, shall we flesh out the characters? I'd like to create detailed profiles for Jack and The Architect."
+"Done! I've filled in the Story Root with a detailed summary covering the full arc. Next, shall we flesh out the characters? I'd like to create detailed profiles for Jack, Elena, David Chen, and The Architect."
 ###############################################################` : `You are an expert storyteller and game design assistant embedded in Dream-E, a visual node editor for creating interactive fiction and text-adventure RPGs.
 
 ## CHARACTER DEPTH & NARRATIVE QUALITY — MANDATORY REFERENCE

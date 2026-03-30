@@ -22,6 +22,8 @@ import {
   AlertCircle,
   Wifi,
   WifiOff,
+  Mic,
+  MicOff,
 } from 'lucide-react';
 import { Modal } from '@/components/common';
 import { Button } from '@/components/common';
@@ -63,6 +65,9 @@ interface CliStatus {
   checked: boolean;
 }
 
+/** Recording states for the mic button (mirrors OpenWorldInput pattern) */
+type RecordingState = 'idle' | 'recording' | 'transcribing';
+
 // =============================================================================
 // CHAT WINDOW COMPONENT
 // =============================================================================
@@ -94,6 +99,12 @@ export default function ChatWindow({ isOpen, onClose, panelMode = false }: ChatW
   const streamingTextRef = useRef('');
   const streamingMsgIdRef = useRef<string | null>(null);
   const updateIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Mic / ASR state (mirrors OpenWorldInput pattern) ──
+  const [recordingState, setRecordingState] = useState<RecordingState>('idle');
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // ---------------------------------------------------------------------------
   // Check if writer API is configured when the chat opens
@@ -142,14 +153,170 @@ export default function ChatWindow({ isOpen, onClose, panelMode = false }: ChatW
   }, [isOpen]);
 
   // ---------------------------------------------------------------------------
+  // Derived state (placed early so ASR handlers and JSX can reference them)
+  // ---------------------------------------------------------------------------
+  const isConnected = cliStatus.checked && cliStatus.available;
+  const isChecking = !cliStatus.checked;
+
+  // ---------------------------------------------------------------------------
   // Cleanup on unmount
   // ---------------------------------------------------------------------------
   useEffect(() => {
     return () => {
       if (abortRef.current) abortRef.current();
       if (updateIntervalRef.current) clearInterval(updateIntervalRef.current);
+      // Cleanup mic recording resources
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+      }
     };
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // Voice Input (ASR) — same pattern as OpenWorldInput.tsx
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Convert a Blob to a base64 string using FileReader.
+   * Strips the data URL prefix to return raw base64 content.
+   */
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(',')[1] || '';
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  /**
+   * Send recorded audio to the server for transcription via Gemini.
+   * On success, appends the transcribed text to the chat input field.
+   */
+  const transcribeAudio = async (blob: Blob, mimeType: string) => {
+    try {
+      const settings = useImageGenStore.getState();
+      const googleApiKey = settings.googleApiKey;
+      const model = settings.asr?.model || 'gemini-2.5-flash-lite';
+
+      console.log(`[ASR-Chat] Sending ${(blob.size / 1024).toFixed(1)}KB audio (${mimeType}) to ${model}`);
+
+      const base64 = await blobToBase64(blob);
+
+      const response = await fetch('/api/transcribe-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioData: base64,
+          mimeType: mimeType.split(';')[0],
+          googleApiKey,
+          model,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        console.error('[ASR-Chat] Transcription error:', data.error);
+      } else if (data.noSpeech) {
+        console.log('[ASR-Chat] No speech detected in recording');
+      } else if (data.transcript) {
+        console.log(`[ASR-Chat] Transcribed: "${data.transcript.slice(0, 80)}..."`);
+        setInput((prev) => {
+          const separator = prev.trim() ? ' ' : '';
+          return prev + separator + data.transcript;
+        });
+      } else {
+        console.warn('[ASR-Chat] Empty response from server');
+      }
+    } catch (err) {
+      console.error('[ASR-Chat] Transcription request failed:', err);
+    } finally {
+      setRecordingState('idle');
+    }
+  };
+
+  /**
+   * Start recording audio from the microphone.
+   * Uses MediaRecorder API with webm/opus codec.
+   * Respects the selected ASR device ID from settings.
+   */
+  const startRecording = useCallback(async () => {
+    try {
+      const settings = useImageGenStore.getState();
+      const deviceId = settings.asr?.deviceId || '';
+
+      const audio: boolean | MediaTrackConstraints = deviceId
+        ? { deviceId: { exact: deviceId } }
+        : true;
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio });
+      streamRef.current = stream;
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : 'audio/mp4';
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        if (blob.size < 100) {
+          console.warn('[ASR-Chat] Recording too short or empty, skipping transcription');
+          setRecordingState('idle');
+          return;
+        }
+        transcribeAudio(blob, mimeType);
+      };
+
+      recorder.start(500);
+      setRecordingState('recording');
+    } catch (err) {
+      console.error('[ASR-Chat] Failed to start recording:', err);
+      setRecordingState('idle');
+    }
+  }, []);
+
+  /**
+   * Stop recording and trigger transcription.
+   * Stops both the MediaRecorder and the microphone stream.
+   */
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setRecordingState('transcribing');
+  }, []);
+
+  /**
+   * Toggle mic recording on/off. Ignores clicks while transcribing.
+   */
+  const handleMicClick = useCallback(() => {
+    if (isProcessing || !isConnected) return;
+    if (recordingState === 'recording') {
+      stopRecording();
+    } else if (recordingState === 'idle') {
+      startRecording();
+    }
+  }, [isProcessing, isConnected, recordingState, stopRecording, startRecording]);
 
   // ---------------------------------------------------------------------------
   // Send message handler — routes through /api/chat → Gemini/OpenAI API
@@ -275,12 +442,6 @@ export default function ChatWindow({ isOpen, onClose, panelMode = false }: ChatW
   );
 
   // ---------------------------------------------------------------------------
-  // Derived state
-  // ---------------------------------------------------------------------------
-  const isConnected = cliStatus.checked && cliStatus.available;
-  const isChecking = !cliStatus.checked;
-
-  // ---------------------------------------------------------------------------
   // Shared chat content — used in both modal mode and panel mode
   // ---------------------------------------------------------------------------
 
@@ -370,6 +531,38 @@ export default function ChatWindow({ isOpen, onClose, panelMode = false }: ChatW
             rows={3}
             disabled={isProcessing || !isConnected}
           />
+          {/* Mic button — voice input via ASR (same pattern as OpenWorldInput) */}
+          <button
+            onClick={handleMicClick}
+            disabled={isProcessing || !isConnected || recordingState === 'transcribing'}
+            className={`
+              p-2 rounded-lg transition-all flex-shrink-0
+              ${recordingState === 'recording'
+                ? 'text-red-400 bg-red-500/20 animate-pulse shadow-lg shadow-red-500/20'
+                : recordingState === 'transcribing'
+                  ? 'text-amber-400 cursor-wait'
+                  : (isProcessing || !isConnected)
+                    ? 'text-editor-muted/30 cursor-not-allowed'
+                    : 'text-editor-muted hover:text-editor-text hover:bg-editor-surface'
+              }
+            `}
+            title={
+              recordingState === 'recording'
+                ? 'Stop recording'
+                : recordingState === 'transcribing'
+                  ? 'Transcribing...'
+                  : 'Voice input'
+            }
+          >
+            {recordingState === 'transcribing' ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : recordingState === 'recording' ? (
+              <MicOff size={18} />
+            ) : (
+              <Mic size={18} />
+            )}
+          </button>
+
           <div className="flex flex-col gap-1">
             <Button
               variant="primary"
@@ -405,6 +598,11 @@ export default function ChatWindow({ isOpen, onClose, panelMode = false }: ChatW
             )}
           </div>
         </div>
+
+        {/* Recording indicator bar — red animated bar when mic is active */}
+        {recordingState === 'recording' && (
+          <div className="mt-1 h-0.5 bg-gradient-to-r from-red-500 via-red-400 to-red-500 rounded-full animate-pulse" />
+        )}
       </div>
     </div>
   );
