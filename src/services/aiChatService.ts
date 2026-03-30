@@ -255,12 +255,29 @@ export function sendChatMessage(
       let nextMessage = buildUserMessage(userText);
 
       for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
-        // ── Step 1: Stream agent response ──────────────────────────
-        const fullText = await streamOneMessage(
-          nextMessage,
-          controller.signal,
-          onTextDelta
-        );
+        // ── Step 1: Stream agent response (with retry on transient failures)
+        let fullText = '';
+        let streamError: Error | null = null;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            fullText = await streamOneMessage(
+              nextMessage,
+              controller.signal,
+              onTextDelta
+            );
+            streamError = null;
+            break;
+          } catch (err) {
+            streamError = err instanceof Error ? err : new Error(String(err));
+            if (err instanceof Error && err.name === 'AbortError') throw err;
+            if (attempt < 2) {
+              console.warn(`[Chat] Stream attempt ${attempt} failed: ${streamError.message}. Retrying in 2s...`);
+              onTextDelta(`\n*[Connection error — retrying...]*\n`);
+              await new Promise(r => setTimeout(r, 2000));
+            }
+          }
+        }
+        if (streamError) throw streamError;
 
         // ── Step 2: Parse commands from response ───────────────────
         const { cleanText, commands } = parseCommands(fullText);
@@ -311,6 +328,17 @@ export function sendChatMessage(
         }
 
         // ── Step 7: Send results back to agent for next iteration ──
+        // If all commands succeeded and the project is in co-write mode,
+        // complete the loop immediately. In co-write mode, the AI follows
+        // a propose→confirm→execute pattern. After execution, there's no
+        // need for another round-trip — just report success and suggest
+        // the next step in the chat.
+        const projectMode = useProjectStore.getState().currentProject?.mode;
+        if (projectMode === 'cowrite' && !hasFailures) {
+          onComplete(allCleanText, allToolCalls);
+          return;
+        }
+
         nextMessage = buildResultsMessage(iterationResults, iteration, MAX_ITERATIONS);
       }
 
