@@ -263,28 +263,14 @@ export default function MusicSearchOverlay({
       setPlayProgress(0);
 
       // Check cache first, fetch if not cached.
-      // The BM25 server exposes GET /api/track/{row_id} which returns metadata
-      // including an `audio_url` field. We fetch that URL to get the actual audio.
+      // The BM25 server streams MP3 files directly from local tar archives
+      // via GET /api/track/{row_id}/audio — much faster than CDN download.
       let blobUrl = audioCacheRef.current.get(row_id);
       if (!blobUrl) {
         try {
-          // Step 1: Get track metadata (contains the audio_url)
-          const metaRes = await fetch(`${MUSIC_API}/track/${row_id}`);
-          if (!metaRes.ok) {
-            console.error(`[MusicSearchOverlay] Failed to get track metadata for ${row_id}`);
-            return;
-          }
-          const meta = await metaRes.json();
-          const audioUrl = meta.audio_url;
-          if (!audioUrl) {
-            console.error(`[MusicSearchOverlay] Track ${row_id} has no audio_url`);
-            return;
-          }
-
-          // Step 2: Fetch the actual audio file from the audio URL
-          const audioRes = await fetch(audioUrl);
+          const audioRes = await fetch(`${MUSIC_API}/track/${row_id}/audio`);
           if (!audioRes.ok) {
-            console.error(`[MusicSearchOverlay] Failed to download audio from ${audioUrl}`);
+            console.error(`[MusicSearchOverlay] Failed to fetch audio for track ${row_id}: HTTP ${audioRes.status}`);
             return;
           }
           const blob = await audioRes.blob();
@@ -333,21 +319,10 @@ export default function MusicSearchOverlay({
       setPlayingId(null);
 
       try {
-        // Step 1: Get track metadata to obtain the audio_url
-        const metaRes = await fetch(`${MUSIC_API}/track/${track.row_id}`);
-        if (!metaRes.ok) {
-          throw new Error(`Failed to get track metadata: HTTP ${metaRes.status}`);
-        }
-        const meta = await metaRes.json();
-        const audioUrl = meta.audio_url;
-        if (!audioUrl) {
-          throw new Error('Track has no audio URL');
-        }
-
-        // Step 2: Fetch the actual audio file
-        const audioRes = await fetch(audioUrl);
+        // Fetch audio from local BM25 server (tar archives, instant)
+        const audioRes = await fetch(`${MUSIC_API}/track/${track.row_id}/audio`);
         if (!audioRes.ok) {
-          throw new Error(`Failed to download audio: HTTP ${audioRes.status}`);
+          throw new Error(`Failed to fetch audio: HTTP ${audioRes.status}`);
         }
 
         const blob = await audioRes.blob();
