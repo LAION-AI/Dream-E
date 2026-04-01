@@ -24,7 +24,7 @@
  */
 
 import React, { useState, useMemo, useRef } from 'react';
-import { Sparkles, FolderOpen, Plus, Trash2, ChevronDown, Music, Search, Upload } from 'lucide-react';
+import { Sparkles, FolderOpen, Plus, Trash2, ChevronDown, Music, Search, Upload, Volume2 } from 'lucide-react';
 import type { CoWriteSceneNode, CoWriteSceneData, CoWriteSceneEntity } from '@/types';
 import { useProjectStore } from '@stores/useProjectStore';
 import InfoTooltip from '@components/common/InfoTooltip';
@@ -33,6 +33,7 @@ import MediaUploader from './MediaUploader';
 import ImageGenerationOverlay from '@components/media/ImageGenerationOverlay';
 import AssetPicker from '@components/media/AssetPicker';
 import MusicSearchOverlay from '@components/media/MusicSearchOverlay';
+import TTSGenerationOverlay from '@components/media/TTSGenerationOverlay';
 import { getBlobUrl } from '@/utils/blobCache';
 
 // =============================================================================
@@ -68,8 +69,12 @@ export default function CoWriteSceneInspector({ node }: CoWriteSceneInspectorPro
   const [entityPickerOpen, setEntityPickerOpen] = useState(false);
   /** State for the music search overlay */
   const [musicSearchOpen, setMusicSearchOpen] = useState(false);
+  /** State for the TTS generation overlay (voiceover) */
+  const [ttsGenOpen, setTtsGenOpen] = useState(false);
   /** Hidden file input ref for manual music upload */
   const musicFileInputRef = useRef<HTMLInputElement>(null);
+  /** Hidden file input ref for voiceover audio upload */
+  const voiceoverFileInputRef = useRef<HTMLInputElement>(null);
 
   /**
    * Helper to update any field on the CoWriteSceneNode's data object.
@@ -131,6 +136,25 @@ export default function CoWriteSceneInspector({ node }: CoWriteSceneInspectorPro
     };
     reader.readAsDataURL(file);
     event.target.value = '';
+  };
+
+  /**
+   * Handle voiceover TTS generation callback.
+   */
+  const handleVoiceoverGenerated = (dataUrl: string) => {
+    updateData({ voiceoverAudio: dataUrl } as any);
+  };
+
+  /**
+   * Handle voiceover audio file upload.
+   */
+  const handleVoiceoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => updateData({ voiceoverAudio: reader.result as string } as any);
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   /**
@@ -419,6 +443,55 @@ export default function CoWriteSceneInspector({ node }: CoWriteSceneInspectorPro
         />
       </div>
 
+      {/* ==================== VOICEOVER ==================== */}
+      <div>
+        <label className="input-label flex items-center gap-2">
+          <Volume2 size={14} />
+          Voiceover
+        </label>
+        {(node.data as any).voiceoverAudio ? (
+          <div className="mt-2 border border-editor-border rounded-lg p-3 bg-editor-bg/50">
+            <audio
+              src={getBlobUrl((node.data as any).voiceoverAudio)}
+              controls
+              className="w-full h-8 mb-2"
+            />
+            <button
+              onClick={() => updateData({ voiceoverAudio: undefined } as any)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-colors text-red-400"
+            >
+              <Trash2 size={12} />
+              Remove Voiceover
+            </button>
+          </div>
+        ) : (
+          <p className="text-xs text-editor-muted mt-1 italic">No voiceover set.</p>
+        )}
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => setTtsGenOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-teal-500/10 border border-teal-500/30 hover:bg-teal-500/20 transition-colors text-teal-400"
+          >
+            <Volume2 size={12} />
+            Generate TTS
+          </button>
+          <button
+            onClick={() => voiceoverFileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-editor-bg border border-editor-border hover:bg-editor-surface transition-colors text-editor-text"
+          >
+            <Upload size={12} />
+            Upload Audio
+          </button>
+        </div>
+        <input
+          ref={voiceoverFileInputRef}
+          type="file"
+          accept="audio/*"
+          onChange={handleVoiceoverUpload}
+          className="hidden"
+        />
+      </div>
+
       {/* Image Generation Overlay */}
       <ImageGenerationOverlay
         isOpen={imageGenOpen}
@@ -445,6 +518,15 @@ export default function CoWriteSceneInspector({ node }: CoWriteSceneInspectorPro
         onClose={() => setMusicSearchOpen(false)}
         onSelect={(dataUrl) => updateData({ backgroundMusic: dataUrl })}
         title="Search Background Music"
+      />
+
+      {/* TTS Generation Overlay for voiceover */}
+      <TTSGenerationOverlay
+        isOpen={ttsGenOpen}
+        onClose={() => setTtsGenOpen(false)}
+        onAudioGenerated={handleVoiceoverGenerated}
+        initialText={node.data.sceneAction || node.data.description || node.data.title || ''}
+        title="Generate Voiceover"
       />
     </div>
   );

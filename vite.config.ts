@@ -587,16 +587,21 @@ export default defineConfig({
                 const {
                   text,
                   googleApiKey: gKey = '',
+                  hyprLabApiKey: hKey = '',
                   model: ttsModel = 'gemini-2.5-flash-preview-tts',
                   voice = 'Zephyr',
                   instruction = 'Read aloud in a very natural fluid audiobook narrator style, very genuine:',
                 } = JSON.parse(body);
 
-                const apiKey = gKey || process.env.GOOGLE_API_KEY || '';
+                // Determine which API to use. If a Google API key is available,
+                // call Google's generativelanguage endpoint directly. If only a
+                // HyprLab key is available, use HyprLab's Gemini-compatible
+                // endpoint (identical request format, different base URL).
+                const apiKey = gKey || hKey || process.env.GOOGLE_API_KEY || '';
                 if (!apiKey) {
                   res.statusCode = 400;
                   res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ error: 'Google API key not configured. Set it in AI Settings.' }));
+                  res.end(JSON.stringify({ error: 'API key not configured. Set Google API Key or provider key in AI Settings.' }));
                   return;
                 }
 
@@ -607,8 +612,14 @@ export default defineConfig({
                   return;
                 }
 
-                // Gemini TTS uses streamGenerateContent for audio output
-                const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/${ttsModel}:generateContent?key=${apiKey}`;
+                // Use HyprLab's endpoint when only the HyprLab key is available;
+                // otherwise use Google's direct endpoint. The request body format
+                // is identical (Gemini generateContent format).
+                const baseUrl = (!gKey && hKey)
+                  ? 'https://api.hyprlab.io'
+                  : 'https://generativelanguage.googleapis.com';
+
+                const ttsUrl = `${baseUrl}/v1beta/models/${ttsModel}:generateContent?key=${apiKey}`;
 
                 const ttsRes = await fetch(ttsUrl, {
                   method: 'POST',

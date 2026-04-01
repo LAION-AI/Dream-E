@@ -166,8 +166,8 @@ export default function TTSGenerationOverlay({
       return;
     }
 
-    if (!store.googleApiKey) {
-      setError('Google API key is required for TTS. Set it in AI Settings.');
+    if (!store.googleApiKey && !store.apiKey) {
+      setError('An API key is required for TTS. Set Google API Key or provider key in AI Settings.');
       return;
     }
 
@@ -181,7 +181,8 @@ export default function TTSGenerationOverlay({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: text.trim(),
-          googleApiKey: store.googleApiKey,
+          googleApiKey: store.googleApiKey || '',
+          hyprLabApiKey: store.apiKey || '',
           model,
           voice,
           instruction: voiceInstruction.trim(),
@@ -236,14 +237,14 @@ export default function TTSGenerationOverlay({
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-        {/* ── Google API Key status ── */}
+        {/* ── API Key status ── */}
         <div style={{
           padding: '8px 14px',
           borderRadius: 8,
-          background: store.googleApiKey
+          background: (store.googleApiKey || store.apiKey)
             ? 'rgba(74, 222, 128, 0.06)'
             : 'rgba(239, 68, 68, 0.06)',
-          border: `1px solid ${store.googleApiKey
+          border: `1px solid ${(store.googleApiKey || store.apiKey)
             ? 'rgba(74, 222, 128, 0.2)'
             : 'rgba(239, 68, 68, 0.2)'}`,
           fontSize: '0.82em',
@@ -252,11 +253,13 @@ export default function TTSGenerationOverlay({
           alignItems: 'center',
           gap: 6,
         }}>
-          <span style={{ color: store.googleApiKey ? '#4ade80' : '#ef4444' }}>●</span>
+          <span style={{ color: (store.googleApiKey || store.apiKey) ? '#4ade80' : '#ef4444' }}>●</span>
           <span>
             {store.googleApiKey
               ? <>Google API Key set. Using <strong style={{ color: '#e2e4ea' }}>{model}</strong></>
-              : <>Google API Key missing. Set it in AI Settings to use TTS.</>
+              : store.apiKey
+                ? <>Using provider key (HyprLab). Model: <strong style={{ color: '#e2e4ea' }}>{model}</strong></>
+                : <>API Key missing. Set Google API Key or provider key in AI Settings.</>
             }
           </span>
         </div>
@@ -473,16 +476,16 @@ export default function TTSGenerationOverlay({
             </button>
             <button
               onClick={handleGenerate}
-              disabled={isGenerating || !text.trim() || !store.googleApiKey}
+              disabled={isGenerating || !text.trim() || (!store.googleApiKey && !store.apiKey)}
               style={{
                 padding: '8px 20px',
                 borderRadius: 8,
                 border: 'none',
-                background: (isGenerating || !text.trim() || !store.googleApiKey) ? '#6c8aff80' : '#6c8aff',
+                background: (isGenerating || !text.trim() || (!store.googleApiKey && !store.apiKey)) ? '#6c8aff80' : '#6c8aff',
                 color: '#fff',
                 fontWeight: 600,
                 fontSize: '0.9em',
-                cursor: (isGenerating || !text.trim() || !store.googleApiKey) ? 'not-allowed' : 'pointer',
+                cursor: (isGenerating || !text.trim() || (!store.googleApiKey && !store.apiKey)) ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,

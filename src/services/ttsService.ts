@@ -99,14 +99,14 @@ async function generateChunkTTS(
 ): Promise<TTSChunkResult> {
   const settings = useImageGenStore.getState();
 
-  // Try Google API key first, fall back to the main provider API key (e.g. HyprLab).
-  // TTS always calls Google's Gemini TTS API, so the key must be a valid Google key.
-  // HyprLab doesn't proxy TTS, but some users may have entered their Google key
-  // in the main apiKey field instead of the dedicated googleApiKey field.
-  const apiKey = settings.googleApiKey || settings.apiKey;
+  // Determine which API key(s) to send to the server.
+  // The server endpoint will decide whether to call Google directly or use
+  // HyprLab's Gemini-compatible endpoint based on which keys are available.
+  const googleKey = settings.googleApiKey || '';
+  const hyprLabKey = settings.apiKey || '';
 
-  if (!apiKey) {
-    throw new Error('Google API key required for TTS — set it in AI Settings');
+  if (!googleKey && !hyprLabKey) {
+    throw new Error('An API key is required for TTS — set Google API Key or provider key in AI Settings');
   }
 
   const res = await fetch('/api/generate-tts', {
@@ -114,7 +114,8 @@ async function generateChunkTTS(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       text,
-      googleApiKey: apiKey,
+      googleApiKey: googleKey,
+      hyprLabApiKey: hyprLabKey,
       model: settings.tts.model,
       voice: settings.tts.voice,
       instruction: settings.tts.instruction,

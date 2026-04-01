@@ -27,6 +27,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search,
   Music,
@@ -35,8 +36,8 @@ import {
   Pause,
   Check,
   AlertTriangle,
+  X,
 } from 'lucide-react';
-import { Modal } from '@components/common/Modal';
 
 // =============================================================================
 // TYPES
@@ -261,16 +262,32 @@ export default function MusicSearchOverlay({
 
       setPlayProgress(0);
 
-      // Check cache first, fetch if not cached
+      // Check cache first, fetch if not cached.
+      // The BM25 server exposes GET /api/track/{row_id} which returns metadata
+      // including an `audio_url` field. We fetch that URL to get the actual audio.
       let blobUrl = audioCacheRef.current.get(row_id);
       if (!blobUrl) {
         try {
-          const res = await fetch(`${MUSIC_API}/track/${row_id}/audio`);
-          if (!res.ok) {
-            console.error(`[MusicSearchOverlay] Failed to fetch audio for track ${row_id}`);
+          // Step 1: Get track metadata (contains the audio_url)
+          const metaRes = await fetch(`${MUSIC_API}/track/${row_id}`);
+          if (!metaRes.ok) {
+            console.error(`[MusicSearchOverlay] Failed to get track metadata for ${row_id}`);
             return;
           }
-          const blob = await res.blob();
+          const meta = await metaRes.json();
+          const audioUrl = meta.audio_url;
+          if (!audioUrl) {
+            console.error(`[MusicSearchOverlay] Track ${row_id} has no audio_url`);
+            return;
+          }
+
+          // Step 2: Fetch the actual audio file from the audio URL
+          const audioRes = await fetch(audioUrl);
+          if (!audioRes.ok) {
+            console.error(`[MusicSearchOverlay] Failed to download audio from ${audioUrl}`);
+            return;
+          }
+          const blob = await audioRes.blob();
           blobUrl = URL.createObjectURL(blob);
           audioCacheRef.current.set(row_id, blobUrl);
         } catch (err) {
@@ -316,12 +333,24 @@ export default function MusicSearchOverlay({
       setPlayingId(null);
 
       try {
-        const res = await fetch(`${MUSIC_API}/track/${track.row_id}/audio`);
-        if (!res.ok) {
-          throw new Error(`Failed to fetch audio: HTTP ${res.status}`);
+        // Step 1: Get track metadata to obtain the audio_url
+        const metaRes = await fetch(`${MUSIC_API}/track/${track.row_id}`);
+        if (!metaRes.ok) {
+          throw new Error(`Failed to get track metadata: HTTP ${metaRes.status}`);
+        }
+        const meta = await metaRes.json();
+        const audioUrl = meta.audio_url;
+        if (!audioUrl) {
+          throw new Error('Track has no audio URL');
         }
 
-        const blob = await res.blob();
+        // Step 2: Fetch the actual audio file
+        const audioRes = await fetch(audioUrl);
+        if (!audioRes.ok) {
+          throw new Error(`Failed to download audio: HTTP ${audioRes.status}`);
+        }
+
+        const blob = await audioRes.blob();
         const arrayBuffer = await blob.arrayBuffer();
         const bytes = new Uint8Array(arrayBuffer);
 
@@ -379,328 +408,389 @@ export default function MusicSearchOverlay({
 
   // ── Render ────────────────────────────────────────────────────────────
 
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {/* ── Search Controls ── */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-          {/* Query input */}
-          <div style={{ flex: 1 }}>
-            <label style={labelStyle}>Search Query</label>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="e.g., mysterious forest night, epic battle..."
-              style={inputStyle}
-              disabled={isSearching}
-            />
-          </div>
+  // ── Render ────────────────────────────────────────────────────────────
+  // Uses createPortal to render a fullscreen overlay (like the chat panel)
+  // instead of a centered modal popup. This gives more room for search
+  // results and a better browsing experience.
 
-          {/* Search field dropdown */}
-          <div style={{ width: 130 }}>
-            <label style={labelStyle}>Field</label>
-            <select
-              value={searchField}
-              onChange={(e) => setSearchField(e.target.value as SearchField)}
-              style={inputStyle}
-              disabled={isSearching}
-            >
-              {SEARCH_FIELDS.map((sf) => (
-                <option key={sf.value} value={sf.value}>
-                  {sf.label}
-                </option>
-              ))}
-            </select>
-          </div>
+  if (!isOpen) return null;
 
-          {/* Search button */}
-          <button
-            onClick={handleSearch}
-            disabled={isSearching || !query.trim()}
-            style={{
-              padding: '9px 16px',
-              borderRadius: 8,
-              border: 'none',
-              background:
-                isSearching || !query.trim() ? '#6c8aff60' : '#6c8aff',
-              color: '#fff',
-              fontWeight: 600,
-              fontSize: '0.88em',
-              cursor:
-                isSearching || !query.trim() ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {isSearching ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Search size={14} />
-            )}
-            Search
-          </button>
-        </div>
+  return createPortal(
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        background: '#0f1117',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* ── Header with title and close button ── */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 24px',
+          borderBottom: '1px solid #2d3148',
+          flexShrink: 0,
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: '1.1em', fontWeight: 600, color: '#e2e4ea', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Music size={20} style={{ color: '#6c8aff' }} />
+          {title}
+        </h2>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#8b8fa4',
+            cursor: 'pointer',
+            padding: 4,
+            borderRadius: 6,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          title="Close"
+        >
+          <X size={20} />
+        </button>
+      </div>
 
-        {/* ── Singing Filter Toggle ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              cursor: 'pointer',
-              fontSize: '0.85em',
-              color: '#8b8fa4',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={noSinging}
-              onChange={(e) => setNoSinging(e.target.checked)}
-              style={{ accentColor: '#6c8aff' }}
-              disabled={isSearching}
-            />
-            No singing (instrumental only)
-          </label>
-        </div>
+      {/* ── Scrollable content area ── */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '20px 24px',
+        }}
+      >
+        <div style={{ maxWidth: 800, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* ── Search Controls ── */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            {/* Query input */}
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Search Query</label>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="e.g., mysterious forest night, epic battle..."
+                style={inputStyle}
+                disabled={isSearching}
+                autoFocus
+              />
+            </div>
 
-        {/* ── Error Message ── */}
-        {searchError && (
-          <div
-            style={{
-              padding: '10px 14px',
-              borderRadius: 8,
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              color: '#ef4444',
-              fontSize: '0.85em',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            <AlertTriangle size={16} />
-            {searchError}
-          </div>
-        )}
-
-        {/* ── Loading State ── */}
-        {isSearching && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 32,
-              color: '#8b8fa4',
-              gap: 10,
-            }}
-          >
-            <Loader2 size={20} className="animate-spin" />
-            Searching music library...
-          </div>
-        )}
-
-        {/* ── Results List ── */}
-        {!isSearching && results.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <label style={labelStyle}>
-              Results ({results.length})
-            </label>
-            {results.map((track) => (
-              <div
-                key={track.row_id}
-                style={{
-                  padding: '12px 14px',
-                  borderRadius: 10,
-                  border: '1px solid #2d3148',
-                  background: '#171923',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                }}
+            {/* Search field dropdown */}
+            <div style={{ width: 130 }}>
+              <label style={labelStyle}>Field</label>
+              <select
+                value={searchField}
+                onChange={(e) => setSearchField(e.target.value as SearchField)}
+                style={inputStyle}
+                disabled={isSearching}
               >
-                {/* Track header: title + duration + score */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Music size={16} style={{ color: '#6c8aff', flexShrink: 0 }} />
-                    <span
-                      style={{
-                        fontWeight: 600,
-                        color: '#e2e4ea',
-                        fontSize: '0.92em',
-                      }}
-                    >
-                      {track.title}
-                    </span>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: '0.78em',
-                      color: '#8b8fa4',
-                      fontFamily: "'Cascadia Code', monospace",
-                    }}
-                  >
-                    {formatDuration(track.duration)}
-                  </span>
-                </div>
+                {SEARCH_FIELDS.map((sf) => (
+                  <option key={sf.value} value={sf.value}>
+                    {sf.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                {/* Metadata: situations + emotions */}
-                <div style={{ fontSize: '0.8em', color: '#8b8fa4', lineHeight: 1.5 }}>
-                  <div>{formatSituations(track.genre_situations)}</div>
-                  {track.evoked_emotions && track.evoked_emotions.length > 0 && (
-                    <div style={{ marginTop: 2 }}>
-                      <span style={{ color: '#6c8aff' }}>Emotions:</span>{' '}
-                      {track.evoked_emotions.slice(0, 5).join(', ')}
-                    </div>
-                  )}
-                </div>
+            {/* Search button */}
+            <button
+              onClick={handleSearch}
+              disabled={isSearching || !query.trim()}
+              style={{
+                padding: '9px 16px',
+                borderRadius: 8,
+                border: 'none',
+                background:
+                  isSearching || !query.trim() ? '#6c8aff60' : '#6c8aff',
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: '0.88em',
+                cursor:
+                  isSearching || !query.trim() ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {isSearching ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Search size={14} />
+              )}
+              Search
+            </button>
+          </div>
 
-                {/* Audio preview (play/pause + progress bar) + Select button */}
+          {/* ── Singing Filter Toggle ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer',
+                fontSize: '0.85em',
+                color: '#8b8fa4',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={noSinging}
+                onChange={(e) => setNoSinging(e.target.checked)}
+                style={{ accentColor: '#6c8aff' }}
+                disabled={isSearching}
+              />
+              No singing (instrumental only)
+            </label>
+          </div>
+
+          {/* ── Error Message ── */}
+          {searchError && (
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: 8,
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#ef4444',
+                fontSize: '0.85em',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <AlertTriangle size={16} />
+              {searchError}
+            </div>
+          )}
+
+          {/* ── Loading State ── */}
+          {isSearching && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 32,
+                color: '#8b8fa4',
+                gap: 10,
+              }}
+            >
+              <Loader2 size={20} className="animate-spin" />
+              Searching music library...
+            </div>
+          )}
+
+          {/* ── Results List ── */}
+          {!isSearching && results.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <label style={labelStyle}>
+                Results ({results.length})
+              </label>
+              {results.map((track) => (
                 <div
+                  key={track.row_id}
                   style={{
+                    padding: '12px 14px',
+                    borderRadius: 10,
+                    border: '1px solid #2d3148',
+                    background: '#171923',
                     display: 'flex',
-                    alignItems: 'center',
+                    flexDirection: 'column',
                     gap: 8,
                   }}
                 >
-                  {/* Play/Pause button */}
-                  <button
-                    onClick={() => togglePreview(track.row_id)}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      border: '1px solid #2d3148',
-                      background:
-                        playingId === track.row_id
-                          ? 'rgba(108, 138, 255, 0.2)'
-                          : 'transparent',
-                      color: playingId === track.row_id ? '#6c8aff' : '#8b8fa4',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                      padding: 0,
-                    }}
-                    title={
-                      playingId === track.row_id ? 'Pause preview' : 'Play preview'
-                    }
-                  >
-                    {playingId === track.row_id ? (
-                      <Pause size={14} />
-                    ) : (
-                      <Play size={14} />
-                    )}
-                  </button>
-
-                  {/* Progress bar — only shows meaningful progress for the playing track */}
+                  {/* Track header: title + duration + score */}
                   <div
                     style={{
-                      flex: 1,
-                      height: 4,
-                      borderRadius: 2,
-                      background: '#2d3148',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${playingId === track.row_id ? playProgress * 100 : 0}%`,
-                        height: '100%',
-                        background: '#6c8aff',
-                        borderRadius: 2,
-                        transition: 'width 0.3s linear',
-                      }}
-                    />
-                  </div>
-
-                  {/* Select button */}
-                  <button
-                    onClick={() => handleSelectTrack(track)}
-                    disabled={downloadingId !== null}
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: 6,
-                      border: 'none',
-                      background:
-                        downloadingId === track.row_id
-                          ? '#4ade8040'
-                          : '#4ade8020',
-                      color: '#4ade80',
-                      fontWeight: 600,
-                      fontSize: '0.82em',
-                      cursor:
-                        downloadingId !== null ? 'not-allowed' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 4,
-                      whiteSpace: 'nowrap',
+                      justifyContent: 'space-between',
                     }}
-                    title="Select this track"
                   >
-                    {downloadingId === track.row_id ? (
-                      <>
-                        <Loader2 size={12} className="animate-spin" />
-                        Loading...
-                      </>
-                    ) : (
-                      <>
-                        <Check size={12} />
-                        Select
-                      </>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Music size={16} style={{ color: '#6c8aff', flexShrink: 0 }} />
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          color: '#e2e4ea',
+                          fontSize: '0.92em',
+                        }}
+                      >
+                        {track.title}
+                      </span>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '0.78em',
+                        color: '#8b8fa4',
+                        fontFamily: "'Cascadia Code', monospace",
+                      }}
+                    >
+                      {formatDuration(track.duration)}
+                    </span>
+                  </div>
+
+                  {/* Metadata: situations + emotions */}
+                  <div style={{ fontSize: '0.8em', color: '#8b8fa4', lineHeight: 1.5 }}>
+                    <div>{formatSituations(track.genre_situations)}</div>
+                    {track.evoked_emotions && track.evoked_emotions.length > 0 && (
+                      <div style={{ marginTop: 2 }}>
+                        <span style={{ color: '#6c8aff' }}>Emotions:</span>{' '}
+                        {track.evoked_emotions.slice(0, 5).join(', ')}
+                      </div>
                     )}
-                  </button>
+                  </div>
+
+                  {/* Audio preview (play/pause + progress bar) + Select button */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    {/* Play/Pause button */}
+                    <button
+                      onClick={() => togglePreview(track.row_id)}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: '50%',
+                        border: '1px solid #2d3148',
+                        background:
+                          playingId === track.row_id
+                            ? 'rgba(108, 138, 255, 0.2)'
+                            : 'transparent',
+                        color: playingId === track.row_id ? '#6c8aff' : '#8b8fa4',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                        padding: 0,
+                      }}
+                      title={
+                        playingId === track.row_id ? 'Pause preview' : 'Play preview'
+                      }
+                    >
+                      {playingId === track.row_id ? (
+                        <Pause size={14} />
+                      ) : (
+                        <Play size={14} />
+                      )}
+                    </button>
+
+                    {/* Progress bar — only shows meaningful progress for the playing track */}
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 4,
+                        borderRadius: 2,
+                        background: '#2d3148',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${playingId === track.row_id ? playProgress * 100 : 0}%`,
+                          height: '100%',
+                          background: '#6c8aff',
+                          borderRadius: 2,
+                          transition: 'width 0.3s linear',
+                        }}
+                      />
+                    </div>
+
+                    {/* Select button */}
+                    <button
+                      onClick={() => handleSelectTrack(track)}
+                      disabled={downloadingId !== null}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: 6,
+                        border: 'none',
+                        background:
+                          downloadingId === track.row_id
+                            ? '#4ade8040'
+                            : '#4ade8020',
+                        color: '#4ade80',
+                        fontWeight: 600,
+                        fontSize: '0.82em',
+                        cursor:
+                          downloadingId !== null ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        whiteSpace: 'nowrap',
+                      }}
+                      title="Select this track"
+                    >
+                      {downloadingId === track.row_id ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          <Check size={12} />
+                          Select
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── Empty State ── */}
-        {!isSearching && hasSearched && results.length === 0 && !searchError && (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: 32,
-              color: '#8b8fa4',
-              fontSize: '0.9em',
-            }}
-          >
-            No tracks found. Try different keywords or search field.
-          </div>
-        )}
-
-        {/* ── Initial State (before first search) ── */}
-        {!isSearching && !hasSearched && (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: 32,
-              color: '#8b8fa4',
-              fontSize: '0.9em',
-            }}
-          >
-            <Music size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
-            <div>Search the RPG music library (~2,580 tracks)</div>
-            <div style={{ fontSize: '0.85em', marginTop: 4, opacity: 0.7 }}>
-              Enter keywords and press Search or hit Enter
+              ))}
             </div>
-          </div>
-        )}
+          )}
+
+          {/* ── Empty State ── */}
+          {!isSearching && hasSearched && results.length === 0 && !searchError && (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: 32,
+                color: '#8b8fa4',
+                fontSize: '0.9em',
+              }}
+            >
+              No tracks found. Try different keywords or search field.
+            </div>
+          )}
+
+          {/* ── Initial State (before first search) ── */}
+          {!isSearching && !hasSearched && (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: 32,
+                color: '#8b8fa4',
+                fontSize: '0.9em',
+              }}
+            >
+              <Music size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+              <div>Search the RPG music library (~2,580 tracks)</div>
+              <div style={{ fontSize: '0.85em', marginTop: 4, opacity: 0.7 }}>
+                Enter keywords and press Search or hit Enter
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </Modal>
+    </div>,
+    document.body
   );
 }
 
