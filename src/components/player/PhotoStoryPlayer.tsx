@@ -81,6 +81,8 @@ interface NodeDisplayContent {
   textSections: TextSection[];
   /** Badge color class for the type indicator */
   badgeColor: string;
+  /** Pre-existing voiceover audio URL (blob URL or data URL) if already generated */
+  voiceoverAudio?: string;
 }
 
 // =============================================================================
@@ -199,6 +201,7 @@ function getNodeDisplayContent(node: StoryNode): NodeDisplayContent {
         image: d.image,
         textSections: sections,
         badgeColor: 'bg-purple-600',
+        voiceoverAudio: d.voiceoverAudio,
       };
     }
 
@@ -215,6 +218,7 @@ function getNodeDisplayContent(node: StoryNode): NodeDisplayContent {
         image: d.image,
         textSections: sections,
         badgeColor: 'bg-amber-600',
+        voiceoverAudio: d.voiceoverAudio,
       };
     }
 
@@ -231,6 +235,7 @@ function getNodeDisplayContent(node: StoryNode): NodeDisplayContent {
         image: d.image,
         textSections: sections,
         badgeColor: 'bg-sky-600',
+        voiceoverAudio: d.voiceoverAudio,
       };
     }
 
@@ -262,6 +267,7 @@ function getNodeDisplayContent(node: StoryNode): NodeDisplayContent {
         image: d.image,
         textSections: sections,
         badgeColor: 'bg-blue-600',
+        voiceoverAudio: d.voiceoverAudio,
       };
     }
 
@@ -372,10 +378,20 @@ export default function PhotoStoryPlayer() {
           }
         }
 
-        // Check if TTS is enabled in AI settings
+        // Check if TTS is enabled in AI settings.
+        // Try Google API key first, fall back to the main provider API key (e.g. HyprLab).
+        // TTS calls Google's Gemini TTS API, so the key must be a valid Google key.
         const ttsSettings = useImageGenStore.getState().tts;
         const googleKey = useImageGenStore.getState().googleApiKey;
-        setTtsEnabled(ttsSettings.enabled && !!googleKey);
+        const fallbackKey = useImageGenStore.getState().apiKey;
+        const effectiveKey = googleKey || fallbackKey;
+
+        if (ttsSettings.enabled && !effectiveKey) {
+          console.warn('[PhotoStory] TTS requires a Google API key — set it in AI Settings. Narration disabled.');
+          setTtsEnabled(false);
+        } else {
+          setTtsEnabled(ttsSettings.enabled && !!effectiveKey);
+        }
 
         setIsLoading(false);
       } catch (err) {
@@ -422,12 +438,46 @@ export default function PhotoStoryPlayer() {
 
   /**
    * Start TTS narration for the given node content.
-   * Creates a new TTSPlayer and streams chunks into it.
+   *
+   * FIX 3: If the node already has saved voiceoverAudio, play that directly
+   * instead of regenerating via the TTS API. This avoids unnecessary API calls
+   * and provides instant playback for previously narrated nodes.
+   *
+   * FIX 2: When new TTS audio is generated, save it back to the node's data
+   * so subsequent plays reuse the cached audio.
    */
   const startTTS = useCallback(
     (content: NodeDisplayContent) => {
       // Don't re-trigger if already playing this index
       stopTTS();
+
+      console.log('[PhotoStory] Starting TTS for node:', content.title, '| text length:', buildNarrationText(content).length);
+
+      // FIX 3: Check if the node already has saved voiceover audio.
+      // If so, play that directly — no need to call the TTS API again.
+      if (content.voiceoverAudio) {
+        console.log('[PhotoStory] Playing existing voiceover audio for:', content.title);
+        const player = new TTSPlayer(1.0);
+        ttsPlayerRef.current = player;
+        setTtsPlaying(true);
+        setTtsPaused(false);
+
+        // Resolve through blobCache in case it's a data URL that was converted to blob URL
+        const resolvedUrl = getBlobUrl(content.voiceoverAudio);
+        player.enqueue(resolvedUrl);
+        // TTSPlayer's onend callback will fire when playback finishes,
+        // but we need to detect that to update ttsPlaying state.
+        // Since we're using a single enqueue, we poll for completion.
+        const checkDone = setInterval(() => {
+          // TTSPlayer sets playing=false internally when queue is empty and current is done
+          // We check by seeing if the player ref is still valid
+          if (!ttsPlayerRef.current || !(ttsPlayerRef.current as any).playing) {
+            setTtsPlaying(false);
+            clearInterval(checkDone);
+          }
+        }, 500);
+        return;
+      }
 
       const text = buildNarrationText(content);
       if (!text.trim()) return;
@@ -446,10 +496,35 @@ export default function PhotoStoryPlayer() {
             player.enqueue(chunk.dataUrl);
           }
         },
-        (_finalUrl) => {
+        (finalUrl) => {
           // All chunks done — TTS playback will finish when the last chunk plays out.
           // We don't auto-advance; user clicks Next.
           setTtsPlaying(false);
+
+          // FIX 2: Save the generated TTS audio back to the node so it doesn't
+          // need to be regenerated next time. We find the project node by ID and
+          // update its data with the final concatenated audio URL.
+          if (finalUrl && content.nodeId) {
+            try {
+              const store = useProjectStore.getState();
+              const proj = store.currentProject;
+              if (proj) {
+                const node = proj.nodes.find(n => n.id === content.nodeId);
+                if (node) {
+                  console.log('[PhotoStory] Saving TTS audio to node:', content.nodeId);
+                  store.updateNode(content.nodeId, {
+                    data: { ...(node.data as any), voiceoverAudio: finalUrl },
+                  } as any);
+
+                  // Also update our local nodeOrder so re-playing this slide
+                  // uses the cached audio without needing a state refresh
+                  content.voiceoverAudio = finalUrl;
+                }
+              }
+            } catch (err) {
+              console.warn('[PhotoStory] Failed to save TTS audio to node:', err);
+            }
+          }
         },
       );
 
@@ -514,15 +589,19 @@ export default function PhotoStoryPlayer() {
       setTtsEnabled(false);
       ttsStartedForIndexRef.current = currentIndex; // Prevent re-trigger
     } else {
-      // Turning on — check if API key is available, then start
+      // Turning on — check if API key is available, then start.
+      // Try Google key first, fall back to main provider key.
       const ttsSettings = useImageGenStore.getState().tts;
       const googleKey = useImageGenStore.getState().googleApiKey;
-      if (ttsSettings.enabled && googleKey) {
+      const fallbackKey = useImageGenStore.getState().apiKey;
+      const effectiveKey = googleKey || fallbackKey;
+
+      if (ttsSettings.enabled && effectiveKey) {
         setTtsEnabled(true);
         ttsStartedForIndexRef.current = -1; // Allow TTS to trigger
       } else {
         // Can't enable — no API key or TTS disabled in settings
-        console.warn('[PhotoStory] TTS not available: check AI Settings');
+        console.warn('[PhotoStory] TTS not available: Google API key required — set it in AI Settings');
       }
     }
   }, [ttsEnabled, stopTTS, currentIndex]);

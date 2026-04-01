@@ -52,6 +52,13 @@ import {
 /** Fields on SceneNode.data that hold large binary assets */
 const SCENE_ASSET_FIELDS = ['backgroundImage', 'backgroundMusic', 'voiceoverAudio'] as const;
 
+/**
+ * Co-write node types (storyRoot, plot, act, cowriteScene) that have asset fields.
+ * These are separate from scene nodes which have different field names.
+ */
+const COWRITE_NODE_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene']);
+const COWRITE_ASSET_FIELDS = ['image', 'voiceoverAudio', 'backgroundMusic'] as const;
+
 /** Fields on Entity that hold large binary assets */
 const ENTITY_ASSET_FIELDS = ['referenceImage', 'referenceVoice', 'defaultMusic'] as const;
 
@@ -125,6 +132,40 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
           id: assetId,
           projectId,
           type: field.includes('Image') || field.includes('image') ? 'image' as const : 'audio' as const,
+          name: `${node.id}_${field}`,
+          mimeType: blob.type || 'application/octet-stream',
+          blob,
+          size: blob.size,
+          createdAt: Date.now(),
+        });
+        data[field] = `asset:${assetId}`;
+        extracted++;
+      }
+    }
+  }
+
+  // Co-write node assets (storyRoot, plot, act, cowriteScene)
+  // These nodes have image, voiceoverAudio (from Photo Story TTS), and backgroundMusic fields.
+  for (const node of project.nodes) {
+    if (!COWRITE_NODE_TYPES.has(node.type)) continue;
+    const data = node.data as Record<string, unknown>;
+    for (const field of COWRITE_ASSET_FIELDS) {
+      const val = data[field];
+      if (typeof val !== 'string') continue;
+      if (val.startsWith('asset:')) continue;
+      if (val.startsWith('blob:') || (val.startsWith('data:') && val.length > 200)) {
+        // valid asset
+      } else {
+        continue;
+      }
+
+      const assetId = `${projectId}_${node.id}_${field}`;
+      const blob = await resolveToBlob(val);
+      if (blob) {
+        await db.assets.put({
+          id: assetId,
+          projectId,
+          type: field.includes('image') || field.includes('Image') ? 'image' as const : 'audio' as const,
           name: `${node.id}_${field}`,
           mimeType: blob.type || 'application/octet-stream',
           blob,
@@ -224,6 +265,20 @@ async function resolveAssetReferences(project: Project): Promise<number> {
       const val = data[field];
       if (typeof val === 'string' && val.startsWith('asset:')) {
         const assetId = val.slice(6); // Remove 'asset:' prefix
+        const success = await resolveOneAsset(assetId, project.id, data, field);
+        if (success) resolved++;
+      }
+    }
+  }
+
+  // Co-write node assets (storyRoot, plot, act, cowriteScene)
+  for (const node of project.nodes) {
+    if (!COWRITE_NODE_TYPES.has(node.type)) continue;
+    const data = node.data as Record<string, unknown>;
+    for (const field of COWRITE_ASSET_FIELDS) {
+      const val = data[field];
+      if (typeof val === 'string' && val.startsWith('asset:')) {
+        const assetId = val.slice(6);
         const success = await resolveOneAsset(assetId, project.id, data, field);
         if (success) resolved++;
       }

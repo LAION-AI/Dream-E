@@ -23,8 +23,8 @@
  * =============================================================================
  */
 
-import React, { useState, useMemo } from 'react';
-import { Sparkles, FolderOpen, Plus, Trash2, ChevronDown } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Sparkles, FolderOpen, Plus, Trash2, ChevronDown, Music, Search, Upload } from 'lucide-react';
 import type { CoWriteSceneNode, CoWriteSceneData, CoWriteSceneEntity } from '@/types';
 import { useProjectStore } from '@stores/useProjectStore';
 import InfoTooltip from '@components/common/InfoTooltip';
@@ -32,6 +32,8 @@ import { STORY_TOOLTIPS } from '@/data/storyTooltips';
 import MediaUploader from './MediaUploader';
 import ImageGenerationOverlay from '@components/media/ImageGenerationOverlay';
 import AssetPicker from '@components/media/AssetPicker';
+import MusicSearchOverlay from '@components/media/MusicSearchOverlay';
+import { getBlobUrl } from '@/utils/blobCache';
 
 // =============================================================================
 // PROPS
@@ -64,6 +66,10 @@ export default function CoWriteSceneInspector({ node }: CoWriteSceneInspectorPro
   const [assetPickerOpen, setAssetPickerOpen] = useState(false);
   /** State for the entity-picker dropdown */
   const [entityPickerOpen, setEntityPickerOpen] = useState(false);
+  /** State for the music search overlay */
+  const [musicSearchOpen, setMusicSearchOpen] = useState(false);
+  /** Hidden file input ref for manual music upload */
+  const musicFileInputRef = useRef<HTMLInputElement>(null);
 
   /**
    * Helper to update any field on the CoWriteSceneNode's data object.
@@ -111,6 +117,20 @@ export default function CoWriteSceneInspector({ node }: CoWriteSceneInspectorPro
    */
   const handleImageChange = (_file: File | null, url: string | null) => {
     updateData({ image: url || undefined });
+  };
+
+  /**
+   * Handle music file upload via the hidden file input.
+   */
+  const handleMusicFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateData({ backgroundMusic: reader.result as string });
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
   };
 
   /**
@@ -350,6 +370,55 @@ export default function CoWriteSceneInspector({ node }: CoWriteSceneInspectorPro
         </div>
       </div>
 
+      {/* ==================== BACKGROUND MUSIC ==================== */}
+      <div>
+        <label className="input-label flex items-center gap-2">
+          <Music size={14} />
+          Background Music
+        </label>
+        {node.data.backgroundMusic ? (
+          <div className="mt-2 border border-editor-border rounded-lg p-3 bg-editor-bg/50">
+            <audio
+              src={getBlobUrl(node.data.backgroundMusic)}
+              controls
+              className="w-full h-8 mb-2"
+            />
+            <button
+              onClick={() => updateData({ backgroundMusic: undefined })}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition-colors text-red-400"
+            >
+              <Trash2 size={12} />
+              Remove Music
+            </button>
+          </div>
+        ) : (
+          <p className="text-xs text-editor-muted mt-1 italic">No background music set.</p>
+        )}
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => setMusicSearchOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-accent/10 border border-accent/30 hover:bg-accent/20 transition-colors text-accent"
+          >
+            <Search size={12} />
+            Search Music
+          </button>
+          <button
+            onClick={() => musicFileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-editor-bg border border-editor-border hover:bg-editor-surface transition-colors text-editor-text"
+          >
+            <Upload size={12} />
+            Upload Music
+          </button>
+        </div>
+        <input
+          ref={musicFileInputRef}
+          type="file"
+          accept="audio/*"
+          onChange={handleMusicFileUpload}
+          className="hidden"
+        />
+      </div>
+
       {/* Image Generation Overlay */}
       <ImageGenerationOverlay
         isOpen={imageGenOpen}
@@ -368,6 +437,14 @@ export default function CoWriteSceneInspector({ node }: CoWriteSceneInspectorPro
         }}
         filterType="image"
         title="Select Scene Image"
+      />
+
+      {/* Music Search Overlay */}
+      <MusicSearchOverlay
+        isOpen={musicSearchOpen}
+        onClose={() => setMusicSearchOpen(false)}
+        onSelect={(dataUrl) => updateData({ backgroundMusic: dataUrl })}
+        title="Search Background Music"
       />
     </div>
   );

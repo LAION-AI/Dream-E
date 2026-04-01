@@ -912,6 +912,27 @@ export const COMMANDS: CommandMeta[] = [
     returns: 'Array of {sceneNodeId, title, description, entityCount, parentActId?}',
   },
 
+  // -- Co-Write Music --
+  {
+    name: 'set_node_music',
+    group: 'cowrite',
+    description: 'Set background music on a co-write node (storyRoot, plot, act, or cowriteScene)',
+    params: [
+      { name: 'nodeId', type: 'string', required: true, description: 'Node ID (storyRoot, plot, act, or cowriteScene)' },
+      { name: 'musicDataUrl', type: 'string', required: true, description: 'Base64 audio data URL for the music' },
+    ],
+    returns: '{nodeId, set: true}',
+  },
+  {
+    name: 'remove_node_music',
+    group: 'cowrite',
+    description: 'Remove background music from a co-write node',
+    params: [
+      { name: 'nodeId', type: 'string', required: true, description: 'Node ID (storyRoot, plot, act, or cowriteScene)' },
+    ],
+    returns: '{nodeId, removed: true}',
+  },
+
   // ── TTS ──
   {
     name: 'generate_scene_voiceover',
@@ -1348,6 +1369,7 @@ The TTS service uses Google Gemini and produces natural-sounding narration. Cons
     'update_project_info', 'update_notes',           // project group
     'get_entity_details', 'list_entities',            // query group
     'list_variables',                                 // query group (for context)
+    'search_music', 'get_music_track', 'list_music_genres', // music group — search & browse tracks
   ]);
 
   // Filter commands based on project mode

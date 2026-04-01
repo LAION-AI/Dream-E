@@ -2178,6 +2178,74 @@ const handleListCowriteScenes: CommandHandler = (_params, _store, project) => {
   };
 };
 
+// ─── CO-WRITE MUSIC ─────────────────────────────────────────────────
+
+/**
+ * Valid co-write node types that support the backgroundMusic field.
+ * Used by set_node_music and remove_node_music to validate the target node.
+ */
+const COWRITE_MUSIC_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene']);
+
+/**
+ * Set background music on a co-write node (storyRoot, plot, act, or cowriteScene).
+ * Accepts a base64 audio data URL and stores it on the node's backgroundMusic field.
+ *
+ * WHY A SEPARATE COMMAND FROM set_scene_music?
+ * set_scene_music targets game-mode scene nodes (type 'scene') and also handles
+ * musicKeepPlaying. Co-write nodes have a simpler model — just store the audio.
+ */
+const handleSetNodeMusic: CommandHandler = (params, store, project) => {
+  const nodeId = requireString(params, 'nodeId');
+  const musicDataUrl = requireString(params, 'musicDataUrl');
+
+  const node = project.nodes.find(n => n.id === nodeId);
+  if (!node || !COWRITE_MUSIC_TYPES.has(node.type)) {
+    const available = project.nodes
+      .filter(n => COWRITE_MUSIC_TYPES.has(n.type))
+      .map(n => `${n.id} (${n.type}: "${n.label}")`)
+      .join(', ');
+    throw new ValidationError(
+      `Node ${nodeId} is not a valid co-write node for music.`,
+      available
+        ? `Available co-write nodes: ${available}`
+        : 'No co-write nodes exist.'
+    );
+  }
+
+  const data = node.data as Record<string, unknown>;
+  store.updateNode(nodeId, { data: { ...data, backgroundMusic: musicDataUrl } } as any);
+
+  return { success: true, nodeId, set: true };
+};
+
+/**
+ * Remove background music from a co-write node.
+ * Clears the backgroundMusic field by setting it to undefined.
+ */
+const handleRemoveNodeMusic: CommandHandler = (params, store, project) => {
+  const nodeId = requireString(params, 'nodeId');
+
+  const node = project.nodes.find(n => n.id === nodeId);
+  if (!node || !COWRITE_MUSIC_TYPES.has(node.type)) {
+    const available = project.nodes
+      .filter(n => COWRITE_MUSIC_TYPES.has(n.type))
+      .map(n => `${n.id} (${n.type}: "${n.label}")`)
+      .join(', ');
+    throw new ValidationError(
+      `Node ${nodeId} is not a valid co-write node for music.`,
+      available
+        ? `Available co-write nodes: ${available}`
+        : 'No co-write nodes exist.'
+    );
+  }
+
+  const data = node.data as Record<string, unknown>;
+  const hadMusic = !!data.backgroundMusic;
+  store.updateNode(nodeId, { data: { ...data, backgroundMusic: undefined } } as any);
+
+  return { success: true, nodeId, removed: true, hadMusic };
+};
+
 // =============================================================================
 // HANDLER MAP
 // =============================================================================
@@ -2277,6 +2345,9 @@ const handlers: Record<string, CommandHandler> = {
   update_cowrite_scene: handleUpdateCowriteScene,
   delete_cowrite_scene: handleDeleteCowriteScene,
   list_cowrite_scenes: handleListCowriteScenes,
+  // Co-Write Music
+  set_node_music: handleSetNodeMusic,
+  remove_node_music: handleRemoveNodeMusic,
 };
 
 // =============================================================================

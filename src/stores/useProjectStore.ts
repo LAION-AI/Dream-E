@@ -1123,6 +1123,10 @@ export const useProjectStore = create<ProjectState>()(
 /** Fields on SceneNode.data that hold large binary assets */
 const SCENE_ASSET_FIELDS = ['backgroundImage', 'backgroundMusic', 'voiceoverAudio'] as const;
 
+/** Co-write node types that have asset fields (image, voiceoverAudio, backgroundMusic) */
+const COWRITE_NODE_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene']);
+const COWRITE_ASSET_FIELDS = ['image', 'voiceoverAudio', 'backgroundMusic'] as const;
+
 /** Fields on Entity that hold large binary assets */
 const ENTITY_ASSET_FIELDS = ['referenceImage', 'referenceVoice', 'defaultMusic'] as const;
 
@@ -1132,6 +1136,7 @@ const ENTITY_ASSET_FIELDS = ['referenceImage', 'referenceVoice', 'defaultMusic']
  */
 const ALL_ASSET_FIELD_NAMES = new Set<string>([
   ...SCENE_ASSET_FIELDS,
+  ...COWRITE_ASSET_FIELDS,
   ...ENTITY_ASSET_FIELDS,
 ]);
 
@@ -1176,6 +1181,16 @@ function snapshotProjectLean(project: Project): Project {
       delete data.constructedContext;
       delete data.constructedSystemPrompt;
     }
+
+    // Co-write nodes (storyRoot, plot, act, cowriteScene) also have large assets
+    if (COWRITE_NODE_TYPES.has(node.type)) {
+      const data = node.data as Record<string, unknown>;
+      for (const field of COWRITE_ASSET_FIELDS) {
+        if (typeof data[field] === 'string' && (data[field] as string).length > 200) {
+          data[field] = '__asset_stripped__';
+        }
+      }
+    }
   }
 
   for (const entity of (clone.entities || [])) {
@@ -1206,6 +1221,18 @@ function rehydrateAssets(snapshot: Project, liveProject: Project): Project {
       const liveNode = liveNodeMap.get(node.id);
       const liveData = liveNode?.data as Record<string, unknown> | undefined;
       for (const field of SCENE_ASSET_FIELDS) {
+        if (data[field] === '__asset_stripped__' && liveData?.[field]) {
+          data[field] = liveData[field];
+        }
+      }
+    }
+
+    // Co-write nodes (storyRoot, plot, act, cowriteScene) also need asset rehydration
+    if (COWRITE_NODE_TYPES.has(node.type)) {
+      const data = node.data as Record<string, unknown>;
+      const liveNode = liveNodeMap.get(node.id);
+      const liveData = liveNode?.data as Record<string, unknown> | undefined;
+      for (const field of COWRITE_ASSET_FIELDS) {
         if (data[field] === '__asset_stripped__' && liveData?.[field]) {
           data[field] = liveData[field];
         }
