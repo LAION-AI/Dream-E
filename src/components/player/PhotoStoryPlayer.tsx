@@ -40,7 +40,9 @@ import {
   VolumeX,
   Play,
   Pause,
+  Settings,
 } from 'lucide-react';
+import { Howl } from 'howler';
 
 import { useProjectStore } from '@stores/useProjectStore';
 import { useImageGenStore } from '@stores/useImageGenStore';
@@ -83,6 +85,8 @@ interface NodeDisplayContent {
   badgeColor: string;
   /** Pre-existing voiceover audio URL (blob URL or data URL) if already generated */
   voiceoverAudio?: string;
+  /** Background music URL (blob URL or data URL) if assigned to this node */
+  backgroundMusic?: string;
 }
 
 // =============================================================================
@@ -202,6 +206,7 @@ function getNodeDisplayContent(node: StoryNode): NodeDisplayContent {
         textSections: sections,
         badgeColor: 'bg-purple-600',
         voiceoverAudio: d.voiceoverAudio,
+        backgroundMusic: (d as any).backgroundMusic,
       };
     }
 
@@ -219,6 +224,7 @@ function getNodeDisplayContent(node: StoryNode): NodeDisplayContent {
         textSections: sections,
         badgeColor: 'bg-amber-600',
         voiceoverAudio: d.voiceoverAudio,
+        backgroundMusic: (d as any).backgroundMusic,
       };
     }
 
@@ -236,6 +242,7 @@ function getNodeDisplayContent(node: StoryNode): NodeDisplayContent {
         textSections: sections,
         badgeColor: 'bg-sky-600',
         voiceoverAudio: d.voiceoverAudio,
+        backgroundMusic: (d as any).backgroundMusic,
       };
     }
 
@@ -268,6 +275,7 @@ function getNodeDisplayContent(node: StoryNode): NodeDisplayContent {
         textSections: sections,
         badgeColor: 'bg-blue-600',
         voiceoverAudio: d.voiceoverAudio,
+        backgroundMusic: d.backgroundMusic,
       };
     }
 
@@ -329,6 +337,13 @@ export default function PhotoStoryPlayer() {
   /** Whether we're paused (waiting for user to resume) */
   const [ttsPaused, setTtsPaused] = useState(false);
 
+  /** Music volume (0..1) for background music Howl instances */
+  const [musicVolume, setMusicVolume] = useState(0.5);
+  /** TTS/narration volume (0..1), applied to TTSPlayer instances */
+  const [ttsVolume, setTtsVolume] = useState(1.0);
+  /** Whether the audio settings popover is visible */
+  const [showSettings, setShowSettings] = useState(false);
+
   // ── Refs ────────────────────────────────────────────────────────────────
   const ttsPlayerRef = useRef<TTSPlayer | null>(null);
   const ttsHandleRef = useRef<TTSStreamHandle | null>(null);
@@ -336,6 +351,12 @@ export default function PhotoStoryPlayer() {
   const ttsStartedForIndexRef = useRef<number>(-1);
   /** Ref for the scrollable text container to auto-scroll to top on slide change */
   const textContainerRef = useRef<HTMLDivElement>(null);
+  /** Howl instance for background music — persists across slides until the music URL changes */
+  const musicHowlRef = useRef<Howl | null>(null);
+  /** Track the current music source URL so we don't restart the same track on every slide */
+  const currentMusicSrcRef = useRef<string | null>(null);
+  /** Ref for the settings popover container (for click-outside dismissal) */
+  const settingsRef = useRef<HTMLDivElement>(null);
 
   // ── Load project ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -457,7 +478,7 @@ export default function PhotoStoryPlayer() {
       // If so, play that directly — no need to call the TTS API again.
       if (content.voiceoverAudio) {
         console.log('[PhotoStory] Playing existing voiceover audio for:', content.title);
-        const player = new TTSPlayer(1.0);
+        const player = new TTSPlayer(ttsVolume);
         ttsPlayerRef.current = player;
         setTtsPlaying(true);
         setTtsPaused(false);
@@ -482,7 +503,7 @@ export default function PhotoStoryPlayer() {
       const text = buildNarrationText(content);
       if (!text.trim()) return;
 
-      const player = new TTSPlayer(1.0);
+      const player = new TTSPlayer(ttsVolume);
       ttsPlayerRef.current = player;
 
       setTtsPlaying(true);
@@ -530,7 +551,7 @@ export default function PhotoStoryPlayer() {
 
       ttsHandleRef.current = handle;
     },
-    [stopTTS],
+    [stopTTS, ttsVolume],
   );
 
   // ── Auto-trigger TTS when slide changes ────────────────────────────
@@ -553,6 +574,90 @@ export default function PhotoStoryPlayer() {
       textContainerRef.current.scrollTop = 0;
     }
   }, [currentIndex]);
+
+  // ── Background music playback ─────────────────────────────────────
+  // When the slide changes, check if the current node has backgroundMusic.
+  // If the music URL is different from what's currently playing, crossfade
+  // to the new track. If no music is set on this node, let the previous
+  // music continue (don't stop it) — this matches the "musicKeepPlaying"
+  // behavior from the adventure engine.
+  useEffect(() => {
+    const node = nodeOrder[currentIndex];
+    if (!node) return;
+    const musicUrl = node.backgroundMusic;
+
+    if (musicUrl) {
+      const resolvedUrl = getBlobUrl(musicUrl);
+
+      // Only change music if it's a different track than what's currently playing
+      if (currentMusicSrcRef.current !== resolvedUrl) {
+        // Stop and unload the previous music Howl to free memory
+        if (musicHowlRef.current) {
+          musicHowlRef.current.stop();
+          musicHowlRef.current.unload();
+        }
+
+        const howl = new Howl({
+          src: [resolvedUrl],
+          loop: true,
+          volume: musicVolume,
+          html5: true, // Use HTML5 Audio to avoid decoding the entire file into memory
+        });
+        howl.play();
+        musicHowlRef.current = howl;
+        currentMusicSrcRef.current = resolvedUrl;
+      }
+    }
+    // If no music on this node, let previous music keep playing (don't stop)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, nodeOrder]);
+
+  // ── Update music volume when slider changes ───────────────────────
+  useEffect(() => {
+    if (musicHowlRef.current) {
+      musicHowlRef.current.volume(musicVolume);
+    }
+  }, [musicVolume]);
+
+  // ── Update TTS volume when slider changes ─────────────────────────
+  useEffect(() => {
+    if (ttsPlayerRef.current) {
+      ttsPlayerRef.current.setVolume(ttsVolume);
+    }
+  }, [ttsVolume]);
+
+  // ── Cleanup music on unmount ──────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (musicHowlRef.current) {
+        musicHowlRef.current.stop();
+        musicHowlRef.current.unload();
+        musicHowlRef.current = null;
+      }
+    };
+  }, []);
+
+  // ── Click outside to close settings popover ───────────────────────
+  useEffect(() => {
+    if (!showSettings) return;
+
+    function handleClickOutside(e: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setShowSettings(false);
+      }
+    }
+
+    // Delay the listener attachment so the button click that opened the
+    // popover doesn't immediately close it
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSettings]);
 
   // ── Navigation ─────────────────────────────────────────────────────
 
@@ -769,9 +874,9 @@ export default function PhotoStoryPlayer() {
       </main>
 
       {/* ══════════════════════════════════════════════════════════════════
-          BOTTOM BAR — Navigation + TTS controls
+          BOTTOM BAR — Navigation + TTS controls + Settings
           ══════════════════════════════════════════════════════════════════ */}
-      <footer className="flex items-center justify-between px-6 py-4 bg-black/40 border-t border-white/10 shrink-0">
+      <footer className="relative flex items-center justify-between px-6 py-4 bg-black/40 border-t border-white/10 shrink-0">
         {/* Previous button */}
         <button
           onClick={goPrev}
@@ -782,7 +887,7 @@ export default function PhotoStoryPlayer() {
           Previous
         </button>
 
-        {/* Center — TTS toggle */}
+        {/* Center — TTS toggle + Settings gear */}
         <div className="flex items-center gap-3">
           <button
             onClick={toggleTTS}
@@ -802,7 +907,64 @@ export default function PhotoStoryPlayer() {
               Speaking...
             </span>
           )}
+
+          {/* Audio Settings gear button */}
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className={`p-2 rounded-lg transition-colors ${
+              showSettings
+                ? 'bg-editor-accent/20 text-editor-accent'
+                : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+            }`}
+            title="Audio Settings"
+          >
+            <Settings size={20} />
+          </button>
         </div>
+
+        {/* Audio Settings popover — positioned above the footer bar */}
+        {showSettings && (
+          <div
+            ref={settingsRef}
+            className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-[#1a1d2e] border border-[#2d3148] rounded-xl p-4 shadow-2xl w-72 z-50"
+          >
+            <h3 className="text-sm font-semibold text-white mb-3">Audio Settings</h3>
+
+            {/* TTS / Narration Volume */}
+            <div className="mb-3">
+              <label className="text-xs text-[#8b8fa4] flex justify-between">
+                <span>Narration Volume</span>
+                <span>{Math.round(ttsVolume * 100)}%</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={ttsVolume}
+                onChange={(e) => setTtsVolume(parseFloat(e.target.value))}
+                className="w-full mt-1 accent-[#6366f1]"
+              />
+            </div>
+
+            {/* Background Music Volume */}
+            <div>
+              <label className="text-xs text-[#8b8fa4] flex justify-between">
+                <span>Music Volume</span>
+                <span>{Math.round(musicVolume * 100)}%</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={musicVolume}
+                onChange={(e) => setMusicVolume(parseFloat(e.target.value))}
+                className="w-full mt-1 accent-[#6366f1]"
+              />
+            </div>
+          </div>
+        )}
 
         {/* Next button */}
         <button
