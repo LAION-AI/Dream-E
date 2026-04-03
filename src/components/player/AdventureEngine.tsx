@@ -1361,6 +1361,24 @@ export default function AdventureEngine() {
 
     setCurrentScene(sceneData);
 
+    // Extract curiosity facts and character mind states from the stored
+    // AI response (if any). This enables the Curiosity and Character Lens
+    // panels to work for previously generated scenes, not just new ones.
+    const storedAiResponse = node.data.aiResponse || (node.data as any).aiResponse;
+    if (typeof storedAiResponse === 'string' && storedAiResponse.trim()) {
+      try {
+        const parsed = JSON.parse(storedAiResponse);
+        if (parsed.curiosityFacts && Array.isArray(parsed.curiosityFacts)) {
+          setCuriosityFacts(parsed.curiosityFacts);
+        }
+        if (parsed.characterMindStates && typeof parsed.characterMindStates === 'object') {
+          setCharacterMindStates(parsed.characterMindStates);
+        }
+      } catch {
+        // AI response might not be JSON (legacy scenes) — that's OK
+      }
+    }
+
     // Track visited scenes for in-play blob eviction (P2a fix).
     // After each OW scene is saved, evictBlobsExcept() soft-evicts blobs
     // not in the last 3 visited scenes + entity assets. This is done in
