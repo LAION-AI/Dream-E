@@ -1497,7 +1497,7 @@ export default defineConfig({
             req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
             req.on('end', async () => {
               try {
-                const { message, systemPrompt, provider, model, apiKey, endpoint } = JSON.parse(body);
+                const { message, systemPrompt, provider, model, apiKey, endpoint, gameContext } = JSON.parse(body);
 
                 // SSE headers
                 res.setHeader('Content-Type', 'text/event-stream');
@@ -1515,7 +1515,13 @@ export default defineConfig({
                   storytellerChatHistory.push({ role: 'system', content: systemPrompt });
                 }
 
-                storytellerChatHistory.push({ role: 'user', content: message });
+                // Include full game context with the user message so the
+                // Storyteller knows the complete story, characters, and state.
+                const enrichedMessage = gameContext
+                  ? `[Current Game State]\n${gameContext}\n\n---\nPlayer: ${message}`
+                  : message;
+
+                storytellerChatHistory.push({ role: 'user', content: enrichedMessage });
 
                 let aborted = false;
                 const abortController = new AbortController();

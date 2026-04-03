@@ -2476,7 +2476,7 @@ export default function AdventureEngine() {
    * has access to game context (current scene, entities, etc.) but acts as
    * a friendly narrator/DM persona rather than the scene writer.
    */
-  const handleStorytellerSend = useCallback((text: string) => {
+  const handleStorytellerSend = useCallback(async (text: string) => {
     const userMsg = { role: 'user' as const, content: text, timestamp: Date.now() };
     setStorytellerMessages(prev => [...prev, userMsg]);
     setStorytellerGenerating(true);
@@ -2487,24 +2487,26 @@ export default function AdventureEngine() {
     const writer = settings.writer;
     const apiKey = writer.provider === 'gemini' ? (writer.apiKey || settings.googleApiKey) : writer.apiKey;
 
-    // Build minimal game context for the storyteller
+    // Build FULL game context for the storyteller — same as the OW writer sees
     const project = useProjectStore.getState().currentProject;
     const playerSession = usePlayerStore.getState().session;
-    const playerScene = usePlayerStore.getState().currentScene;
     if (!project || !playerSession) return;
 
-    // Construct a context summary for the storyteller
-    const entityNames = (project.entities || []).map(e => `${e.name} (${e.category})`).join(', ');
-    const gameContext = [
-      `Current scene: ${playerScene?.storyText?.slice(0, 200) || '(no scene)'}`,
-      `Speaker: ${playerScene?.speakerName || 'Narrator'}`,
-      `Entities in world: ${entityNames || '(none)'}`,
-      `Project: ${project.info.title}`,
-    ].join('\n');
+    // Use the same context builder as the OW writer so the Storyteller
+    // has complete knowledge of the story, characters, and game state.
+    // Import dynamically to avoid circular deps.
+    let gameContext = '';
+    try {
+      const { getGameContext } = await import('@/services/gameStateAPI.context');
+      gameContext = getGameContext();
+    } catch {
+      // Fallback if import fails
+      gameContext = `Project: ${project.info.title}\nScene: ${playerSession.currentNodeId}`;
+    }
 
-    // TODO: Use a dedicated STORYTELLER_CHAT_SYSTEM_PROMPT from the other agent's changes.
-    // For now, use a sensible default prompt that instructs the AI to be a helpful storyteller.
-    const systemPrompt = `You are "The Storyteller" — a friendly, knowledgeable narrator and dungeon master for an interactive fiction game called "${project.info.title}". The player is asking you questions about the game world, characters, lore, or story. Answer warmly and in-character, drawing on the game context provided. Keep answers concise but evocative. You may speculate about lore and backstory if the game context doesn't cover it — but clearly mark speculation as such.`;
+    // Use the dedicated Storyteller system prompt
+    const { STORYTELLER_CHAT_SYSTEM_PROMPT } = await import('@/stores/useImageGenStore');
+    const systemPrompt = STORYTELLER_CHAT_SYSTEM_PROMPT;
 
     // Call the storyteller chat endpoint via SSE streaming.
     // The endpoint may not exist yet — the other agent may need to create it.

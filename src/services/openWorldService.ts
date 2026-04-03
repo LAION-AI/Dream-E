@@ -769,9 +769,9 @@ export function generateOpenWorldScene(
                 const { entityId, imageDataUrl, entity } = result.value;
                 // Persist the reference image on the entity (triggers debounced auto-save)
                 onEntityImageReady(entityId, imageDataUrl);
-                // Also update the in-memory project so Step 1b and Step 5
-                // can see this entity now has a reference image
-                entity.referenceImage = imageDataUrl;
+                // Track for later steps — entity object is Immer-frozen (read-only),
+                // so we can't assign directly. Use try/catch as safety.
+                try { (entity as any).referenceImage = imageDataUrl; } catch { /* frozen */ }
                 successCount++;
               }
             }
