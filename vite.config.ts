@@ -39,6 +39,9 @@ let openWorldSessionId: string | null = null;
 /** Server-side chat message history for the direct-API chat endpoint */
 let chatHistory: { role: string; content: string }[] = [];
 
+/** Server-side chat message history for the Storyteller chat endpoint */
+let storytellerChatHistory: Array<{ role: string; content: string }> = [];
+
 // =============================================================================
 // VITE CONFIG
 // =============================================================================
@@ -983,6 +986,10 @@ export default defineConfig({
                     engagementStrategy: { type: 'STRING', description: 'One sentence decision: should this scene SATISFY the player (give them what they want) or CHALLENGE them (introduce complication/conflict/uncertainty that requires active decision-making)? Never make it impossible, just require engagement.' },
                     narrativeTensionAnalysis: { type: 'STRING', description: 'Analyze the tension arc: how many scenes since last conflict/surprise/setback? If 2+, MUST introduce tension. If recent, may offer respite. Describe what tension element you will introduce and why.' },
                     plannedStateChanges: { type: 'STRING', description: 'One detailed sentence: which specific entities (characters, locations, objects) should change state, and how, to realize the engagement strategy? Changes must be plausible, emotionally intelligent, not cliche. EVERY entity mentioned here MUST get a corresponding entityUpdates entry with profilePatch.' },
+                    characterMindStates: {
+                      type: 'OBJECT',
+                      description: 'Theory-of-mind for ALL characters present. Keys = entity IDs. Values = objects with: feeling (current emotion, 1 sentence), thinkingSituation (assessment of current situation, 1-3 sentences), thinkingOthers (thoughts about other characters present, 1-3 sentences), theoryOfMind (what they believe others think about them, 1-2 sentences). Use Big Five profiles and Character Depth Guide.'
+                    },
                     // ── Scene content (written AFTER the analysis above) ──
                     sceneText: { type: 'STRING', description: 'The narrative continuation (100-300 words). Screenplay-inspired style. Driven by the analysis above.' },
                     speakerName: { type: 'STRING', description: 'Name of the narrator or main speaking character' },
@@ -1050,6 +1057,19 @@ export default defineConfig({
                       type: 'BOOLEAN',
                       description: 'Set true to auto-generate TTS voiceover for this scene. Default false.',
                     },
+                    curiosityFacts: {
+                      type: 'ARRAY',
+                      items: {
+                        type: 'OBJECT',
+                        properties: {
+                          title: { type: 'STRING', description: 'Engaging title' },
+                          fact: { type: 'STRING', description: 'Real-world educational fact (2-4 sentences)' },
+                          category: { type: 'STRING', description: 'history, science, culture, psychology, nature, technology' },
+                        },
+                        required: ['title', 'fact', 'category'],
+                      },
+                      description: 'Array of 2-4 real-world educational fun facts related to scene content. NOT fiction — genuine knowledge about the real world topics touched by the scene.',
+                    },
                     floatingGoals: {
                       type: 'ARRAY',
                       items: { type: 'STRING' },
@@ -1060,7 +1080,7 @@ export default defineConfig({
                       description: 'When the player uploads reference images, assign them to entities. Keys are entity IDs, values are 0-based indices of the uploaded images. Only use when the player explicitly attaches images and asks to use them for specific entities.',
                     },
                   },
-                  required: ['playerGoalHypothesis', 'sceneIntentHypothesis', 'lastSatisfactionEstimate', 'engagementStrategy', 'narrativeTensionAnalysis', 'plannedStateChanges', 'sceneText', 'speakerName', 'choices', 'imagePrompt', 'reuseImage', 'musicQuery', 'sceneSummary', 'presentEntityIds', 'floatingGoals'],
+                  required: ['playerGoalHypothesis', 'sceneIntentHypothesis', 'lastSatisfactionEstimate', 'engagementStrategy', 'narrativeTensionAnalysis', 'plannedStateChanges', 'characterMindStates', 'sceneText', 'speakerName', 'choices', 'imagePrompt', 'reuseImage', 'musicQuery', 'sceneSummary', 'presentEntityIds', 'floatingGoals', 'curiosityFacts'],
                 };
 
                 if (provider === 'gemini') {
@@ -1453,6 +1473,199 @@ export default defineConfig({
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({ error: msg }));
             }
+            return;
+          }
+
+          // ============================================================
+          // POST /api/storyteller-chat-reset — Reset the Storyteller chat
+          // ============================================================
+          if (url === '/api/storyteller-chat-reset' && req.method === 'POST') {
+            storytellerChatHistory = [];
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: true }));
+            return;
+          }
+
+          // ============================================================
+          // POST /api/storyteller-chat — Send a message to the Storyteller
+          // ============================================================
+          // Same streaming pattern as /api/chat but uses storytellerChatHistory
+          // instead of chatHistory. The Storyteller is an in-game creative
+          // companion that discusses the story with the player.
+          if (url === '/api/storyteller-chat' && req.method === 'POST') {
+            let body = '';
+            req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+            req.on('end', async () => {
+              try {
+                const { message, systemPrompt, provider, model, apiKey, endpoint } = JSON.parse(body);
+
+                // SSE headers
+                res.setHeader('Content-Type', 'text/event-stream');
+                res.setHeader('Cache-Control', 'no-cache');
+                res.setHeader('Connection', 'keep-alive');
+                res.setHeader('X-Accel-Buffering', 'no');
+
+                if (!apiKey) {
+                  res.write(`data: ${JSON.stringify({ type: 'error', error: 'No API key configured for the Storyteller chat. Set it in AI Settings.' })}\n\n`);
+                  res.end();
+                  return;
+                }
+
+                if (storytellerChatHistory.length === 0 && systemPrompt) {
+                  storytellerChatHistory.push({ role: 'system', content: systemPrompt });
+                }
+
+                storytellerChatHistory.push({ role: 'user', content: message });
+
+                let aborted = false;
+                const abortController = new AbortController();
+                res.on('close', () => {
+                  aborted = true;
+                  abortController.abort();
+                });
+
+                let assistantResponse = '';
+
+                if (provider === 'gemini') {
+                  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+                  const contents = storytellerChatHistory.filter(msg => msg.role !== 'system').map(msg => ({
+                    role: msg.role === 'user' ? 'user' : 'model',
+                    parts: [{ text: msg.content }]
+                  }));
+
+                  const geminiBody = {
+                    system_instruction: {
+                      parts: [{ text: storytellerChatHistory.find(msg => msg.role === 'system')?.content || '' }]
+                    },
+                    contents,
+                    generationConfig: {
+                      temperature: 0.7,
+                      maxOutputTokens: 16384,
+                    },
+                  };
+
+                  const geminiRes = await fetch(geminiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(geminiBody),
+                    signal: abortController.signal,
+                  });
+
+                  if (!geminiRes.ok) {
+                    const errText = await geminiRes.text().catch(() => 'Unknown error');
+                    let errMsg = `Gemini API error ${geminiRes.status}`;
+                    try {
+                      const errJson = JSON.parse(errText);
+                      errMsg = errJson.error?.message || errMsg;
+                    } catch { errMsg += ': ' + errText.slice(0, 200); }
+                    res.write(`data: ${JSON.stringify({ type: 'error', error: errMsg })}\n\n`);
+                    res.end();
+                    return;
+                  }
+
+                  const reader = geminiRes.body as any;
+                  let buf = '';
+
+                  for await (const chunk of reader) {
+                    if (aborted) break;
+                    buf += (typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
+
+                    const lines = buf.split('\n');
+                    buf = lines.pop() || '';
+
+                    for (const line of lines) {
+                      if (!line.startsWith('data: ')) continue;
+                      const jsonStr = line.slice(6).trim();
+                      if (!jsonStr) continue;
+                      try {
+                        const parsed = JSON.parse(jsonStr);
+                        const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (text && !aborted) {
+                          assistantResponse += text;
+                          res.write(`data: ${JSON.stringify({ type: 'text', text })}\n\n`);
+                        }
+                      } catch {
+                        // skip malformed JSON chunks
+                      }
+                    }
+                  }
+                } else {
+                  // OpenAI-compatible
+                  const baseUrl = (endpoint || 'https://api.openai.com/v1').replace(/\/+$/, '');
+                  const chatUrl = `${baseUrl}/chat/completions`;
+
+                  const oaiRes = await fetch(chatUrl, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${apiKey}`,
+                    },
+                    body: JSON.stringify({
+                      model,
+                      stream: true,
+                      temperature: 0.7,
+                      max_tokens: 16384,
+                      messages: storytellerChatHistory,
+                    }),
+                    signal: abortController.signal,
+                  });
+
+                  if (!oaiRes.ok) {
+                    const errText = await oaiRes.text().catch(() => 'Unknown error');
+                    let errMsg = `API error ${oaiRes.status}`;
+                    try {
+                      const errJson = JSON.parse(errText);
+                      errMsg = errJson.error?.message || errMsg;
+                    } catch { errMsg += ': ' + errText.slice(0, 200); }
+                    res.write(`data: ${JSON.stringify({ type: 'error', error: errMsg })}\n\n`);
+                    res.end();
+                    return;
+                  }
+
+                  const reader = oaiRes.body as any;
+                  let buf = '';
+
+                  for await (const chunk of reader) {
+                    if (aborted) break;
+                    buf += (typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
+
+                    const lines = buf.split('\n');
+                    buf = lines.pop() || '';
+
+                    for (const line of lines) {
+                      if (!line.startsWith('data: ')) continue;
+                      const jsonStr = line.slice(6).trim();
+                      if (jsonStr === '[DONE]') continue;
+                      if (!jsonStr) continue;
+                      try {
+                        const parsed = JSON.parse(jsonStr);
+                        const text = parsed.choices?.[0]?.delta?.content;
+                        if (text && !aborted) {
+                          assistantResponse += text;
+                          res.write(`data: ${JSON.stringify({ type: 'text', text })}\n\n`);
+                        }
+                      } catch {
+                        // skip malformed JSON chunks
+                      }
+                    }
+                  }
+                }
+
+                if (!aborted) {
+                  storytellerChatHistory.push({ role: 'assistant', content: assistantResponse });
+                  if (!res.writableEnded) {
+                    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+                    res.end();
+                  }
+                }
+              } catch (err: unknown) {
+                if (!res.writableEnded) {
+                  res.write(`data: ${JSON.stringify({ type: 'error', error: err instanceof Error ? err.message : 'Unknown error' })}\n\n`);
+                  res.end();
+                }
+              }
+            });
             return;
           }
 

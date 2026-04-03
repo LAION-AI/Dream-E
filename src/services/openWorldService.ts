@@ -82,6 +82,10 @@ export interface OpenWorldResult {
   floatingGoals?: string[];
   /** When user uploads images, maps entity IDs to 0-based image indices for assignment */
   assignUploadedImages?: Record<string, number>;
+  /** Theory-of-mind for all characters present — keys are entity IDs */
+  characterMindStates?: Record<string, { feeling: string; thinkingSituation: string; thinkingOthers: string; theoryOfMind: string }>;
+  /** Array of 2-4 real-world educational fun facts related to scene content */
+  curiosityFacts?: Array<{ title: string; fact: string; category: string }>;
 }
 
 interface OWMetadata {
@@ -107,6 +111,10 @@ interface OWMetadata {
   floatingGoals?: string[];
   /** When user uploads images, maps entity IDs to 0-based image indices for assignment */
   assignUploadedImages?: Record<string, number>;
+  /** Theory-of-mind for all characters present — keys are entity IDs */
+  characterMindStates?: Record<string, { feeling: string; thinkingSituation: string; thinkingOthers: string; theoryOfMind: string }>;
+  /** Array of 2-4 real-world educational fun facts related to scene content */
+  curiosityFacts?: Array<{ title: string; fact: string; category: string }>;
 }
 
 // =============================================================================
@@ -217,6 +225,8 @@ function parseOpenWorldResponse(
       narrativeTensionAnalysis: parsed.narrativeTensionAnalysis,
       floatingGoals: parsed.floatingGoals,
       assignUploadedImages: parsed.assignUploadedImages,
+      characterMindStates: parsed.characterMindStates,
+      curiosityFacts: parsed.curiosityFacts,
     };
     console.log('[OpenWorld] Parsed structured JSON output successfully');
     return { sceneText, metadata };
@@ -948,6 +958,8 @@ export function generateOpenWorldScene(
         constructedSystemPrompt: context.systemPrompt,
         floatingGoals: metadata.floatingGoals,
         assignUploadedImages: metadata.assignUploadedImages,
+        characterMindStates: metadata.characterMindStates,
+        curiosityFacts: metadata.curiosityFacts,
       });
 
       // ── Step 4.5: Generate missing entity reference images ──────

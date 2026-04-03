@@ -481,7 +481,9 @@ function formatPathStep(
 export function buildOpenWorldContext(
   project: Project,
   session: GameSession,
-  userAction: string
+  userAction: string,
+  playerMindStateOverrides?: Record<string, Record<string, string>>,
+  storytellerChatExchange?: Array<{ role: string; content: string }>,
 ): OpenWorldContext {
   const writerSettings = useImageGenStore.getState().writer;
   const systemPrompt = writerSettings.systemPrompt;
@@ -678,6 +680,37 @@ export function buildOpenWorldContext(
         // skip if not parseable
       }
     }
+  }
+
+  // Player mind state overrides (manually edited character mental states)
+  if (playerMindStateOverrides && Object.keys(playerMindStateOverrides).length > 0) {
+    const overrideLines: string[] = [];
+    for (const [eid, overrides] of Object.entries(playerMindStateOverrides)) {
+      const entity = allEntities.find(e => e.id === eid);
+      const name = entity?.name || eid;
+      for (const [field, value] of Object.entries(overrides)) {
+        overrideLines.push(`  ${name} [${eid}]: ${field} = "${value}"`);
+      }
+    }
+    sections.push({
+      label: 'player_mind_state_edits',
+      text: `[PLAYER-EDITED CHARACTER MENTAL STATES]\nThe player manually adjusted these character states. Respect these changes in the next scene:\n${overrideLines.join('\n')}`,
+      order: 86,
+      compressible: false,
+    });
+  }
+
+  // Storyteller chat exchange (meta-conversation between player and Storyteller)
+  if (storytellerChatExchange && storytellerChatExchange.length > 0) {
+    const chatLines = storytellerChatExchange.map(msg =>
+      `  ${msg.role === 'user' ? 'Player' : 'Storyteller'}: ${msg.content}`
+    ).join('\n');
+    sections.push({
+      label: 'storyteller_chat',
+      text: `[STORYTELLER CHAT — between scenes]\nThe player had a meta-conversation with the Storyteller. Consider these insights:\n${chatLines}`,
+      order: 87,
+      compressible: true,
+    });
   }
 
   // Player action (ALWAYS)

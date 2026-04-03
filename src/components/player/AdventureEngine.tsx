@@ -34,7 +34,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Undo2, Settings, Volume2, VolumeX, ChevronDown, ChevronUp, GripHorizontal, GripVertical, MoveVertical, Pencil, Brain, FileText } from 'lucide-react';
+import { ArrowLeft, Undo2, Settings, Volume2, VolumeX, ChevronDown, ChevronUp, GripHorizontal, GripVertical, MoveVertical, Pencil, Brain, FileText, Lightbulb, Eye, BookOpen } from 'lucide-react';
 import { Howl } from 'howler';
 import { usePlayerStore } from '@stores/usePlayerStore';
 import { useProjectStore, suppressHistoryRecording, cancelPendingAutoSave } from '@stores/useProjectStore';
@@ -48,6 +48,9 @@ import DialogBox from './DialogBox';
 import ChoiceList from './ChoiceList';
 import SystemMenu from './SystemMenu';
 import OpenWorldInput from './OpenWorldInput';
+import CuriosityPanel from './CuriosityPanel';
+import CharacterLensPanel from './CharacterLensPanel';
+import StorytellerChatPanel from './StorytellerChatPanel';
 import StatusBox from './StatusBox';
 import { Modal } from '@components/common';
 import { generateOpenWorldScene, type OpenWorldStatus, type OpenWorldResult } from '@/services/openWorldService';
@@ -134,6 +137,20 @@ export default function AdventureEngine() {
   const [showContextViewer, setShowContextViewer] = useState(false);
   const [contextViewerText, setContextViewerText] = useState('');
   const [contextViewerTab, setContextViewerTab] = useState<'user' | 'system'>('user');
+
+  // --- Side panel states (Open World feature panels) ---
+  const [showCuriosity, setShowCuriosity] = useState(false);
+  const [showCharacterLens, setShowCharacterLens] = useState(false);
+  const [showStorytellerChat, setShowStorytellerChat] = useState(false);
+  const [curiosityFacts, setCuriosityFacts] = useState<any[]>([]);
+  const [characterMindStates, setCharacterMindStates] = useState<Record<string, any>>({});
+  const [storytellerMessages, setStorytellerMessages] = useState<any[]>([]);
+  const [storytellerGenerating, setStorytellerGenerating] = useState(false);
+  const [storytellerStreamText, setStorytellerStreamText] = useState('');
+  /** Tracks player overrides to character mind states, injected into next scene context */
+  const mindStateOverridesRef = useRef<Record<string, Record<string, string>>>({});
+  /** Abort function for an in-progress storyteller chat request */
+  const storytellerAbortRef = useRef<(() => void) | null>(null);
 
   // Track recently visited scene node IDs for blob eviction.
   // We keep blob URLs for the current + last 4 scenes to avoid OOM during play.
@@ -1844,6 +1861,16 @@ export default function AdventureEngine() {
         // Store the result for display when user clicks "Continue"
         setOwPendingResult(result);
 
+        // --- Extract side panel data from OW result (curiosity facts + mind states) ---
+        // TODO: These fields (curiosityFacts, characterMindStates) are added by the
+        // other agent's schema/prompt changes. Use `any` assertion until types are updated.
+        if ((result as any).curiosityFacts) {
+          setCuriosityFacts((result as any).curiosityFacts);
+        }
+        if ((result as any).characterMindStates) {
+          setCharacterMindStates((result as any).characterMindStates);
+        }
+
         // Apply variable changes immediately (these are game state changes, not display)
         if (result.variableChanges) {
           for (const [name, value] of Object.entries(result.variableChanges)) {
@@ -2426,6 +2453,133 @@ export default function AdventureEngine() {
   };
 
   /**
+   * Handle a player edit to a character's mind state field.
+   * Updates the local state immediately and tracks the override in a ref
+   * so it can be injected into the next OW scene's context. This allows
+   * the player to "correct" the AI's interpretation of what a character
+   * is feeling or thinking, and have that correction influence the story.
+   */
+  const handleMindStateChange = useCallback((entityId: string, field: string, value: string) => {
+    setCharacterMindStates(prev => ({
+      ...prev,
+      [entityId]: { ...prev[entityId], [field]: value },
+    }));
+    // Track override for context injection into next OW scene
+    if (!mindStateOverridesRef.current[entityId]) mindStateOverridesRef.current[entityId] = {};
+    mindStateOverridesRef.current[entityId][field] = value;
+  }, []);
+
+  /**
+   * Handle sending a message to "The Storyteller" AI chat.
+   * Streams the response via SSE from the /api/storyteller-chat endpoint,
+   * using the same writer API settings as the scene writer. The storyteller
+   * has access to game context (current scene, entities, etc.) but acts as
+   * a friendly narrator/DM persona rather than the scene writer.
+   */
+  const handleStorytellerSend = useCallback((text: string) => {
+    const userMsg = { role: 'user' as const, content: text, timestamp: Date.now() };
+    setStorytellerMessages(prev => [...prev, userMsg]);
+    setStorytellerGenerating(true);
+    setStorytellerStreamText('');
+
+    // Get writer settings for API call — reuse the scene writer config
+    const settings = useImageGenStore.getState();
+    const writer = settings.writer;
+    const apiKey = writer.provider === 'gemini' ? (writer.apiKey || settings.googleApiKey) : writer.apiKey;
+
+    // Build minimal game context for the storyteller
+    const project = useProjectStore.getState().currentProject;
+    const playerSession = usePlayerStore.getState().session;
+    const playerScene = usePlayerStore.getState().currentScene;
+    if (!project || !playerSession) return;
+
+    // Construct a context summary for the storyteller
+    const entityNames = (project.entities || []).map(e => `${e.name} (${e.category})`).join(', ');
+    const gameContext = [
+      `Current scene: ${playerScene?.storyText?.slice(0, 200) || '(no scene)'}`,
+      `Speaker: ${playerScene?.speakerName || 'Narrator'}`,
+      `Entities in world: ${entityNames || '(none)'}`,
+      `Project: ${project.info.title}`,
+    ].join('\n');
+
+    // TODO: Use a dedicated STORYTELLER_CHAT_SYSTEM_PROMPT from the other agent's changes.
+    // For now, use a sensible default prompt that instructs the AI to be a helpful storyteller.
+    const systemPrompt = `You are "The Storyteller" — a friendly, knowledgeable narrator and dungeon master for an interactive fiction game called "${project.info.title}". The player is asking you questions about the game world, characters, lore, or story. Answer warmly and in-character, drawing on the game context provided. Keep answers concise but evocative. You may speculate about lore and backstory if the game context doesn't cover it — but clearly mark speculation as such.`;
+
+    // Call the storyteller chat endpoint via SSE streaming.
+    // The endpoint may not exist yet — the other agent may need to create it.
+    // For robustness, fall back gracefully if the endpoint doesn't exist.
+    const controller = new AbortController();
+    storytellerAbortRef.current = () => controller.abort();
+
+    fetch('/api/storyteller-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: text,
+        systemPrompt,
+        provider: writer.provider,
+        model: writer.model,
+        apiKey,
+        endpoint: writer.endpoint,
+        gameContext,
+      }),
+      signal: controller.signal,
+    }).then(async (res) => {
+      if (!res.ok) {
+        // If the endpoint doesn't exist yet, show a friendly error
+        const errText = await res.text().catch(() => 'Unknown error');
+        throw new Error(`Storyteller API error (${res.status}): ${errText}`);
+      }
+      // Stream SSE response
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const parsed = JSON.parse(line.slice(6));
+            if (parsed.type === 'text') {
+              fullText += parsed.text;
+              setStorytellerStreamText(fullText);
+            }
+          } catch {
+            // Ignore non-JSON SSE lines
+          }
+        }
+      }
+
+      const assistantMsg = { role: 'assistant' as const, content: fullText, timestamp: Date.now() };
+      setStorytellerMessages(prev => [...prev, assistantMsg]);
+      setStorytellerGenerating(false);
+      setStorytellerStreamText('');
+    }).catch(err => {
+      if (err.name === 'AbortError') {
+        console.log('[Storyteller] Chat aborted by user');
+      } else {
+        console.error('[Storyteller] Chat error:', err);
+        // Add an error message so the user knows what happened
+        const errorMsg = {
+          role: 'assistant' as const,
+          content: `(The Storyteller is unavailable right now. Error: ${err.message || 'Unknown error'}. The /api/storyteller-chat endpoint may need to be created.)`,
+          timestamp: Date.now(),
+        };
+        setStorytellerMessages(prev => [...prev, errorMsg]);
+      }
+      setStorytellerGenerating(false);
+      setStorytellerStreamText('');
+    });
+  }, []);
+
+  /**
    * Go back to the previous scene without leaving play mode.
    * Uses session.history (array of previously visited node IDs).
    */
@@ -2750,6 +2904,48 @@ export default function AdventureEngine() {
         <StatusBox statuses={owStatuses} isGenerating={owGenerating} />
       )}
 
+      {/* Side panel icons — right edge, vertically centered (Open World only) */}
+      {openWorldMode && !isLoading && (
+        <div className="fixed right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-3">
+          {/* Curiosity — Fun Facts */}
+          <button
+            onClick={() => setShowCuriosity(true)}
+            disabled={curiosityFacts.length === 0}
+            className="p-3 rounded-xl transition-all disabled:opacity-30"
+            style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)' }}
+            title="Curiosity — Fun Facts"
+          >
+            <Lightbulb size={22} style={{ color: '#f59e0b' }} />
+          </button>
+
+          {/* Character Lens — Mind States */}
+          <button
+            onClick={() => setShowCharacterLens(true)}
+            disabled={Object.keys(characterMindStates).length === 0}
+            className="p-3 rounded-xl transition-all disabled:opacity-30"
+            style={{ background: 'rgba(249, 115, 22, 0.15)', border: '1px solid rgba(249, 115, 22, 0.3)' }}
+            title="Character Lens — Mind States"
+          >
+            <Eye size={22} style={{ color: '#f97316' }} />
+          </button>
+
+          {/* Ask the Storyteller — Chat */}
+          <button
+            onClick={() => setShowStorytellerChat(true)}
+            className="p-3 rounded-xl transition-all relative"
+            style={{ background: 'rgba(180, 83, 9, 0.15)', border: '1px solid rgba(180, 83, 9, 0.3)' }}
+            title="Ask the Storyteller"
+          >
+            <BookOpen size={22} style={{ color: '#b45309' }} />
+            {storytellerMessages.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 rounded-full text-[9px] text-black flex items-center justify-center font-bold">
+                {storytellerMessages.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Open World Debug: bottom-left button group */}
       {openWorldMode && currentScene && (
         <div className="fixed bottom-6 left-6 z-30 flex gap-2">
@@ -2919,6 +3115,43 @@ export default function AdventureEngine() {
 
       {/* System Menu */}
       {isMenuOpen && <SystemMenu />}
+
+      {/* --- Side Panel Overlays (Open World feature panels) --- */}
+
+      {/* Curiosity Panel — Fun facts about the scene/world */}
+      {showCuriosity && (
+        <CuriosityPanel
+          facts={curiosityFacts}
+          onClose={() => setShowCuriosity(false)}
+        />
+      )}
+
+      {/* Character Lens — AI mind states for present characters */}
+      {showCharacterLens && (
+        <CharacterLensPanel
+          mindStates={characterMindStates}
+          entities={(useProjectStore.getState().currentProject?.entities || []).map(e => ({
+            id: e.id,
+            name: e.name,
+            category: e.category,
+            referenceImage: e.referenceImage,
+            summary: e.summary,
+          }))}
+          onClose={() => setShowCharacterLens(false)}
+          onMindStateChange={handleMindStateChange}
+        />
+      )}
+
+      {/* Storyteller Chat — Chat with the AI narrator/DM */}
+      {showStorytellerChat && (
+        <StorytellerChatPanel
+          messages={storytellerMessages}
+          onSendMessage={handleStorytellerSend}
+          onClose={() => setShowStorytellerChat(false)}
+          isGenerating={storytellerGenerating}
+          streamingText={storytellerStreamText}
+        />
+      )}
     </div>
   );
 }

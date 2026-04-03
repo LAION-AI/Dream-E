@@ -253,6 +253,7 @@ Your output is enforced as a JSON object. You MUST fill the ANALYSIS fields FIRS
 - **engagementStrategy** (REQUIRED): One sentence decision: based on the above analysis, should this scene SATISFY the player's desires (reward, progress, fun moments) or CHALLENGE them (introduce complication, conflict, uncertainty that requires active decision-making, cleverness, or a new approach)? Never make goals impossible — just require engagement. If the player hasn't been satisfied recently, lean toward satisfaction. If things have been too easy, introduce meaningful challenge.
 - **narrativeTensionAnalysis** (REQUIRED): Reflect on the story's current tension arc. How many consecutive scenes have passed without a meaningful conflict, surprise, setback, or unpredictable twist? If the answer is 2 or more, this scene MUST introduce tension — a betrayal, obstacle, mysterious event, moral dilemma, unexpected NPC action, revelation that changes the stakes, or an antagonistic force asserting itself. If there was recent conflict, you may give the player a brief respite or reward — but NEVER let 3+ scenes pass without something that makes the player uncertain about the outcome. Good stories thrive on uncertainty: the player should never be sure if things will work out. Describe what tension element (if any) you will introduce and why.
 - **plannedStateChanges** (REQUIRED): One detailed sentence: which specific entities (characters, locations, objects, concepts) should change state during this scene, and exactly how, to realize the engagement strategy? Every dramatic beat must materialize as concrete entity state changes (emotions, intentions, physical changes, new arrivals, revelations). Changes MUST be plausible, emotionally intelligent, and fit naturally into the world — not cliche or forced for drama's sake. IMPORTANT: Any change mentioned here MUST produce a corresponding entityUpdates entry with a profilePatch that permanently records the change on the entity's profile.
+- **characterMindStates** (REQUIRED): Theory-of-mind for ALL characters present in or relevant to this scene. For each character, provide: feeling (what they're emotionally experiencing RIGHT NOW), thinkingSituation (their internal assessment of the current situation), thinkingOthers (what they think about other characters present), theoryOfMind (what they believe others think about them). Apply Big Five personality profiles — an extraverted character processes differently than an introverted one. Be psychologically specific, not generic.
 - **floatingGoals** (REQUIRED): Array of 2-5 "floating goals" — active plot threads, unresolved hooks, or opportunities currently available to the player. Each is a short sentence describing a potential storyline the player could pursue (e.g. "Investigate the strange lights in the abandoned mine", "Win the trust of the suspicious merchant guild", "Find a cure for the spreading corruption before it reaches the village"). These persist and evolve across scenes: carry forward goals from previous scenes, add new ones as the story introduces them, and remove ones that have been resolved or become irrelevant. The player is free to ignore these, but they provide narrative momentum and make the world feel alive with opportunity. At least one goal should promise reward, and at least one should threaten consequences if ignored.
 
 ### SCENE CONTENT FIELDS (driven by the analysis above):
@@ -283,6 +284,7 @@ Your output is enforced as a JSON object. You MUST fill the ANALYSIS fields FIRS
 - **variableChanges** (optional): Object of variable name → new value. Only modify existing variables.
 - **musicQuery** (RECOMMENDED): 3-8 keyword search for background music. ALWAYS provide this for the first scene and whenever mood, location, or atmosphere changes. Only omit when the current music still fits perfectly.
 - **sceneSummary** (REQUIRED): 1-3 sentence summary of key events, decisions, state changes, who was present.
+- **curiosityFacts** (REQUIRED): Array of 2-4 real-world educational fun facts thematically related to this scene. These must be GENUINE knowledge — history, science, culture, psychology, nature, technology. If the scene involves a medieval castle, include facts about real medieval architecture. If it involves space, include real astronomy. Make them surprising, engaging, and educational. Each has: title (catchy hook), fact (2-4 sentences), category.
 
 ### WORLD-BUILDING FIELDS (use when the story introduces new elements):
 - **newEntities** (optional): Array of new entities to create. Each has: category ("character"|"location"|"object"|"concept"), name, description, and optionally summary and profile (structured data). Use when a genuinely NEW character, location, object, or concept is introduced that isn't in the entity list yet. Include a profile with relevant attributes (appearance, personality, etc.).
@@ -328,6 +330,31 @@ NARRATIVE TENSION: Before writing, check your narrativeTensionAnalysis. If recen
 FLOATING GOALS: Always maintain 2-5 active plot threads in floatingGoals. Carry forward unresolved goals from previous scenes, add new ones as opportunities emerge, and remove resolved ones. These give the player a sense of a living world with things happening beyond their immediate actions.
 
 ENTITY PROFILE RICHNESS: New entities MUST have descriptions of at least 200 words. For ALL entities involved in the scene, use entityUpdates.profilePatch to ADD new details discovered or revealed. Profiles should grow richer over time — add backstory, personality observations, relationship notes, physical details noticed, secrets revealed. A well-developed entity has 500+ words across all profile fields.`;
+
+export const STORYTELLER_CHAT_SYSTEM_PROMPT = `You are the Storyteller — an in-game creative companion for an interactive fiction experience.
+
+## YOUR ROLE
+You discuss the story with the player as a behind-the-scenes creative partner. You are warm, conversational, slightly conspiratorial — like a friend who's really into the story.
+
+## WHAT YOU KNOW
+You have access to the complete story (every scene, choice, event), all characters and their profiles, locations, objects, variables, and the writer's previous analysis.
+
+## WHAT YOU CAN DO
+- Answer questions about the story, characters, lore, world
+- Offer creative suggestions for what to try next
+- Discuss character motivations and predict behavior
+- Help understand complex situations or relationships
+- Brainstorm ideas for the player's next action
+- Explain consequences of past choices
+- Offer "what if" scenarios
+
+## RULES
+1. NEVER generate scene content or advance the plot
+2. NEVER reveal future plot points
+3. Reflect on what happened and what might happen based on character motivations
+4. Be honest about uncertainty
+5. Keep responses concise (2-5 paragraphs)
+6. Respond in the same language as the player`;
 
 const DEFAULT_ASR: ASRSettings = {
   enabled: true,
@@ -466,9 +493,9 @@ export const useImageGenStore = create<AISettingsStore>()(
     }),
     {
       name: 'storyweaver-image-gen-settings',
-      // Version 7: Added providerPreset field for top-level provider selection
-      // (gemini / hyprlab / custom).
-      version: 7,
+      // Version 8: Added characterMindStates and curiosityFacts to OW JSON schema
+      // and system prompt. Added STORYTELLER_CHAT_SYSTEM_PROMPT export.
+      version: 8,
       migrate: (persisted: any, version: number) => {
         if (version < 3 && persisted?.writer) {
           // Auto-upgrade system prompt if it lacks the new relevantEntityTraits
@@ -519,6 +546,15 @@ export const useImageGenStore = create<AISettingsStore>()(
               persisted.providerPreset = 'custom';
             }
             console.log(`[ImageGenStore] Migrating to v7: providerPreset = '${persisted.providerPreset}'`);
+          }
+        }
+        if (version < 8 && persisted?.writer) {
+          // Upgrade system prompt to include characterMindStates and curiosityFacts
+          if (persisted.writer.systemPrompt &&
+              !persisted.writer.systemPrompt.includes('characterMindStates')) {
+            console.log('[ImageGenStore] Migrating to v8: adding characterMindStates & curiosityFacts to system prompt');
+            persisted.writer.systemPrompt = DEFAULT_WRITER_SYSTEM_PROMPT;
+            persisted.writer.instruction = DEFAULT_WRITER_INSTRUCTION;
           }
         }
         return persisted;
