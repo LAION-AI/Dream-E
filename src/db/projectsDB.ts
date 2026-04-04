@@ -108,6 +108,11 @@ async function resolveToBlob(val: string): Promise<Blob | null> {
  */
 async function extractAndSaveAssets(project: Project, projectId: string): Promise<number> {
   let extracted = 0;
+  let skippedAssetRef = 0;
+  let skippedNonAsset = 0;
+  let blobCount = 0;
+  let dataUrlCount = 0;
+  let failedResolves = 0;
 
   // Scene node assets
   for (const node of project.nodes) {
@@ -116,12 +121,15 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
     for (const field of SCENE_ASSET_FIELDS) {
       const val = data[field];
       if (typeof val !== 'string') continue;
-      if (val.startsWith('asset:')) continue;
+      if (val.startsWith('asset:')) { skippedAssetRef++; continue; }
       // Blob URLs are short (~63 chars) but ARE real assets that need extraction.
       // Data URLs are long (100KB+). Static paths like "/dreamroom.jpg" are neither.
       if (val.startsWith('blob:') || (val.startsWith('data:') && val.length > 200)) {
         // valid asset — continue to extraction below
+        if (val.startsWith('blob:')) blobCount++;
+        else dataUrlCount++;
       } else {
+        skippedNonAsset++;
         continue;
       }
 
@@ -140,6 +148,9 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
         });
         data[field] = `asset:${assetId}`;
         extracted++;
+      } else {
+        failedResolves++;
+        console.warn(`[ProjectsDB] extractAndSaveAssets: FAILED to resolve blob for scene ${node.id}.${field} (${val.substring(0, 60)}...)`);
       }
     }
   }
@@ -152,10 +163,13 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
     for (const field of COWRITE_ASSET_FIELDS) {
       const val = data[field];
       if (typeof val !== 'string') continue;
-      if (val.startsWith('asset:')) continue;
+      if (val.startsWith('asset:')) { skippedAssetRef++; continue; }
       if (val.startsWith('blob:') || (val.startsWith('data:') && val.length > 200)) {
         // valid asset
+        if (val.startsWith('blob:')) blobCount++;
+        else dataUrlCount++;
       } else {
+        skippedNonAsset++;
         continue;
       }
 
@@ -174,6 +188,9 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
         });
         data[field] = `asset:${assetId}`;
         extracted++;
+      } else {
+        failedResolves++;
+        console.warn(`[ProjectsDB] extractAndSaveAssets: FAILED to resolve blob for cowrite ${node.id}.${field} (${val.substring(0, 60)}...)`);
       }
     }
   }
@@ -184,11 +201,14 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
     for (const field of ENTITY_ASSET_FIELDS) {
       const val = e[field];
       if (typeof val !== 'string') continue;
-      if (val.startsWith('asset:')) continue;
+      if (val.startsWith('asset:')) { skippedAssetRef++; continue; }
       // Blob URLs are short (~63 chars) but ARE real assets that need extraction.
       if (val.startsWith('blob:') || (val.startsWith('data:') && val.length > 200)) {
         // valid asset — continue to extraction below
+        if (val.startsWith('blob:')) blobCount++;
+        else dataUrlCount++;
       } else {
+        skippedNonAsset++;
         continue;
       }
 
@@ -207,6 +227,9 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
         });
         e[field] = `asset:${assetId}`;
         extracted++;
+      } else {
+        failedResolves++;
+        console.warn(`[ProjectsDB] extractAndSaveAssets: FAILED to resolve blob for entity ${entity.id}.${field} (${(val as string).substring(0, 60)}...)`);
       }
     }
   }
@@ -231,7 +254,20 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
       });
       project.info.coverImage = `asset:${assetId}`;
       extracted++;
+    } else {
+      failedResolves++;
+      console.warn(`[ProjectsDB] extractAndSaveAssets: FAILED to resolve cover image blob`);
     }
+  }
+
+  // Diagnostic summary log — helps debug asset eviction issues
+  if (extracted > 0 || failedResolves > 0) {
+    console.log(
+      `[ProjectsDB] extractAndSaveAssets summary for ${projectId}: ` +
+      `extracted=${extracted}, failed=${failedResolves}, ` +
+      `blobs=${blobCount}, dataUrls=${dataUrlCount}, ` +
+      `alreadyAssetRef=${skippedAssetRef}, nonAsset=${skippedNonAsset}`
+    );
   }
 
   return extracted;
@@ -829,6 +865,7 @@ export async function saveProject(project: Project): Promise<void> {
     // Each asset is written individually to the assets table (1-3 MB each).
     // The clone's fields are replaced with `asset:{id}` reference strings.
     const extracted = await extractAndSaveAssets(lightCopy, project.id);
+    console.log(`[ProjectsDB] extractAndSaveAssets: extracted ${extracted} assets for project ${project.id}`);
     if (extracted > 0) {
       logDB(`Extracted ${extracted} assets to separate records`);
     }

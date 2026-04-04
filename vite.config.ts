@@ -1068,7 +1068,7 @@ export default defineConfig({
                         },
                         required: ['title', 'fact', 'category'],
                       },
-                      description: 'Array of 2-4 real-world educational fun facts related to scene content. NOT fiction — genuine knowledge about the real world topics touched by the scene.',
+                      description: 'Array with exactly 1 real-world educational fun fact related to scene content. NOT fiction — genuine knowledge about the real world topics touched by the scene. Always exactly one item.',
                     },
                     floatingGoals: {
                       type: 'ARRAY',

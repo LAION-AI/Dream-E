@@ -135,48 +135,60 @@ export default function CuriosityPanel({ facts, onClose }: CuriosityPanelProps) 
           </button>
         </div>
 
-        {/* Facts grid */}
-        <div className="p-6">
+        {/* Fact display — single large card centered in the panel */}
+        <div className="p-6 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]">
           {facts.length === 0 ? (
             <p className="text-white/40 text-center italic mt-12">
               No curiosity facts for this scene yet.
             </p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {facts.map((fact, index) => {
-                const colors = getCategoryColor(fact.category);
-                return (
+            /* Show only the first fact in a large, immersive layout */
+            (() => {
+              const fact = facts[0];
+              const colors = getCategoryColor(fact.category);
+              return (
+                <div
+                  className="w-full max-w-2xl rounded-2xl p-10 border relative overflow-hidden"
+                  style={{
+                    background: 'linear-gradient(145deg, rgba(50, 35, 15, 0.8) 0%, rgba(30, 20, 8, 0.9) 100%)',
+                    borderColor: 'rgba(245, 158, 11, 0.18)',
+                  }}
+                >
+                  {/* Subtle decorative glow behind the card */}
                   <div
-                    key={index}
-                    className="rounded-xl p-5 border transition-all hover:scale-[1.01]"
+                    className="absolute inset-0 pointer-events-none"
                     style={{
-                      background: 'rgba(40, 30, 15, 0.6)',
-                      borderColor: 'rgba(245, 158, 11, 0.12)',
+                      background: 'radial-gradient(ellipse at 50% 0%, rgba(245, 158, 11, 0.06) 0%, transparent 70%)',
                     }}
-                  >
+                  />
+
+                  <div className="relative z-10">
                     {/* Category badge */}
                     <span
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider mb-3 ${colors.bg} ${colors.text} border ${colors.border}`}
+                      className={`inline-block px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider mb-6 ${colors.bg} ${colors.text} border ${colors.border}`}
                     >
                       {fact.category}
                     </span>
 
-                    {/* Title */}
-                    <h3 className="text-base font-bold text-amber-100 mb-2">
+                    {/* Title — large and prominent */}
+                    <h3 className="text-2xl md:text-3xl font-bold text-amber-100 mb-5 leading-snug">
                       {fact.title}
                     </h3>
 
-                    {/* Fact text in serif font for a "storybook" feel */}
+                    {/* Decorative divider */}
+                    <div className="w-16 h-0.5 bg-amber-500/30 mb-6" />
+
+                    {/* Fact text — large serif font for readability and storybook feel */}
                     <p
-                      className="text-sm text-white/70 leading-relaxed"
+                      className="text-lg md:text-xl text-white/75 leading-relaxed"
                       style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
                     >
                       {fact.fact}
                     </p>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })()
           )}
         </div>
       </div>

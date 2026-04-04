@@ -1378,8 +1378,47 @@ export default function AdventureEngine() {
           setCuriosityFacts(parsed.curiosityFacts);
         }
         if (parsed.characterMindStates && typeof parsed.characterMindStates === 'object') {
-          setCharacterMindStates(parsed.characterMindStates);
+          // Normalize mind state keys: the AI may use entity names as keys
+          // instead of entity IDs. Map name-based keys to ID-based keys so
+          // the CharacterLensPanel (which filters by entity.id) works correctly.
+          const rawStates = parsed.characterMindStates as Record<string, any>;
+          const normalizedStates: Record<string, any> = {};
+          const projectEntities = useProjectStore.getState().currentProject?.entities || [];
+          const entityByName = new Map(projectEntities.map(e => [e.name.toLowerCase(), e.id]));
+          const entityIdSet = new Set(projectEntities.map(e => e.id));
+
+          for (const [key, value] of Object.entries(rawStates)) {
+            if (entityIdSet.has(key)) {
+              // Key is already a valid entity ID
+              normalizedStates[key] = value;
+            } else {
+              // Key might be an entity name — try to resolve to an ID
+              const resolvedId = entityByName.get(key.toLowerCase());
+              if (resolvedId) {
+                normalizedStates[resolvedId] = value;
+              } else {
+                // Keep the original key as fallback (might be a partial match)
+                normalizedStates[key] = value;
+              }
+            }
+          }
+
+          console.log('[AE] Extracted characterMindStates from aiResponse:', {
+            rawKeys: Object.keys(rawStates),
+            normalizedKeys: Object.keys(normalizedStates),
+            entityIds: projectEntities.map(e => e.id).slice(0, 10),
+            entityNames: projectEntities.map(e => e.name).slice(0, 10),
+          });
+
+          setCharacterMindStates(normalizedStates);
         }
+
+        console.log('[AE] Extracted from aiResponse:', {
+          hasCuriosity: !!parsed.curiosityFacts,
+          curiosityCount: parsed.curiosityFacts?.length,
+          hasMindStates: !!parsed.characterMindStates,
+          mindStateKeys: Object.keys(parsed.characterMindStates || {}),
+        });
       } catch {
         // AI response might not be parseable JSON (legacy scenes) — that's OK
       }
@@ -1886,13 +1925,40 @@ export default function AdventureEngine() {
         setOwPendingResult(result);
 
         // --- Extract side panel data from OW result (curiosity facts + mind states) ---
-        // TODO: These fields (curiosityFacts, characterMindStates) are added by the
-        // other agent's schema/prompt changes. Use `any` assertion until types are updated.
-        if ((result as any).curiosityFacts) {
-          setCuriosityFacts((result as any).curiosityFacts);
+        if (result.curiosityFacts) {
+          setCuriosityFacts(result.curiosityFacts);
         }
-        if ((result as any).characterMindStates) {
-          setCharacterMindStates((result as any).characterMindStates);
+        if (result.characterMindStates) {
+          // Normalize mind state keys: the AI may use entity names instead of
+          // entity IDs as keys. Resolve name-based keys to ID-based keys so
+          // CharacterLensPanel (which filters by entity.id) works correctly.
+          const rawStates = result.characterMindStates as Record<string, any>;
+          const normalizedStates: Record<string, any> = {};
+          const projectEntities = useProjectStore.getState().currentProject?.entities || [];
+          const entityByName = new Map(projectEntities.map(e => [e.name.toLowerCase(), e.id]));
+          const entityIdSet = new Set(projectEntities.map(e => e.id));
+
+          for (const [key, value] of Object.entries(rawStates)) {
+            if (entityIdSet.has(key)) {
+              normalizedStates[key] = value;
+            } else {
+              const resolvedId = entityByName.get(key.toLowerCase());
+              if (resolvedId) {
+                normalizedStates[resolvedId] = value;
+                console.log(`[AE] Mind state key "${key}" resolved to entity ID "${resolvedId}"`);
+              } else {
+                normalizedStates[key] = value;
+                console.warn(`[AE] Mind state key "${key}" could not be resolved to an entity ID`);
+              }
+            }
+          }
+
+          console.log('[AE] OW result characterMindStates:', {
+            rawKeys: Object.keys(rawStates),
+            normalizedKeys: Object.keys(normalizedStates),
+          });
+
+          setCharacterMindStates(normalizedStates);
         }
 
         // Apply variable changes immediately (these are game state changes, not display)
