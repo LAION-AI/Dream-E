@@ -262,6 +262,81 @@ function cleanBlobUrls(data) {
   return data;
 }
 
+/**
+ * Auto-repair empty asset fields by checking if matching asset records
+ * exist in the database. If a scene's backgroundImage is '' but an asset
+ * record with the expected deterministic ID exists, restore the reference.
+ *
+ * This handles the case where cleanBlobUrls stripped dead blob URLs but
+ * the binary asset data was already uploaded to the server. Without this
+ * repair, images appear lost even though the data is on disk.
+ *
+ * @param {object} data - The project data object (mutated in place)
+ * @param {string} projectId - The project ID (for building asset IDs)
+ * @param {import('sql.js').Database} db - The database for asset lookups
+ * @returns {object} The repaired data
+ */
+function repairAssetReferences(data, projectId, db) {
+  if (!data || typeof data !== 'object' || !projectId) return data;
+
+  const sceneFields = ['backgroundImage', 'backgroundMusic', 'voiceoverAudio'];
+  const entityFields = ['referenceImage', 'referenceVoice', 'defaultMusic'];
+  const cowriteFields = ['image', 'voiceoverAudio', 'backgroundMusic'];
+  let repaired = 0;
+
+  // Repair scene nodes
+  for (const node of data.nodes || []) {
+    if (!node.data || !node.id) continue;
+    const fields = node.type === 'scene' ? sceneFields
+      : ['storyRoot', 'plot', 'act', 'cowriteScene'].includes(node.type) ? cowriteFields
+      : [];
+    for (const field of fields) {
+      if (node.data[field] && node.data[field] !== '') continue; // already has value
+      const assetId = `${projectId}_${node.id}_${field}`;
+      const exists = db.exec('SELECT COUNT(*) FROM assets WHERE id = ?', [assetId]);
+      if (exists.length > 0 && exists[0].values[0][0] > 0) {
+        node.data[field] = `asset:${assetId}`;
+        repaired++;
+      }
+    }
+  }
+
+  // Repair entities
+  for (const entity of data.entities || []) {
+    if (!entity.id) continue;
+    for (const field of entityFields) {
+      if (entity[field] && entity[field] !== '') continue;
+      const assetId = `${projectId}_${entity.id}_${field}`;
+      const exists = db.exec('SELECT COUNT(*) FROM assets WHERE id = ?', [assetId]);
+      if (exists.length > 0 && exists[0].values[0][0] > 0) {
+        entity[field] = `asset:${assetId}`;
+        repaired++;
+      }
+    }
+  }
+
+  // Repair cover image
+  if (data.info && (!data.info.coverImage || data.info.coverImage === '')) {
+    const assetId = `${projectId}_coverImage`;
+    const exists = db.exec('SELECT COUNT(*) FROM assets WHERE id = ?', [assetId]);
+    if (exists.length > 0 && exists[0].values[0][0] > 0) {
+      data.info.coverImage = `asset:${assetId}`;
+      repaired++;
+    }
+  }
+
+  if (repaired > 0) {
+    console.log(`[PROJECTS] Auto-repaired ${repaired} asset reference(s) from server asset records`);
+    // Save the repaired data back to the database so future loads don't need repair
+    db.run('UPDATE projects SET data = ?, updated_at = ? WHERE id = ?',
+      [JSON.stringify(data), Date.now(), projectId]);
+    const { saveDb } = require('../db.cjs');
+    saveDb();
+  }
+
+  return data;
+}
+
 router.get('/:id', async (req, res) => {
   try {
     const db = await getDb();
@@ -282,6 +357,11 @@ router.get('/:id', async (req, res) => {
     // Blob URLs are session-scoped and never valid across sessions.
     if (typeof parsedData === 'object' && parsedData !== null) {
       cleanBlobUrls(parsedData);
+      // Auto-repair: if asset fields are empty but matching asset records
+      // exist on the server, restore the asset:{id} references. This
+      // recovers images that were lost when cleanBlobUrls stripped dead
+      // blob URLs but the binary data had already been uploaded.
+      repairAssetReferences(parsedData, id, db);
     }
 
     res.json({
