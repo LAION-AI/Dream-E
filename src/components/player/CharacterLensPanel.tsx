@@ -150,7 +150,7 @@ export default function CharacterLensPanel({
 
   const content = (
     <div
-      className="fixed inset-0 z-[9999] flex justify-end"
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -161,13 +161,16 @@ export default function CharacterLensPanel({
         style={{ opacity: visible ? 1 : 0 }}
       />
 
-      {/* Panel */}
+      {/* Panel — centered, 80% of screen */}
       <div
-        className="relative w-full max-w-4xl h-full overflow-y-auto transition-transform duration-500 ease-out"
+        className="relative overflow-y-auto rounded-2xl transition-all duration-500 ease-out"
         style={{
-          transform: visible ? 'translateX(0)' : 'translateX(100%)',
+          width: '85vw',
+          height: '85vh',
+          opacity: visible ? 1 : 0,
+          transform: visible ? 'scale(1)' : 'scale(0.95)',
           background: 'linear-gradient(135deg, rgba(25, 15, 10, 0.97) 0%, rgba(15, 10, 5, 0.98) 100%)',
-          borderLeft: '1px solid rgba(249, 115, 22, 0.2)',
+          border: '1px solid rgba(249, 115, 22, 0.2)',
         }}
       >
         {/* Header */}
@@ -198,7 +201,7 @@ export default function CharacterLensPanel({
               No character mind states available for this scene.
             </p>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {charactersWithStates.map((entity) => {
                 const state = mindStates[entity.id];
                 if (!state) return null;
@@ -212,12 +215,12 @@ export default function CharacterLensPanel({
                       borderColor: 'rgba(249, 115, 22, 0.12)',
                     }}
                   >
-                    {/* Character header — image + name + category */}
-                    <div className="flex items-center gap-3 p-4 border-b"
+                    {/* Character header — large image + name + category */}
+                    <div className="flex items-center gap-4 p-5 border-b"
                       style={{ borderColor: 'rgba(249, 115, 22, 0.1)' }}
                     >
-                      {/* Character image or placeholder */}
-                      <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-white/5 flex items-center justify-center">
+                      {/* Character image — large and prominent */}
+                      <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-white/5 flex items-center justify-center">
                         {entity.referenceImage ? (
                           <img
                             src={getBlobUrl(entity.referenceImage)}
@@ -225,31 +228,34 @@ export default function CharacterLensPanel({
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <User size={24} className="text-white/30" />
+                          <User size={36} className="text-white/30" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-bold text-orange-100 truncate">
+                        <h3 className="text-lg font-bold text-orange-100 truncate">
                           {entity.name}
                         </h3>
-                        <span className="text-[10px] uppercase tracking-wider text-white/40">
+                        <span className="text-xs uppercase tracking-wider text-white/40">
                           {entity.category}
                         </span>
+                        {entity.summary && (
+                          <p className="text-sm text-white/30 mt-1 line-clamp-1">{entity.summary}</p>
+                        )}
                       </div>
                     </div>
 
                     {/* Mind state fields */}
-                    <div className="p-3 space-y-2.5">
+                    <div className="p-4 space-y-3">
                       {MIND_FIELDS.map(({ key, label, icon, accentColor, bgColor }) => {
                         const fieldKey = `${entity.id}:${key}`;
                         const isEdited = editedFields.has(fieldKey);
 
                         return (
-                          <div key={key} className={`rounded-lg p-2.5 ${bgColor}`}>
+                          <div key={key} className={`rounded-lg p-3 ${bgColor}`}>
                             {/* Field label with icon */}
-                            <div className="flex items-center gap-1.5 mb-1.5">
+                            <div className="flex items-center gap-2 mb-2">
                               <span className={accentColor}>{icon}</span>
-                              <span className={`text-[11px] font-semibold uppercase tracking-wide ${accentColor}`}>
+                              <span className={`text-xs font-semibold uppercase tracking-wide ${accentColor}`}>
                                 {label}
                               </span>
                               {isEdited && (
@@ -316,7 +322,7 @@ function MindStateTextarea({
   if (!editing) {
     return (
       <p
-        className="text-xs text-white/60 leading-relaxed cursor-text min-h-[1.5em] italic"
+        className="text-sm text-white/60 leading-relaxed cursor-text min-h-[1.5em] italic"
         style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
         onClick={() => setEditing(true)}
         title="Click to edit"
@@ -329,8 +335,8 @@ function MindStateTextarea({
   return (
     <textarea
       ref={textareaRef}
-      className="w-full text-xs text-white/80 leading-relaxed bg-black/30 border border-white/10 rounded px-2 py-1.5 resize-y focus:outline-none focus:border-orange-500/40 italic"
-      style={{ fontFamily: 'Georgia, "Times New Roman", serif', minHeight: '3em' }}
+      className="w-full text-sm text-white/80 leading-relaxed bg-black/30 border border-white/10 rounded px-2 py-1.5 resize-y focus:outline-none focus:border-orange-500/40 italic"
+      style={{ fontFamily: 'Georgia, "Times New Roman", serif', minHeight: '4em' }}
       value={localValue}
       onChange={(e) => setLocalValue(e.target.value)}
       onBlur={() => {
