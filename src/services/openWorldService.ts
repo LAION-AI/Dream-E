@@ -182,7 +182,13 @@ function extractFieldsFallback(raw: string): OWMetadata & { sceneText?: string }
 function parseOpenWorldResponse(
   fullText: string
 ): { sceneText: string; metadata: OWMetadata } {
-  const trimmed = fullText.trim();
+  let trimmed = fullText.trim();
+
+  // Strip markdown code fences if the model wrapped JSON in ```json ... ```
+  // (common with Claude via HyprLab which doesn't enforce responseMimeType)
+  if (trimmed.startsWith('```')) {
+    trimmed = trimmed.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+  }
 
   // ── Primary path: parse as JSON (structured output) ───────────────
   // The model should return a JSON object with sceneText + metadata fields.

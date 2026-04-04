@@ -1367,7 +1367,13 @@ export default function AdventureEngine() {
     const storedAiResponse = node.data.aiResponse || (node.data as any).aiResponse;
     if (typeof storedAiResponse === 'string' && storedAiResponse.trim()) {
       try {
-        const parsed = JSON.parse(storedAiResponse);
+        // Strip markdown code fences if present — the AI sometimes wraps
+        // JSON in ```json ... ``` blocks (especially via HyprLab/Claude).
+        let jsonStr = storedAiResponse.trim();
+        if (jsonStr.startsWith('```')) {
+          jsonStr = jsonStr.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+        }
+        const parsed = JSON.parse(jsonStr);
         if (parsed.curiosityFacts && Array.isArray(parsed.curiosityFacts)) {
           setCuriosityFacts(parsed.curiosityFacts);
         }
@@ -1375,7 +1381,7 @@ export default function AdventureEngine() {
           setCharacterMindStates(parsed.characterMindStates);
         }
       } catch {
-        // AI response might not be JSON (legacy scenes) — that's OK
+        // AI response might not be parseable JSON (legacy scenes) — that's OK
       }
     }
 
