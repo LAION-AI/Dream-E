@@ -2843,7 +2843,7 @@ export default function AdventureEngine() {
         className="absolute bottom-0 left-0 right-0 z-20 p-6"
         style={{ transform: `translateX(${dialogOffsetX}px)` }}
       >
-        <div className="mx-auto space-y-1 relative" style={{ maxWidth: `${dialogWidth}px` }}>
+        <div className="mx-auto space-y-0 relative" style={{ maxWidth: `${dialogWidth}px` }}>
           {/* Drag handle + collapse toggle — compact bar above dialog */}
           <div className="flex items-center justify-center gap-2">
             <button

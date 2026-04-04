@@ -7,9 +7,9 @@
  * by the Open World AI for the current scene. Each fact has a category, title,
  * and descriptive text. Facts are shown as cards in a responsive grid.
  *
- * The panel animates in from the right (slide-in) and can be dismissed with
- * the X button or Escape key. Rendered via createPortal to document.body so
- * it sits above all other UI layers.
+ * The panel displays as a fullscreen centered overlay (not a sidebar) and can
+ * be dismissed with the X button, Escape key, or clicking the backdrop.
+ * Rendered via createPortal to document.body so it sits above all other UI.
  *
  * DESIGN:
  * - Dark translucent backdrop (bg-black/85 backdrop-blur)
@@ -67,14 +67,12 @@ function getCategoryColor(category: string) {
 // --- Component ---
 
 export default function CuriosityPanel({ facts, onClose }: CuriosityPanelProps) {
-  // Controls the slide-in animation — starts offscreen (right), transitions to 0
+  // Controls the scale-in animation — starts slightly scaled down, transitions to full size
   const [visible, setVisible] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Trigger the slide-in animation on mount
+  // Trigger the scale-in animation on mount
   useEffect(() => {
-    // Use requestAnimationFrame to ensure the initial transform is applied
-    // before we transition to the final position.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setVisible(true);
@@ -93,33 +91,37 @@ export default function CuriosityPanel({ facts, onClose }: CuriosityPanelProps) 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // The portal content — a fullscreen overlay with slide-in panel
+  // The portal content — a truly fullscreen centered overlay (no sidebar)
   const content = (
     <div
-      className="fixed inset-0 z-[9999] flex justify-end"
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
       onClick={(e) => {
         // Close when clicking the backdrop (not the panel itself)
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Dark translucent backdrop */}
+      {/* Dark translucent backdrop — covers entire screen, no sidebar visible */}
       <div
-        className="absolute inset-0 bg-black/85 backdrop-blur-sm transition-opacity duration-300"
+        className="absolute inset-0 bg-black/90 backdrop-blur-sm transition-opacity duration-300"
         style={{ opacity: visible ? 1 : 0 }}
       />
 
-      {/* Sliding panel from the right */}
+      {/* Centered panel — 85vw x 85vh, same sizing as CharacterLens for consistency */}
       <div
         ref={panelRef}
-        className="relative w-full max-w-3xl h-full overflow-y-auto transition-transform duration-500 ease-out"
+        className="relative overflow-hidden rounded-2xl transition-all duration-500 ease-out flex flex-col"
         style={{
-          transform: visible ? 'translateX(0)' : 'translateX(100%)',
+          width: '85vw',
+          height: '85vh',
+          opacity: visible ? 1 : 0,
+          transform: visible ? 'scale(1)' : 'scale(0.95)',
           background: 'linear-gradient(135deg, rgba(30, 20, 10, 0.97) 0%, rgba(20, 15, 8, 0.98) 100%)',
-          borderLeft: '1px solid rgba(245, 158, 11, 0.2)',
+          border: '1px solid rgba(245, 158, 11, 0.2)',
         }}
       >
         {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4"
+        <div
+          className="flex-shrink-0 flex items-center justify-between px-6 py-4"
           style={{ background: 'rgba(30, 20, 10, 0.95)', borderBottom: '1px solid rgba(245, 158, 11, 0.15)' }}
         >
           <div className="flex items-center gap-3">
@@ -135,10 +137,10 @@ export default function CuriosityPanel({ facts, onClose }: CuriosityPanelProps) 
           </button>
         </div>
 
-        {/* Fact display — single large card centered in the panel */}
-        <div className="p-6 flex flex-col items-center justify-center min-h-[calc(100vh-80px)]">
+        {/* Fact display — single large card centered within the panel body */}
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center">
           {facts.length === 0 ? (
-            <p className="text-white/40 text-center italic mt-12">
+            <p className="text-white/40 text-center italic text-lg">
               No curiosity facts for this scene yet.
             </p>
           ) : (
