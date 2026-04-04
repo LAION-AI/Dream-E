@@ -2843,9 +2843,9 @@ export default function AdventureEngine() {
         className="absolute bottom-0 left-0 right-0 z-20 p-6"
         style={{ transform: `translateX(${dialogOffsetX}px)` }}
       >
-        <div className="mx-auto space-y-0 relative" style={{ maxWidth: `${dialogWidth}px` }}>
-          {/* Drag handle + collapse toggle — compact bar above dialog */}
-          <div className="flex items-center justify-center gap-2">
+        <div className="mx-auto relative" style={{ maxWidth: `${dialogWidth}px` }}>
+          {/* Drag handle + collapse toggle — compact bar directly above dialog */}
+          <div className="flex items-center justify-center gap-2 mb-0 pb-0">
             <button
               onClick={() => setDialogCollapsed((c) => !c)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-white/70 hover:text-white transition-colors border border-white/10"
@@ -2903,9 +2903,9 @@ export default function AdventureEngine() {
             )}
           </div>
 
-          {/* Collapsible dialog + choices area */}
+          {/* Collapsible dialog + choices area — mt-0 ensures no gap after toolbar */}
           {!dialogCollapsed && (
-            <>
+            <div className="mt-0 pt-0">
               <div className="flex gap-6 items-end">
                 {/* Dialog Box — show streamed OW text if generating */}
                 <div className="flex-1">
@@ -2986,7 +2986,7 @@ export default function AdventureEngine() {
                   />
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>
