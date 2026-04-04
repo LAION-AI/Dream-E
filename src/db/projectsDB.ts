@@ -813,6 +813,37 @@ export async function getProject(id: string): Promise<Project | null> {
       return null;
     }
 
+    // Check if the local project has many empty asset fields that the server
+    // might have repaired. If so, prefer the server version (which runs
+    // repairAssetReferences on every GET).
+    const sceneNodes = record.data.nodes.filter((n: any) => n.type === 'scene');
+    const emptyImages = sceneNodes.filter((n: any) => !n.data?.backgroundImage || n.data.backgroundImage === '').length;
+    if (sceneNodes.length > 0 && emptyImages > sceneNodes.length * 0.5) {
+      // More than half the scenes are missing images — try server version
+      logDB(`Local project has ${emptyImages}/${sceneNodes.length} empty scene images — checking server for repairs`);
+      try {
+        const serverProject = await loadProjectFromServer(id);
+        if (serverProject) {
+          const serverEmpty = serverProject.nodes
+            .filter((n: any) => n.type === 'scene')
+            .filter((n: any) => !n.data?.backgroundImage || n.data.backgroundImage === '').length;
+          if (serverEmpty < emptyImages) {
+            logDB(`Server version has ${serverEmpty} empty images (vs ${emptyImages} local) — using server version`);
+            // Update local cache with server version
+            try {
+              const cacheCopy = structuredClone(serverProject);
+              await extractAndSaveAssets(cacheCopy, serverProject.id);
+              await db.projects.put({ id: serverProject.id, data: cacheCopy, updatedAt: Date.now() });
+            } catch { /* cache update failure is non-fatal */ }
+            await resolveAssetReferences(serverProject);
+            return serverProject;
+          }
+        }
+      } catch {
+        // Server fetch failed — use local version
+      }
+    }
+
     // Resolve asset:{id} references → blob URLs from the assets table.
     // This handles the new separated storage format. Legacy inline base64
     // strings are left as-is for the caller's offloadAssetsInPlace() to handle.
