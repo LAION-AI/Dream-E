@@ -2844,71 +2844,71 @@ export default function AdventureEngine() {
         style={{ transform: `translateX(${dialogOffsetX}px)` }}
       >
         <div className="mx-auto relative" style={{ maxWidth: `${dialogWidth}px` }}>
-          {/* Drag handle + collapse toggle — compact bar directly above dialog */}
-          <div className="flex items-center justify-center gap-2 mb-0 pb-0">
-            <button
-              onClick={() => setDialogCollapsed((c) => !c)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-white/70 hover:text-white transition-colors border border-white/10"
-              title={dialogCollapsed ? 'Show dialog' : 'Hide dialog'}
-            >
-              {dialogCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              <span className="text-xs">{dialogCollapsed ? 'Show' : 'Hide'}</span>
-            </button>
-            <div
-              onMouseDown={handleDialogDragStart}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-white/50 hover:text-white/80 cursor-grab active:cursor-grabbing transition-colors border border-white/10"
-              title="Drag left/right to reposition"
-            >
-              <GripHorizontal size={14} />
-              <span className="text-xs">Drag</span>
-            </div>
-            <div
-              onMouseDown={handleDialogResizeStart}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-white/50 hover:text-white/80 cursor-ew-resize transition-colors border border-white/10"
-              title="Drag to resize width"
-            >
-              <GripVertical size={14} />
-              <span className="text-xs">Width</span>
-            </div>
-            <div
-              onMouseDown={handleDialogHeightStart}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/50 hover:bg-black/70 text-white/50 hover:text-white/80 cursor-ns-resize transition-colors border border-white/10"
-              title="Drag up/down to resize height"
-            >
-              <MoveVertical size={14} />
-              <span className="text-xs">Height</span>
-            </div>
-            {openWorldMode && (
-              <button
-                onClick={() => setDialogEditing(e => !e)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors border ${
-                  dialogEditing
-                    ? 'bg-amber-600/60 text-white border-amber-400/40'
-                    : 'bg-black/50 hover:bg-black/70 text-white/50 hover:text-white/80 border-white/10'
-                }`}
-                title={dialogEditing ? 'Stop editing' : 'Edit scene text'}
-              >
-                <Pencil size={14} />
-                <span className="text-xs">{dialogEditing ? 'Editing' : 'Edit'}</span>
-              </button>
-            )}
-            {(dialogOffsetX !== 0 || dialogWidth !== 1500 || dialogMaxHeight !== Math.round(window.innerHeight * 0.45)) && (
-              <button
-                onClick={() => { setDialogOffsetX(0); setDialogWidth(1500); setDialogMaxHeight(Math.round(window.innerHeight * 0.45)); }}
-                className="px-2.5 py-1.5 rounded-lg text-xs bg-black/50 hover:bg-black/70 text-white/50 hover:text-white/80 transition-colors border border-white/10"
-                title="Reset position, width, and height"
-              >
-                Reset
-              </button>
-            )}
-          </div>
-
-          {/* Collapsible dialog + choices area — mt-0 ensures no gap after toolbar */}
+          {/* Collapsible dialog + choices area */}
           {!dialogCollapsed && (
-            <div className="mt-0 pt-0">
+            <div>
               <div className="flex gap-6 items-end">
-                {/* Dialog Box — show streamed OW text if generating */}
+                {/* Dialog Box — toolbar is now INSIDE the dialog column so it stays
+                    directly above the text box regardless of choice list height */}
                 <div className="flex-1">
+                  {/* Toolbar repositioned: sits directly above the dialog box */}
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <button
+                      onClick={() => setDialogCollapsed((c) => !c)}
+                      className="flex items-center gap-1 px-2 py-1 rounded bg-black/50 hover:bg-black/70 text-white/70 hover:text-white transition-colors border border-white/10"
+                      title={dialogCollapsed ? 'Show dialog' : 'Hide dialog'}
+                    >
+                      {dialogCollapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                      <span className="text-[10px]">{dialogCollapsed ? 'Show' : 'Hide'}</span>
+                    </button>
+                    <div
+                      onMouseDown={handleDialogDragStart}
+                      className="flex items-center gap-1 px-2 py-1 rounded bg-black/50 hover:bg-black/70 text-white/50 hover:text-white/80 cursor-grab active:cursor-grabbing transition-colors border border-white/10"
+                      title="Drag left/right"
+                    >
+                      <GripHorizontal size={12} />
+                      <span className="text-[10px]">Drag</span>
+                    </div>
+                    <div
+                      onMouseDown={handleDialogResizeStart}
+                      className="flex items-center gap-1 px-2 py-1 rounded bg-black/50 hover:bg-black/70 text-white/50 hover:text-white/80 cursor-ew-resize transition-colors border border-white/10"
+                      title="Resize width"
+                    >
+                      <GripVertical size={12} />
+                      <span className="text-[10px]">Width</span>
+                    </div>
+                    <div
+                      onMouseDown={handleDialogHeightStart}
+                      className="flex items-center gap-1 px-2 py-1 rounded bg-black/50 hover:bg-black/70 text-white/50 hover:text-white/80 cursor-ns-resize transition-colors border border-white/10"
+                      title="Resize height"
+                    >
+                      <MoveVertical size={12} />
+                      <span className="text-[10px]">Height</span>
+                    </div>
+                    {openWorldMode && (
+                      <button
+                        onClick={() => setDialogEditing(e => !e)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded transition-colors border ${
+                          dialogEditing
+                            ? 'bg-amber-600/60 text-white border-amber-400/40'
+                            : 'bg-black/50 hover:bg-black/70 text-white/50 hover:text-white/80 border-white/10'
+                        }`}
+                        title={dialogEditing ? 'Stop editing' : 'Edit scene text'}
+                      >
+                        <Pencil size={12} />
+                        <span className="text-[10px]">{dialogEditing ? 'Editing' : 'Edit'}</span>
+                      </button>
+                    )}
+                    {(dialogOffsetX !== 0 || dialogWidth !== 1500 || dialogMaxHeight !== Math.round(window.innerHeight * 0.45)) && (
+                      <button
+                        onClick={() => { setDialogOffsetX(0); setDialogWidth(1500); setDialogMaxHeight(Math.round(window.innerHeight * 0.45)); }}
+                        className="px-2 py-1 rounded text-[10px] bg-black/50 hover:bg-black/70 text-white/50 hover:text-white/80 transition-colors border border-white/10"
+                        title="Reset"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
                   {owGenerating ? (
                     /* Show a loading state while the AI generates (structured JSON isn't streamable to UI) */
                     <DialogBox
