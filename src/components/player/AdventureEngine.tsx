@@ -2844,22 +2844,36 @@ export default function AdventureEngine() {
         style={{ transform: `translateX(${dialogOffsetX}px)` }}
       >
         <div className="mx-auto relative" style={{ maxWidth: `${dialogWidth}px` }}>
+          {/* Show/Hide toggle — ALWAYS visible even when dialog is collapsed */}
+          {dialogCollapsed && (
+            <div className="flex justify-center mb-1">
+              <button
+                onClick={() => setDialogCollapsed(false)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded bg-black/60 hover:bg-black/80 text-white/70 hover:text-white transition-colors border border-white/10"
+                title="Show dialog"
+              >
+                <ChevronUp size={14} />
+                <span className="text-xs">Show</span>
+              </button>
+            </div>
+          )}
+
           {/* Collapsible dialog + choices area */}
           {!dialogCollapsed && (
             <div>
               <div className="flex gap-6 items-end">
-                {/* Dialog Box — toolbar is now INSIDE the dialog column so it stays
+                {/* Dialog Box — toolbar is INSIDE the dialog column so it stays
                     directly above the text box regardless of choice list height */}
                 <div className="flex-1">
-                  {/* Toolbar repositioned: sits directly above the dialog box */}
+                  {/* Toolbar: sits directly above the dialog box */}
                   <div className="flex items-center justify-center gap-2 mb-1">
                     <button
-                      onClick={() => setDialogCollapsed((c) => !c)}
+                      onClick={() => setDialogCollapsed(true)}
                       className="flex items-center gap-1 px-2 py-1 rounded bg-black/50 hover:bg-black/70 text-white/70 hover:text-white transition-colors border border-white/10"
-                      title={dialogCollapsed ? 'Show dialog' : 'Hide dialog'}
+                      title="Hide dialog"
                     >
-                      {dialogCollapsed ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                      <span className="text-[10px]">{dialogCollapsed ? 'Show' : 'Hide'}</span>
+                      <ChevronDown size={12} />
+                      <span className="text-[10px]">Hide</span>
                     </button>
                     <div
                       onMouseDown={handleDialogDragStart}
