@@ -647,7 +647,9 @@ export default function AdventureEngine() {
    */
   const startTTS = useCallback((text: string, targetNodeId: string) => {
     const settings = useImageGenStore.getState();
-    if (!settings.tts.enabled || !settings.googleApiKey) return;
+    // TTS works with either Google API key (direct) or HyprLab key (proxied)
+    const hasTtsKey = !!(settings.googleApiKey || settings.apiKey);
+    if (!settings.tts.enabled || !hasTtsKey) return;
     if (!text || text.trim().length < 10) return;
 
     // Don't re-generate if already generating for this node
