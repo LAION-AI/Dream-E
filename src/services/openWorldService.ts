@@ -709,14 +709,41 @@ export function generateOpenWorldScene(
       const textStart = Date.now();
       onStatus({ phase: 'generating_text', detail: `Writing the next scene (${writerModel})...` });
 
-      const fullText = await streamOpenWorldResponse(
-        context.systemPrompt,
-        context.userMessage,
-        controller.signal,
-        onTextDelta,
-        writerRefImages,
+      // Stream with retry — if the API connection drops ("terminated"),
+      // retry once after a short delay instead of showing a fatal error.
+      let fullText = '';
+      let streamError: Error | null = null;
+      for (let streamAttempt = 1; streamAttempt <= 2; streamAttempt++) {
+        try {
+          fullText = await streamOpenWorldResponse(
+            context.systemPrompt,
+            context.userMessage,
+            controller.signal,
+            onTextDelta,
+            writerRefImages,
         userUploadedImages || []
       );
+          streamError = null;
+          break; // Success
+        } catch (err) {
+          streamError = err instanceof Error ? err : new Error(String(err));
+          if (err instanceof Error && err.name === 'AbortError') throw err; // User cancelled
+          if (streamAttempt < 2) {
+            const retryMsg = `Connection lost (${streamError.message}). Retrying in 3s...`;
+            console.warn(`[OpenWorld] Stream attempt ${streamAttempt} failed:`, streamError.message);
+            onStatus({ phase: 'generating_text', detail: retryMsg });
+            await new Promise(r => setTimeout(r, 3000));
+            onStatus({ phase: 'generating_text', detail: `Retrying scene generation (${writerModel})...` });
+          }
+        }
+      }
+      if (streamError) {
+        // Both attempts failed — show user-friendly error with retry suggestion
+        const msg = `Scene generation failed: ${streamError.message}. Try again or switch models in AI Settings.`;
+        onStatus({ phase: 'error', detail: msg });
+        onError(msg);
+        return;
+      }
 
       const textMs = Date.now() - textStart;
       onStatus({ phase: 'generating_text', detail: `Scene text generated (${(textMs / 1000).toFixed(1)}s, ${Math.round(fullText.length / 1024)}KB)` });
@@ -1134,7 +1161,19 @@ export function generateOpenWorldScene(
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
-      const msg = err instanceof Error ? err.message : 'Unknown error';
+      const rawMsg = err instanceof Error ? err.message : 'Unknown error';
+      // Make error messages more user-friendly
+      let msg = rawMsg;
+      if (rawMsg.includes('terminated') || rawMsg.includes('ECONNRESET') || rawMsg.includes('network')) {
+        msg = `Connection to AI was lost (${rawMsg}). This is usually temporary — try again.`;
+      } else if (rawMsg.includes('fetch failed')) {
+        msg = `Could not reach the AI server. Check your internet connection and API settings.`;
+      } else if (rawMsg.includes('401') || rawMsg.includes('403')) {
+        msg = `API authentication failed. Check your API key in AI Settings.`;
+      } else if (rawMsg.includes('429')) {
+        msg = `Rate limit reached. Wait a moment and try again.`;
+      }
+      console.error('[OpenWorld] Pipeline error:', rawMsg);
       onStatus({ phase: 'error', detail: msg });
       onError(msg);
     }
