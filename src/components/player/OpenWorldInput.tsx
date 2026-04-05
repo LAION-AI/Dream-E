@@ -204,7 +204,14 @@ export default function OpenWorldInput({ onSubmit, disabled, placeholder }: Open
     try {
       const settings = useImageGenStore.getState();
       const googleApiKey = settings.googleApiKey;
+      const hyprLabApiKey = settings.apiKey; // main provider key (HyprLab)
       const model = settings.asr?.model || 'gemini-2.5-flash-lite';
+
+      if (!googleApiKey && !hyprLabApiKey) {
+        console.error('[ASR] No API key configured for ASR. Set a Google or HyprLab key in AI Settings.');
+        setRecordingState('idle');
+        return;
+      }
 
       console.log(`[ASR] Sending ${(blob.size / 1024).toFixed(1)}KB audio (${mimeType}) to ${model}`);
 
@@ -218,6 +225,7 @@ export default function OpenWorldInput({ onSubmit, disabled, placeholder }: Open
           audioData: base64,
           mimeType: mimeType.split(';')[0], // strip codecs param
           googleApiKey,
+          hyprLabApiKey,
           model,
         }),
       });

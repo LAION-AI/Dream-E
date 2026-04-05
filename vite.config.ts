@@ -479,14 +479,16 @@ export default defineConfig({
                   audioData,   // base64-encoded audio data (no data URL prefix)
                   mimeType = 'audio/webm',
                   googleApiKey: gKey = '',
+                  hyprLabApiKey: hKey = '',
                   model = 'gemini-2.5-flash-lite',
                 } = JSON.parse(body);
 
-                const apiKey = gKey || process.env.GOOGLE_API_KEY || '';
+                // Try Google key first, fall back to HyprLab key
+                const apiKey = gKey || hKey || process.env.GOOGLE_API_KEY || '';
                 if (!apiKey) {
                   res.statusCode = 400;
                   res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ error: 'Google API key not configured. Set it in AI Settings.' }));
+                  res.end(JSON.stringify({ error: 'No API key configured for ASR. Set a Google or HyprLab API key in AI Settings.' }));
                   return;
                 }
 
@@ -509,8 +511,11 @@ export default defineConfig({
                 }
 
                 // Call Gemini multimodal with audio for transcription.
-                // Use the Files API upload approach for reliability with larger audio.
-                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                // Use HyprLab's endpoint if only HyprLab key is available.
+                const baseUrl = (!gKey && hKey)
+                  ? 'https://api.hyprlab.io'
+                  : 'https://generativelanguage.googleapis.com';
+                const geminiUrl = `${baseUrl}/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
                 const requestBody = {
                   contents: [{

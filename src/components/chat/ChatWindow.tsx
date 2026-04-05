@@ -204,7 +204,14 @@ export default function ChatWindow({ isOpen, onClose, panelMode = false }: ChatW
     try {
       const settings = useImageGenStore.getState();
       const googleApiKey = settings.googleApiKey;
+      const hyprLabApiKey = settings.apiKey;
       const model = settings.asr?.model || 'gemini-2.5-flash-lite';
+
+      if (!googleApiKey && !hyprLabApiKey) {
+        console.error('[ASR-Chat] No API key for ASR. Set Google or HyprLab key in AI Settings.');
+        setRecordingState('idle');
+        return;
+      }
 
       console.log(`[ASR-Chat] Sending ${(blob.size / 1024).toFixed(1)}KB audio (${mimeType}) to ${model}`);
 
@@ -217,6 +224,7 @@ export default function ChatWindow({ isOpen, onClose, panelMode = false }: ChatW
           audioData: base64,
           mimeType: mimeType.split(';')[0],
           googleApiKey,
+          hyprLabApiKey,
           model,
         }),
       });
