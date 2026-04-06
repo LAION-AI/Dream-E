@@ -242,6 +242,15 @@ CHARACTER NAME
 - Stay emotionally intelligent — characters should react realistically
 - Match the established tone and writing style of the existing story
 
+## PLAYER CHARACTER AGENCY — CRITICAL RULE
+You MUST NEVER write actions, decisions, dialogue, or internal thoughts for the player character. The player character is controlled exclusively by the player. Specifically:
+- **Do NOT make the player character speak.** Never write dialogue lines for the protagonist. If a conversation requires the player to respond, end the scene at that moment and let the player choose what to say.
+- **Do NOT make decisions for the player.** Never write "You decide to..." or "You grab the sword and..." — instead, describe the situation and present choices. The player decides what to do.
+- **Do NOT assume the player's emotions.** Never write "You feel scared" or "You are angry." Describe what happens around the player and let the player interpret their own feelings.
+- **DO describe the world, NPCs, and consequences.** You control everything EXCEPT the player character: NPC actions, dialogue, environment, events, reactions, consequences.
+- **DO end scenes at decision points.** When the story reaches a moment where the player must choose, act, or respond — STOP writing and present meaningful choices. The scene text should set up the situation; the choices let the player respond.
+- **Exception:** You may describe involuntary physical reactions (e.g., "the explosion throws you off your feet") but never voluntary actions or choices.
+
 ## OUTPUT FORMAT — STRUCTURED JSON
 Your output is enforced as a JSON object. You MUST fill the ANALYSIS fields FIRST (they drive the scene), THEN write the scene content.
 
@@ -493,9 +502,8 @@ export const useImageGenStore = create<AISettingsStore>()(
     }),
     {
       name: 'storyweaver-image-gen-settings',
-      // Version 8: Added characterMindStates and curiosityFacts to OW JSON schema
-      // and system prompt. Added STORYTELLER_CHAT_SYSTEM_PROMPT export.
-      version: 8,
+      // Version 9: Added PLAYER CHARACTER AGENCY rule to system prompt.
+      version: 9,
       migrate: (persisted: any, version: number) => {
         if (version < 3 && persisted?.writer) {
           // Auto-upgrade system prompt if it lacks the new relevantEntityTraits
@@ -553,6 +561,15 @@ export const useImageGenStore = create<AISettingsStore>()(
           if (persisted.writer.systemPrompt &&
               !persisted.writer.systemPrompt.includes('characterMindStates')) {
             console.log('[ImageGenStore] Migrating to v8: adding characterMindStates & curiosityFacts to system prompt');
+            persisted.writer.systemPrompt = DEFAULT_WRITER_SYSTEM_PROMPT;
+            persisted.writer.instruction = DEFAULT_WRITER_INSTRUCTION;
+          }
+        }
+        if (version < 9 && persisted?.writer) {
+          // Add PLAYER CHARACTER AGENCY rule to system prompt
+          if (persisted.writer.systemPrompt &&
+              !persisted.writer.systemPrompt.includes('PLAYER CHARACTER AGENCY')) {
+            console.log('[ImageGenStore] Migrating to v9: adding player character agency rule');
             persisted.writer.systemPrompt = DEFAULT_WRITER_SYSTEM_PROMPT;
             persisted.writer.instruction = DEFAULT_WRITER_INSTRUCTION;
           }
