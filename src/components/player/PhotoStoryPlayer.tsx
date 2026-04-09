@@ -292,18 +292,89 @@ function getNodeDisplayContent(node: StoryNode): NodeDisplayContent {
 }
 
 /**
- * Build a plain-text narration string from a NodeDisplayContent.
- * This is what gets sent to TTS — a natural reading of the node's content.
+ * Build a natural, fluid narration string from a NodeDisplayContent.
+ * This is sent to TTS — it should sound like a narrator reading aloud,
+ * NOT like a form being read ("Genre. Drama. Target Audience. Adults.").
+ *
+ * Instead of "Label: value", uses natural connector sentences:
+ *   "The genre is drama." / "The story follows Jack, who must..."
  */
 function buildNarrationText(content: NodeDisplayContent): string {
   const parts: string[] = [];
 
-  // Title and type
-  parts.push(`${content.typeBadge}: ${content.title}.`);
+  // Natural intro based on node type
+  if (content.typeBadge.startsWith('Story Root')) {
+    parts.push(`${content.title}.`);
+  } else if (content.typeBadge.startsWith('Plot')) {
+    parts.push(`${content.typeBadge}. ${content.title}.`);
+  } else if (content.typeBadge.startsWith('Act')) {
+    parts.push(`${content.typeBadge}. ${content.title}.`);
+  } else if (content.typeBadge === 'Scene') {
+    parts.push(`Scene. ${content.title}.`);
+  } else {
+    parts.push(`${content.title}.`);
+  }
 
-  // Each text section as "Label: text"
+  // Convert label+text pairs into natural sentences
   for (const section of content.textSections) {
-    parts.push(`${section.label}. ${section.text}.`);
+    const label = section.label;
+    const text = section.text;
+    if (!text) continue;
+
+    // Map labels to natural spoken connectors
+    switch (label) {
+      // Story Root fields
+      case 'Genre':
+        parts.push(`The genre is ${text}.`);
+        break;
+      case 'Target Audience':
+        parts.push(`The target audience is ${text}.`);
+        break;
+      case 'Logline':
+        parts.push(`The logline of the story is: ${text}`);
+        break;
+      case 'Main Character':
+        parts.push(`The main character is ${text}.`);
+        break;
+      case 'Antagonist':
+        parts.push(`The antagonist is ${text}.`);
+        break;
+      case 'Supporting Characters':
+        parts.push(`The supporting characters are ${text}.`);
+        break;
+      case 'Protagonist Goal':
+        parts.push(`The protagonist's goal is: ${text}`);
+        break;
+      case 'Summary':
+        parts.push(`Here is the story summary. ${text}`);
+        break;
+
+      // Plot fields
+      case 'Plot Type':
+        parts.push(`This is a ${text} arc.`);
+        break;
+
+      // Act fields
+      case 'Turning Point':
+        parts.push(`The turning point of this act is: ${text}`);
+        break;
+
+      // Scene fields
+      case 'Scene Action':
+        parts.push(`Here is what happens. ${text}`);
+        break;
+      case 'Entity State':
+        // Skip entity states in TTS — too technical
+        break;
+
+      // Default: use "Description" naturally, everything else with a gentle intro
+      case 'Description':
+        parts.push(text);
+        break;
+      default:
+        parts.push(text);
+        break;
+    }
   }
 
   return parts.join(' ');
