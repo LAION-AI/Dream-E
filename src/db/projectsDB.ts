@@ -292,6 +292,8 @@ async function extractAndSaveAssets(project: Project, projectId: string): Promis
  */
 async function resolveAssetReferences(project: Project): Promise<number> {
   let resolved = 0;
+  // Reset server recovery counter for this load cycle
+  serverRecoveryCount = 0;
 
   // Scene node assets
   for (const node of project.nodes) {
@@ -372,6 +374,10 @@ async function resolveAssetReferences(project: Project): Promise<number> {
  * @param field - The field name on the target object
  * @returns true if the asset was resolved, false if not found anywhere
  */
+/** Max server recovery attempts per project load to avoid hammering the API */
+const MAX_SERVER_RECOVERIES = 10;
+let serverRecoveryCount = 0;
+
 async function resolveOneAsset(
   assetId: string,
   projectId: string,
@@ -385,8 +391,12 @@ async function resolveOneAsset(
     blob = record.blob;
   }
 
-  // 2. If not in IndexedDB, try recovering from the server
-  if (!blob) {
+  // 2. If not in IndexedDB, try recovering from the server.
+  // Limit server recovery attempts to avoid hammering the API when many
+  // assets are missing (e.g., after cache clear on a 86-scene project).
+  // After MAX_SERVER_RECOVERIES, just mark assets as empty.
+  if (!blob && serverRecoveryCount < MAX_SERVER_RECOVERIES) {
+    serverRecoveryCount++;
     const recovered = await recoverAssetFromServer(assetId, projectId);
     if (recovered) {
       blob = recovered.blob;
