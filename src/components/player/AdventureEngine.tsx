@@ -1350,7 +1350,14 @@ export default function AdventureEngine() {
       storyText: interpolatedStoryText,
       choices: node.data.choices.map((choice) => ({
         id: choice.id,
-        label: interpolateVariables(choice.label), // Also interpolate choice labels
+        // Defensive: choice.label can be a string or an object {label, text} if
+        // the AI returned a non-standard format. Normalize to string.
+        label: interpolateVariables(
+          typeof choice.label === 'string' ? choice.label
+          : typeof choice.label === 'object' && choice.label !== null
+            ? ((choice.label as any).label || (choice.label as any).text || JSON.stringify(choice.label))
+            : String(choice.label ?? '')
+        ),
         icon: choice.icon,
         isAvailable: true, // Full implementation would check conditions
         targetNodeId: findNextNode(proj, node.id, choice.id) || undefined,
