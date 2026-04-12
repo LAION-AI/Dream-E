@@ -20,7 +20,7 @@ import { useProjectStore } from '@/stores/useProjectStore';
 import type {
   Project, StoryNode, Entity, Variable,
   StoryRootNodeData, PlotNodeData, ActNodeData,
-  CoWriteSceneData, RelationshipEdgeData,
+  CoWriteSceneData, ShotNodeData, RelationshipEdgeData,
 } from '@/types';
 
 /**
@@ -206,6 +206,24 @@ function buildCowriteContext(project: Project): string[] {
       );
       const parentInfo = parentEdge ? ` (act: ${parentEdge.source})` : '';
       lines.push(`  [${s.id}] "${d.title || 'Untitled'}"${entBadge}${parentInfo}${desc}`);
+    }
+  }
+
+  // ── Shot Nodes ──
+  const shotNodes = nodes.filter(n => n.type === 'shot');
+  if (shotNodes.length > 0) {
+    lines.push('');
+    lines.push(`Shot Nodes (${shotNodes.length}):`);
+    for (const s of shotNodes) {
+      const d = s.data as ShotNodeData;
+      const desc = d.description ? ` — ${d.description.slice(0, 100)}` : '';
+      // Find parent by incoming edge (from cowriteScene or act)
+      const parentEdge = edges.find(e =>
+        e.target === s.id &&
+        nodes.some(n => n.id === e.source && (n.type === 'cowriteScene' || n.type === 'act'))
+      );
+      const parentInfo = parentEdge ? ` (parent: ${parentEdge.source})` : '';
+      lines.push(`  [${s.id}] "${d.title || 'Untitled'}"${parentInfo}${desc}`);
     }
   }
 

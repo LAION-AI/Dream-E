@@ -57,6 +57,7 @@ import type {
   PlotNodeData,
   ActNodeData,
   CoWriteSceneData,
+  ShotNodeData,
 } from '@/types';
 
 // =============================================================================
@@ -127,9 +128,28 @@ function buildPhotoStoryOrder(project: Project): StoryNode[] {
 
   // 4. CoWrite scenes: group by parent act (via edges), sort within each group.
   //    We interleave acts with their scenes: Act1 -> Act1Scenes -> Act2 -> Act2Scenes...
+  //    Shot nodes are nested under their parent (scene or act) and sorted left-to-right.
   const scenes = nodes.filter(n => n.type === 'cowriteScene');
+  const shots = nodes.filter(n => n.type === 'shot');
   const orderedActsAndScenes: StoryNode[] = [];
   const connectedSceneIds = new Set<string>();
+  const connectedShotIds = new Set<string>();
+
+  /**
+   * Helper: find and append shot nodes that are children of a given parent node.
+   * Shots connected from the parent via edges are sorted left-to-right.
+   */
+  const appendChildShots = (parentId: string) => {
+    const parentEdges = edges.filter(e => e.source === parentId);
+    const childShotIds = new Set(parentEdges.map(e => e.target));
+    const childShots = shots
+      .filter(s => childShotIds.has(s.id))
+      .sort((a, b) => a.position.x - b.position.x);
+    for (const shot of childShots) {
+      orderedActsAndScenes.push(shot);
+      connectedShotIds.add(shot.id);
+    }
+  };
 
   for (const act of acts) {
     orderedActsAndScenes.push(act);
@@ -144,7 +164,12 @@ function buildPhotoStoryOrder(project: Project): StoryNode[] {
     for (const scene of actScenes) {
       orderedActsAndScenes.push(scene);
       connectedSceneIds.add(scene.id);
+      // Append shots that are children of this scene
+      appendChildShots(scene.id);
     }
+
+    // Also append shots directly connected to the act (not via a scene)
+    appendChildShots(act.id);
   }
 
   // 5. Orphan scenes not connected to any act (append at end)
@@ -152,7 +177,17 @@ function buildPhotoStoryOrder(project: Project): StoryNode[] {
     .filter(s => !connectedSceneIds.has(s.id))
     .sort((a, b) => a.position.x - b.position.x);
 
-  return [...root, ...plots, ...orderedActsAndScenes, ...orphanScenes];
+  for (const scene of orphanScenes) {
+    orderedActsAndScenes.push(scene);
+    appendChildShots(scene.id);
+  }
+
+  // 6. Orphan shots not connected to any parent
+  const orphanShots = shots
+    .filter(s => !connectedShotIds.has(s.id))
+    .sort((a, b) => a.position.x - b.position.x);
+
+  return [...root, ...plots, ...orderedActsAndScenes, ...orphanShots];
 }
 
 // =============================================================================
@@ -279,6 +314,23 @@ function getNodeDisplayContent(node: StoryNode): NodeDisplayContent {
       };
     }
 
+    case 'shot': {
+      const d = node.data as ShotNodeData;
+      const sections: TextSection[] = [];
+      if (d.description) sections.push({ label: 'Description', text: d.description });
+
+      return {
+        ...base,
+        title: d.title || node.label || 'Shot',
+        typeBadge: 'Shot',
+        image: d.image,
+        textSections: sections,
+        badgeColor: 'bg-rose-600',
+        voiceoverAudio: d.voiceoverAudio,
+        backgroundMusic: d.backgroundMusic,
+      };
+    }
+
     default:
       return {
         ...base,
@@ -311,6 +363,8 @@ function buildNarrationText(content: NodeDisplayContent): string {
     parts.push(`${content.typeBadge}. ${content.title}.`);
   } else if (content.typeBadge === 'Scene') {
     parts.push(`Scene. ${content.title}.`);
+  } else if (content.typeBadge === 'Shot') {
+    parts.push(`Shot. ${content.title}.`);
   } else {
     parts.push(`${content.title}.`);
   }

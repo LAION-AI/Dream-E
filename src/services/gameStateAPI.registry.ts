@@ -859,7 +859,7 @@ export const COMMANDS: CommandMeta[] = [
   {
     name: 'generate_node_image',
     group: 'cowrite',
-    description: 'Generate an image for any co-write node (root, plot, act) or entity',
+    description: 'Generate an image for any co-write node (root, plot, act, scene, shot) or entity',
     params: [
       { name: 'targetId', type: 'string', required: true, description: 'Node ID or entity ID to generate image for' },
       { name: 'prompt', type: 'string', required: true, description: 'Image generation prompt (be vivid and detailed)' },
@@ -912,13 +912,54 @@ export const COMMANDS: CommandMeta[] = [
     returns: 'Array of {sceneNodeId, title, description, entityCount, parentActId?}',
   },
 
+  // -- Shots --
+  {
+    name: 'create_shot',
+    group: 'cowrite',
+    description: 'Create a shot node (child of a co-write scene or act)',
+    params: [
+      { name: 'title', type: 'string', required: true, description: 'Shot title' },
+      { name: 'description', type: 'string', required: false, description: 'Shot description (camera angle, framing, etc.)' },
+      { name: 'parentNodeId', type: 'string', required: false, description: 'Parent node ID (cowriteScene or act) to auto-connect' },
+    ],
+    returns: '{shotNodeId}',
+    notes: 'If parentNodeId is provided, an edge is created from the parent to this shot.',
+  },
+  {
+    name: 'update_shot',
+    group: 'cowrite',
+    description: 'Update shot node fields',
+    params: [
+      { name: 'shotNodeId', type: 'string', required: true, description: 'Shot node ID' },
+      { name: 'title', type: 'string', required: false, description: 'New title' },
+      { name: 'description', type: 'string', required: false, description: 'New description' },
+    ],
+    returns: '{shotNodeId, updated}',
+  },
+  {
+    name: 'delete_shot',
+    group: 'cowrite',
+    description: 'Delete a shot node and all its connected edges',
+    params: [
+      { name: 'shotNodeId', type: 'string', required: true, description: 'Shot node ID' },
+    ],
+    returns: '{shotNodeId, edgesRemoved}',
+  },
+  {
+    name: 'list_shots',
+    group: 'cowrite',
+    description: 'List all shot nodes',
+    params: [],
+    returns: 'Array of {shotNodeId, title, description, parentNodeId?}',
+  },
+
   // -- Co-Write Music --
   {
     name: 'set_node_music',
     group: 'cowrite',
-    description: 'Set background music on a co-write node (storyRoot, plot, act, or cowriteScene)',
+    description: 'Set background music on a co-write node (storyRoot, plot, act, cowriteScene, or shot)',
     params: [
-      { name: 'nodeId', type: 'string', required: true, description: 'Node ID (storyRoot, plot, act, or cowriteScene)' },
+      { name: 'nodeId', type: 'string', required: true, description: 'Node ID (storyRoot, plot, act, cowriteScene, or shot)' },
       { name: 'musicDataUrl', type: 'string', required: true, description: 'Base64 audio data URL for the music' },
     ],
     returns: '{nodeId, set: true}',
@@ -928,9 +969,22 @@ export const COMMANDS: CommandMeta[] = [
     group: 'cowrite',
     description: 'Remove background music from a co-write node',
     params: [
-      { name: 'nodeId', type: 'string', required: true, description: 'Node ID (storyRoot, plot, act, or cowriteScene)' },
+      { name: 'nodeId', type: 'string', required: true, description: 'Node ID (storyRoot, plot, act, cowriteScene, or shot)' },
     ],
     returns: '{nodeId, removed: true}',
+  },
+
+  // ── Co-Write TTS ──
+  {
+    name: 'generate_node_voiceover',
+    group: 'cowrite',
+    description: 'Generate TTS voiceover audio for any co-write node (storyRoot, plot, act, cowriteScene, shot). If text is not provided, auto-builds narration from the node content.',
+    params: [
+      { name: 'nodeId', type: 'string', required: true, description: 'Node ID (storyRoot, plot, act, cowriteScene, or shot)' },
+      { name: 'text', type: 'string', required: false, description: 'Text to speak. If omitted, auto-builds from node fields.' },
+    ],
+    returns: '{nodeId, generated: true, audioSize: number}',
+    notes: 'Uses TTS settings from AI Settings. Saves audio on the node voiceoverAudio field.',
   },
 
   // ── TTS ──

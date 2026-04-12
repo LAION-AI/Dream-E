@@ -41,6 +41,7 @@ import {
   FileText,
   User,
   Layers,
+  Camera,
 } from 'lucide-react';
 
 /**
@@ -147,6 +148,15 @@ const cowriteStoryExtraTypes: NodeTypeInfo[] = [
     color: '#10b981',
     bgColor: 'bg-emerald-500/10',
     borderColor: 'border-emerald-500',
+  },
+  {
+    type: 'shot',
+    label: 'Shot',
+    description: 'Visual shot within a scene',
+    icon: Camera,
+    color: '#f43f5e',
+    bgColor: 'bg-rose-500/10',
+    borderColor: 'border-rose-500',
   },
 ];
 

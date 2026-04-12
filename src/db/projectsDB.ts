@@ -56,7 +56,7 @@ const SCENE_ASSET_FIELDS = ['backgroundImage', 'backgroundMusic', 'voiceoverAudi
  * Co-write node types (storyRoot, plot, act, cowriteScene) that have asset fields.
  * These are separate from scene nodes which have different field names.
  */
-const COWRITE_NODE_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene']);
+const COWRITE_NODE_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene', 'shot']);
 const COWRITE_ASSET_FIELDS = ['image', 'voiceoverAudio', 'backgroundMusic'] as const;
 
 /** Fields on Entity that hold large binary assets */

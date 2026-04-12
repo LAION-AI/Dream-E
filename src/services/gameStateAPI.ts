@@ -17,7 +17,7 @@
 
 import { useProjectStore } from '@/stores/useProjectStore';
 import { generateId } from '@/utils/idGenerator';
-import type { Project, StoryNode, Entity, Variable, StoryEdge, StoryRootNodeData, PlotNodeData, ActNodeData, RelationshipEdgeData } from '@/types';
+import type { Project, StoryNode, Entity, Variable, StoryEdge, StoryRootNodeData, PlotNodeData, ActNodeData, RelationshipEdgeData, ShotNodeData } from '@/types';
 import type { APIResult } from './gameStateAPI.types';
 import { ValidationError } from './gameStateAPI.types';
 import { COMMANDS } from './gameStateAPI.registry';
@@ -2184,7 +2184,7 @@ const handleListCowriteScenes: CommandHandler = (_params, _store, project) => {
  * Valid co-write node types that support the backgroundMusic field.
  * Used by set_node_music and remove_node_music to validate the target node.
  */
-const COWRITE_MUSIC_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene']);
+const COWRITE_MUSIC_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene', 'shot']);
 
 /**
  * Set background music on a co-write node (storyRoot, plot, act, or cowriteScene).
@@ -2244,6 +2244,232 @@ const handleRemoveNodeMusic: CommandHandler = (params, store, project) => {
   store.updateNode(nodeId, { data: { ...data, backgroundMusic: undefined } } as any);
 
   return { success: true, nodeId, removed: true, hadMusic };
+};
+
+// ─── CO-WRITE NODE VOICEOVER ─────────────────────────────────────────
+
+/**
+ * Generate TTS voiceover audio for any co-write node (storyRoot, plot, act,
+ * cowriteScene, or shot). If no text is provided, auto-builds narration text
+ * from the node's content fields — similar to how PhotoStoryPlayer's
+ * buildNarrationText works but without the display-layer dependency.
+ */
+const VOICEOVER_NODE_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene', 'shot']);
+
+const handleGenerateNodeVoiceover: CommandHandler = async (params, _store, project) => {
+  const nodeId = requireString(params, 'nodeId');
+  const node = project.nodes.find(n => n.id === nodeId);
+  if (!node) {
+    const available = project.nodes
+      .filter(n => VOICEOVER_NODE_TYPES.has(n.type))
+      .map(n => `${n.id} (${n.type}: "${n.label}")`)
+      .join(', ');
+    throw new ValidationError(
+      `Node not found: ${nodeId}`,
+      available ? `Available nodes: ${available}` : 'No co-write nodes exist.'
+    );
+  }
+
+  if (!VOICEOVER_NODE_TYPES.has(node.type)) {
+    throw new ValidationError(
+      `Node ${nodeId} is type "${node.type}" — voiceover is only supported for: ${[...VOICEOVER_NODE_TYPES].join(', ')}`
+    );
+  }
+
+  // Build text from node content if not provided
+  let text = (params.text as string) || '';
+  if (!text) {
+    const d = node.data as any;
+    if (node.type === 'storyRoot') {
+      text = [d.title, d.genre && `The genre is ${d.genre}.`, d.punchline, d.summary].filter(Boolean).join(' ');
+    } else if (node.type === 'plot') {
+      text = [d.name, d.description].filter(Boolean).join('. ');
+    } else if (node.type === 'act') {
+      text = [d.name, d.description, d.turningPoint && `The turning point is: ${d.turningPoint}`].filter(Boolean).join('. ');
+    } else if (node.type === 'cowriteScene') {
+      text = [d.title, d.description, d.sceneAction].filter(Boolean).join('. ');
+    } else if (node.type === 'shot') {
+      text = [d.title, d.description].filter(Boolean).join('. ');
+    }
+  }
+
+  if (!text.trim()) {
+    throw new ValidationError('No text to generate voiceover for — node has no content and no text param provided.');
+  }
+
+  // Get TTS settings
+  const settings = useImageGenStore.getState();
+  const googleApiKey = settings.googleApiKey || '';
+  const hyprLabApiKey = settings.apiKey || '';
+
+  if (!googleApiKey && !hyprLabApiKey) {
+    throw new ValidationError(
+      'No API key available for TTS.',
+      'Set a Google API Key or provider API key in AI Settings.'
+    );
+  }
+
+  // Call the TTS endpoint
+  const res = await fetch('/api/generate-tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      text,
+      googleApiKey,
+      hyprLabApiKey,
+      model: settings.tts.model,
+      voice: settings.tts.voice,
+      instruction: settings.tts.instruction,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new ValidationError('TTS generation failed', err.error || 'Unknown error');
+  }
+
+  const data = await res.json();
+  if (!data.dataUrl) {
+    throw new ValidationError('No audio returned from TTS endpoint.');
+  }
+
+  // Save on the node — re-fetch store after async wait
+  const freshStore = useProjectStore.getState();
+  const freshNode = freshStore.currentProject?.nodes.find(n => n.id === nodeId);
+  if (freshNode) {
+    freshStore.updateNode(nodeId, {
+      data: { ...(freshNode.data as any), voiceoverAudio: data.dataUrl },
+    } as any);
+  }
+
+  return { success: true, nodeId, generated: true, audioSize: data.dataUrl.length };
+};
+
+// ─── SHOT NODES ──────────────────────────────────────────────────────
+
+/**
+ * Create a new shot node. Shot nodes represent individual visual shots
+ * within a scene — the most granular unit of visual storytelling.
+ */
+const handleCreateShot: CommandHandler = (params, store, project) => {
+  const title = requireString(params, 'title');
+  const description = (params.description as string) || '';
+  const parentNodeId = params.parentNodeId as string | undefined;
+
+  // Validate the parent node if provided
+  if (parentNodeId) {
+    const parentNode = project.nodes.find(n => n.id === parentNodeId);
+    if (!parentNode || (parentNode.type !== 'cowriteScene' && parentNode.type !== 'act')) {
+      const available = project.nodes
+        .filter(n => n.type === 'cowriteScene' || n.type === 'act')
+        .map(n => `${n.id} (${n.type}: "${n.label}")`)
+        .join(', ');
+      throw new ValidationError(
+        `Parent node not found or invalid type: ${parentNodeId}`,
+        available ? `Available parent nodes: ${available}` : 'No valid parent nodes exist.'
+      );
+    }
+  }
+
+  const shotNodeId = generateId('node');
+  const nodeCount = project.nodes.length;
+
+  store.addNode({
+    id: shotNodeId,
+    type: 'shot',
+    position: { x: 800 + nodeCount * 50, y: 600 + nodeCount * 40 },
+    label: title,
+    data: {
+      title,
+      description,
+    } as ShotNodeData,
+  } as any);
+
+  // Auto-connect to parent node if provided
+  if (parentNodeId) {
+    const edgeId = generateId('edge');
+    store.addEdge({
+      id: edgeId,
+      source: parentNodeId,
+      target: shotNodeId,
+    } as any);
+  }
+
+  return { success: true, shotNodeId };
+};
+
+/**
+ * Update fields on an existing shot node.
+ */
+const handleUpdateShot: CommandHandler = (params, store, project) => {
+  const shotNodeId = requireString(params, 'shotNodeId');
+  const node = project.nodes.find(n => n.id === shotNodeId);
+  if (!node || node.type !== 'shot') {
+    const available = project.nodes
+      .filter(n => n.type === 'shot')
+      .map(n => `${n.id} ("${n.label}")`)
+      .join(', ');
+    throw new ValidationError(
+      `Shot node not found: ${shotNodeId}`,
+      available ? `Available shots: ${available}` : 'No shot nodes exist. Use create_shot first.'
+    );
+  }
+
+  const updates: Record<string, unknown> = {};
+  const dataUpdates: Record<string, unknown> = {};
+
+  if (params.title !== undefined) {
+    updates.label = params.title;
+    dataUpdates.title = params.title;
+  }
+  if (params.description !== undefined) dataUpdates.description = params.description;
+
+  if (Object.keys(dataUpdates).length > 0) {
+    updates.data = { ...(node.data as any), ...dataUpdates };
+  }
+  store.updateNode(shotNodeId, updates as any);
+  return { success: true, shotNodeId, updated: Object.keys(params).filter(k => k !== 'shotNodeId') };
+};
+
+/**
+ * Delete a shot node and all edges connected to it.
+ */
+const handleDeleteShot: CommandHandler = (params, store, project) => {
+  const shotNodeId = requireString(params, 'shotNodeId');
+  const node = project.nodes.find(n => n.id === shotNodeId);
+  if (!node || node.type !== 'shot') {
+    throw new ValidationError(`Shot node not found: ${shotNodeId}`);
+  }
+  const connectedEdges = project.edges.filter(
+    e => e.source === shotNodeId || e.target === shotNodeId
+  );
+  for (const edge of connectedEdges) store.deleteEdge(edge.id);
+  store.deleteNode(shotNodeId);
+  return { success: true, shotNodeId, edgesRemoved: connectedEdges.length };
+};
+
+/**
+ * List all shot nodes in the project with key data.
+ */
+const handleListShots: CommandHandler = (_params, _store, project) => {
+  const shots = project.nodes.filter(n => n.type === 'shot');
+  return {
+    success: true,
+    shots: shots.map(s => {
+      const data = s.data as ShotNodeData;
+      // Find parent by incoming edge
+      const parentEdge = project.edges.find(e =>
+        e.target === s.id &&
+        project.nodes.some(n => n.id === e.source && (n.type === 'cowriteScene' || n.type === 'act'))
+      );
+      return {
+        shotNodeId: s.id,
+        title: data.title,
+        description: data.description?.slice(0, 200),
+        parentNodeId: parentEdge?.source || null,
+      };
+    }),
+  };
 };
 
 // =============================================================================
@@ -2348,6 +2574,13 @@ const handlers: Record<string, CommandHandler> = {
   // Co-Write Music
   set_node_music: handleSetNodeMusic,
   remove_node_music: handleRemoveNodeMusic,
+  // Co-Write Node Voiceover
+  generate_node_voiceover: handleGenerateNodeVoiceover,
+  // Shots
+  create_shot: handleCreateShot,
+  update_shot: handleUpdateShot,
+  delete_shot: handleDeleteShot,
+  list_shots: handleListShots,
 };
 
 // =============================================================================

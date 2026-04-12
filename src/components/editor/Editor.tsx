@@ -76,6 +76,7 @@ import {
   Sparkles,
   X,
   Presentation,
+  Film,
 } from 'lucide-react';
 import { useProjectStore } from '@stores/useProjectStore';
 import { useEditorStore } from '@stores/useEditorStore';
@@ -98,6 +99,7 @@ import EntityManager from '../entities/EntityManager';
 import NotesEditor from '../notes/NotesEditor';
 import { AISettingsModal } from '../settings/AISettingsModal';
 import ChatWindow from '../chat/ChatWindow';
+import VideoExporter from '../player/VideoExporter';
 
 // Import custom node components
 import SceneNodeComponent from '../nodes/SceneNode';
@@ -109,6 +111,7 @@ import PlotNodeComponent from '../nodes/PlotNode';
 import CharacterNodeComponent from '../nodes/CharacterNode';
 import ActNodeComponent from '../nodes/ActNode';
 import CoWriteSceneNodeComponent from '../nodes/CoWriteSceneNode';
+import ShotNodeComponent from '../nodes/ShotNode';
 
 // Import custom edge components
 import RelationshipEdge from '../edges/RelationshipEdge';
@@ -138,6 +141,7 @@ const nodeTypes: NodeTypes = {
   character: CharacterNodeComponent,
   act: ActNodeComponent,
   cowriteScene: CoWriteSceneNodeComponent,
+  shot: ShotNodeComponent,
 };
 
 /**
@@ -153,7 +157,7 @@ const nodeTypes: NodeTypes = {
  * characters are handled by the edge filtering logic (both endpoints must
  * be in the visible node set).
  */
-const STORY_NODE_TYPES = new Set(['scene', 'comment', 'storyRoot', 'plot', 'act', 'cowriteScene']);
+const STORY_NODE_TYPES = new Set(['scene', 'comment', 'storyRoot', 'plot', 'act', 'cowriteScene', 'shot']);
 const CHARACTER_NODE_TYPES = new Set(['character']);
 
 /**
@@ -244,6 +248,7 @@ function EditorInner() {
   // Chat and Notes modal states
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
+  const [showVideoExport, setShowVideoExport] = useState(false);
   const [isAISettingsOpen, setIsAISettingsOpen] = useState(false);
 
   // Import state
@@ -905,6 +910,16 @@ function EditorInner() {
             position,
             label: 'New Scene',
             data: { title: '', description: '', entities: [], sceneAction: '' },
+          };
+          break;
+
+        case 'shot':
+          newNode = {
+            id: generateId('node'),
+            type: 'shot',
+            position,
+            label: 'New Shot',
+            data: { title: '', description: '' },
           };
           break;
 
@@ -1613,6 +1628,17 @@ function EditorInner() {
             </button>
           )}
 
+          {/* Make Video — export WebM video, only for co-writing mode */}
+          {isCowriteMode && (
+            <button
+              onClick={() => setShowVideoExport(true)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors"
+            >
+              <Film size={16} />
+              Make Video
+            </button>
+          )}
+
           {/* Play Open World — only for game mode, not co-writing */}
           {!isCowriteMode && (
             <button
@@ -1872,6 +1898,14 @@ function EditorInner() {
         isOpen={isAISettingsOpen}
         onClose={() => setIsAISettingsOpen(false)}
       />
+
+      {/* Video Export Modal — only rendered in co-write mode */}
+      {isCowriteMode && (
+        <VideoExporter
+          isOpen={showVideoExport}
+          onClose={() => setShowVideoExport(false)}
+        />
+      )}
 
       {/* Save As Modal */}
       <Modal

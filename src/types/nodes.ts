@@ -72,7 +72,7 @@ export interface BaseNode {
    * This is a "discriminated union" - it helps TypeScript
    * narrow down which node type we're working with.
    */
-  type: 'scene' | 'choice' | 'modifier' | 'comment' | 'storyRoot' | 'plot' | 'character' | 'act' | 'cowriteScene';
+  type: 'scene' | 'choice' | 'modifier' | 'comment' | 'storyRoot' | 'plot' | 'character' | 'act' | 'cowriteScene' | 'shot';
 
   /**
    * Position on the canvas.
@@ -652,6 +652,38 @@ export interface CoWriteSceneNode extends BaseNode {
   data: CoWriteSceneData;
 }
 
+/**
+ * Data for a shot node — represents a single visual "shot" within a scene
+ * or sequence. Shots are the most granular unit of visual storytelling in
+ * co-write mode, akin to individual camera setups in film production.
+ *
+ * EXAMPLE USAGE:
+ * A scene "The Chase" might contain shots like:
+ *   - "Wide angle: City rooftop"
+ *   - "Close-up: Hero's determined face"
+ *   - "Tracking shot: Pursuit through alley"
+ */
+export interface ShotNodeData {
+  /** Short descriptive title of the shot */
+  title: string;
+  /** Detailed description of what the shot depicts, camera angle, etc. */
+  description: string;
+  /** Optional mood/concept image for this shot */
+  image?: string;
+  /**
+   * Background music for the shot.
+   * Stored as a base64 data URL or blob URL for persistence.
+   */
+  backgroundMusic?: string;
+  /** TTS narration audio (blob URL or data URL) */
+  voiceoverAudio?: string;
+}
+
+export interface ShotNode extends BaseNode {
+  type: 'shot';
+  data: ShotNodeData;
+}
+
 /** Data stored on relationship edges between character nodes */
 export interface RelationshipEdgeData {
   relationshipType: string;
@@ -686,7 +718,7 @@ export interface RelationshipEdgeData {
  *   }
  * }
  */
-export type StoryNode = SceneNode | ChoiceNode | ModifierNode | CommentNode | StoryRootNode | PlotNode | CharacterNode | ActNode | CoWriteSceneNode;
+export type StoryNode = SceneNode | ChoiceNode | ModifierNode | CommentNode | StoryRootNode | PlotNode | CharacterNode | ActNode | CoWriteSceneNode | ShotNode;
 
 /**
  * EDGE INTERFACE

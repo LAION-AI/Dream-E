@@ -41,8 +41,9 @@ import PlotInspector from './PlotInspector';
 import CharacterNodeInspector from './CharacterNodeInspector';
 import ActInspector from './ActInspector';
 import CoWriteSceneInspector from './CoWriteSceneInspector';
+import ShotInspector from './ShotInspector';
 import RelationshipInspector from './RelationshipInspector';
-import type { StoryRootNode, PlotNode, CharacterNode, ActNode, CoWriteSceneNode } from '@/types';
+import type { StoryRootNode, PlotNode, CharacterNode, ActNode, CoWriteSceneNode, ShotNode } from '@/types';
 
 /**
  * INSPECTOR COMPONENT
@@ -57,7 +58,7 @@ import type { StoryRootNode, PlotNode, CharacterNode, ActNode, CoWriteSceneNode 
  * deselects any edge (and vice versa) in the project store.
  */
 /** Set of co-write node types that support the "Photo Story from here" action */
-const PHOTO_STORY_NODE_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene']);
+const PHOTO_STORY_NODE_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene', 'shot']);
 
 export default function Inspector() {
   // Use targeted selectors to avoid re-rendering on unrelated store changes
@@ -118,6 +119,8 @@ export default function Inspector() {
         return <ActInspector node={selectedNode as ActNode} />;
       case 'cowriteScene':
         return <CoWriteSceneInspector node={selectedNode as CoWriteSceneNode} />;
+      case 'shot':
+        return <ShotInspector node={selectedNode as ShotNode} />;
       default:
         return (
           <div className="p-4 text-editor-muted">
@@ -164,6 +167,8 @@ export default function Inspector() {
           return 'Act';
         case 'cowriteScene':
           return 'Scene';
+        case 'shot':
+          return 'Shot';
         default:
           return 'Inspector';
       }
@@ -200,6 +205,8 @@ export default function Inspector() {
           return 'border-indigo-500';
         case 'cowriteScene':
           return 'border-emerald-500';
+        case 'shot':
+          return 'border-rose-500';
         default:
           return 'border-editor-border';
       }
