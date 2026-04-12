@@ -54,6 +54,14 @@ interface ActInspectorProps {
 export default function ActInspector({ node }: ActInspectorProps) {
   const updateNode = useProjectStore((s) => s.updateNode);
 
+  /**
+   * Determine whether this node represents an episode (TV/series structure)
+   * or a traditional act. This changes the labels throughout the inspector
+   * to use episode-appropriate terminology (e.g., "Cliffhanger" instead of
+   * "Turning Point").
+   */
+  const isEpisode = !!(node.data as any).isEpisode;
+
   /** State for the image generation overlay */
   const [imageGenOpen, setImageGenOpen] = useState(false);
   /** State for the asset picker modal */
@@ -117,11 +125,14 @@ export default function ActInspector({ node }: ActInspectorProps) {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto px-4 py-4 space-y-5">
-      {/* ==================== ACT NUMBER ==================== */}
+      {/* ==================== ACT / EPISODE NUMBER ==================== */}
       <div>
         <label className="input-label flex items-center gap-1">
-          Act Number
-          <InfoTooltip content="The sequential number of this act (1, 2, 3, etc.). Acts are typically numbered in chronological order. The most common structure is three acts, but you can use as many as your story needs." />
+          {isEpisode ? 'Episode Number' : 'Act Number'}
+          <InfoTooltip content={isEpisode
+            ? "The sequential number of this episode (1, 2, 3, etc.). Episodes are numbered in the order they air or are read."
+            : "The sequential number of this act (1, 2, 3, etc.). Acts are typically numbered in chronological order. The most common structure is three acts, but you can use as many as your story needs."
+          } />
         </label>
         <input
           type="number"
@@ -136,15 +147,18 @@ export default function ActInspector({ node }: ActInspectorProps) {
       {/* ==================== NAME ==================== */}
       <div>
         <label className="input-label flex items-center gap-1">
-          Act Name
-          <InfoTooltip content={STORY_TOOLTIPS.act || 'A descriptive name for this act that captures its narrative purpose. Examples: "The Ordinary World", "Rising Stakes", "The Final Battle".'} />
+          {isEpisode ? 'Episode Name' : 'Act Name'}
+          <InfoTooltip content={isEpisode
+            ? 'A descriptive name for this episode that captures its hook or central event. Examples: "The Pilot", "Betrayal", "The Reckoning".'
+            : (STORY_TOOLTIPS.act || 'A descriptive name for this act that captures its narrative purpose. Examples: "The Ordinary World", "Rising Stakes", "The Final Battle".')
+          } />
         </label>
         <input
           type="text"
           value={node.data.name || ''}
           onChange={(e) => updateData({ name: e.target.value })}
           className="input"
-          placeholder="e.g., The Setup, Rising Action, The Climax"
+          placeholder={isEpisode ? 'e.g., The Pilot, Betrayal, The Reckoning' : 'e.g., The Setup, Rising Action, The Climax'}
         />
       </div>
 
@@ -162,17 +176,26 @@ export default function ActInspector({ node }: ActInspectorProps) {
         />
       </div>
 
-      {/* ==================== TURNING POINT ==================== */}
+      {/* ==================== TURNING POINT / CLIFFHANGER ==================== */}
       <div>
         <label className="input-label flex items-center gap-1">
-          Turning Point
-          <InfoTooltip content={STORY_TOOLTIPS.turningPoint} title="Turning Point" />
+          {isEpisode ? 'Episode Cliffhanger / Turning Point' : 'Turning Point'}
+          <InfoTooltip
+            content={isEpisode
+              ? 'The cliffhanger or turning point at the end of this episode. What revelation, danger, or unresolved question makes the audience desperate to watch the next episode?'
+              : STORY_TOOLTIPS.turningPoint
+            }
+            title={isEpisode ? 'Cliffhanger' : 'Turning Point'}
+          />
         </label>
         <textarea
           value={node.data.turningPoint || ''}
           onChange={(e) => updateData({ turningPoint: e.target.value })}
           className="input min-h-[100px] resize-y"
-          placeholder="The pivotal event at the end of this act that changes the story's direction and propels it into the next act..."
+          placeholder={isEpisode
+            ? "The cliffhanger at the end of this episode — the unresolved question or shocking revelation that hooks the audience for the next episode..."
+            : "The pivotal event at the end of this act that changes the story's direction and propels it into the next act..."
+          }
         />
       </div>
 

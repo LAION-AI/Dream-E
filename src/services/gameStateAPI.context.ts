@@ -160,17 +160,30 @@ function buildCowriteContext(project: Project): string[] {
     lines.push('  (none)');
   }
 
-  // ── Acts ──
+  // ── Acts / Episodes ──
+  // Act nodes may represent either traditional acts or TV-style episodes
+  // based on the isEpisode flag. The context label adapts accordingly so
+  // the AI agent always sees the correct terminology.
   const actNodes = nodes
     .filter(n => n.type === 'act')
     .sort((a, b) => (a.data as ActNodeData).actNumber - (b.data as ActNodeData).actNumber);
+
+  // Determine the label: if ANY act node has isEpisode, we use "Episodes",
+  // otherwise "Acts". Mixed projects are unlikely but we handle them by
+  // labeling each node individually.
+  const hasEpisodes = actNodes.some(a => (a.data as ActNodeData & { isEpisode?: boolean }).isEpisode);
+  const hasActs = actNodes.some(a => !(a.data as ActNodeData & { isEpisode?: boolean }).isEpisode);
+  const sectionLabel = hasEpisodes && !hasActs ? 'Episodes' : hasActs && !hasEpisodes ? 'Acts' : 'Acts/Episodes';
+
   lines.push('');
-  lines.push(`Acts (${actNodes.length}):`);
+  lines.push(`${sectionLabel} (${actNodes.length}):`);
   if (actNodes.length > 0) {
     for (const a of actNodes) {
-      const d = a.data as ActNodeData;
+      const d = a.data as ActNodeData & { isEpisode?: boolean };
       const desc = d.description ? ` — ${d.description.slice(0, 100)}` : '';
-      lines.push(`  [${a.id}] Act ${d.actNumber}: "${d.name}"${desc}`);
+      const nodeLabel = d.isEpisode ? 'Episode' : 'Act';
+      const episodeFlag = d.isEpisode ? ' [episode]' : '';
+      lines.push(`  [${a.id}] ${nodeLabel} ${d.actNumber}: "${d.name}"${episodeFlag}${desc}`);
     }
   } else {
     lines.push('  (none)');

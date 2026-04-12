@@ -522,6 +522,22 @@ export interface CreateProjectOptions {
    * Defaults to 'game' if not specified.
    */
   mode?: 'game' | 'cowrite';
+
+  /**
+   * Co-write structure type.
+   * Determines the template used when creating a co-write project:
+   * - 'acts': Traditional screenplay/novel act structure (default)
+   * - 'episodes': TV series / web serial episode structure
+   * - 'blank': Only the Story Root node, no plots or acts
+   */
+  cowriteStructure?: 'acts' | 'episodes' | 'blank';
+
+  /**
+   * Number of acts or episodes to create.
+   * Only used when cowriteStructure is 'acts' or 'episodes'.
+   * Defaults to 3 for acts, 6 for episodes. Range: 1-12.
+   */
+  cowriteCount?: number;
 }
 
 /**

@@ -44,6 +44,9 @@ import {
   Upload,
   Sparkles,
   HardDrive,
+  Layers,
+  Tv,
+  FileText,
 } from 'lucide-react';
 import type { ProjectSummary, CreateProjectOptions, Project } from '@/types';
 import * as projectsDB from '@/db/projectsDB';
@@ -112,6 +115,11 @@ export default function Dashboard({ mode }: DashboardProps) {
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
   const [newProjectTitle, setNewProjectTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+
+  // State for co-write template selection (only used when mode === 'cowrite').
+  // These control the structure type and count shown in the "Create New Story" dialog.
+  const [cowriteStructure, setCowriteStructure] = useState<'acts' | 'episodes' | 'blank'>('acts');
+  const [cowriteCount, setCowriteCount] = useState(3);
 
   // State for delete confirmation
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
@@ -283,13 +291,21 @@ export default function Dashboard({ mode }: DashboardProps) {
         // Assign the current dashboard mode to the new project so it appears
         // in the correct dashboard when filtering.
         mode,
+        // Pass co-write structure options when in co-write mode.
+        // These control whether the project starts with acts, episodes, or a blank canvas.
+        ...(mode === 'cowrite' ? {
+          cowriteStructure,
+          cowriteCount,
+        } : {}),
       };
 
       const project = await projectsDB.createProject(options);
 
-      // Close modal and navigate to the editor under the correct mode prefix.
+      // Close modal, reset state, and navigate to the editor under the correct mode prefix.
       setIsNewProjectOpen(false);
       setNewProjectTitle('');
+      setCowriteStructure('acts');
+      setCowriteCount(3);
       navigate(mode === 'cowrite' ? `/cowrite/edit/${project.id}` : `/edit/${project.id}`);
     } catch (err) {
       console.error('[Dashboard] Failed to create project:', err);
@@ -608,11 +624,20 @@ export default function Dashboard({ mode }: DashboardProps) {
       {/* ==================== NEW PROJECT MODAL ==================== */}
       <Modal
         isOpen={isNewProjectOpen}
-        onClose={() => setIsNewProjectOpen(false)}
+        onClose={() => {
+          setIsNewProjectOpen(false);
+          // Reset co-write template state when closing so the next open starts fresh
+          setCowriteStructure('acts');
+          setCowriteCount(3);
+        }}
         title={mode === 'cowrite' ? 'Create New Story' : 'Create New Adventure'}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setIsNewProjectOpen(false)}>
+            <Button variant="ghost" onClick={() => {
+              setIsNewProjectOpen(false);
+              setCowriteStructure('acts');
+              setCowriteCount(3);
+            }}>
               Cancel
             </Button>
             <Button
@@ -625,14 +650,15 @@ export default function Dashboard({ mode }: DashboardProps) {
           </>
         }
       >
-        <div className="space-y-4">
+        <div className="space-y-5">
+          {/* ── Title Input ── */}
           <div>
             <label className="input-label">Project Title</label>
             <input
               type="text"
               value={newProjectTitle}
               onChange={(e) => setNewProjectTitle(e.target.value)}
-              placeholder="My Awesome Adventure"
+              placeholder={mode === 'cowrite' ? 'My New Story' : 'My Awesome Adventure'}
               className="input"
               autoFocus
               onKeyDown={(e) => {
@@ -642,6 +668,105 @@ export default function Dashboard({ mode }: DashboardProps) {
               }}
             />
           </div>
+
+          {/* ── Co-Write Structure Selection ── */}
+          {/* Only shown for co-write mode. Game mode projects always use the default
+              starter scene template, so no structure picker is needed. */}
+          {mode === 'cowrite' && (
+            <>
+              <div>
+                <label className="input-label">Story Structure</label>
+                <div className="grid grid-cols-3 gap-3 mt-2">
+                  {/* Act Structure card */}
+                  <button
+                    type="button"
+                    onClick={() => { setCowriteStructure('acts'); setCowriteCount(3); }}
+                    className={`p-3 rounded-lg border text-left transition-colors ${
+                      cowriteStructure === 'acts'
+                        ? 'border-purple-500 bg-purple-500/10'
+                        : 'border-editor-border hover:border-editor-muted'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Layers size={16} className={cowriteStructure === 'acts' ? 'text-purple-400' : 'text-editor-muted'} />
+                      <h4 className="font-semibold text-sm text-editor-text">Act Structure</h4>
+                    </div>
+                    <p className="text-[11px] text-editor-muted leading-relaxed">
+                      Traditional acts with turning points (novels, screenplays)
+                    </p>
+                  </button>
+
+                  {/* Episode Structure card */}
+                  <button
+                    type="button"
+                    onClick={() => { setCowriteStructure('episodes'); setCowriteCount(6); }}
+                    className={`p-3 rounded-lg border text-left transition-colors ${
+                      cowriteStructure === 'episodes'
+                        ? 'border-teal-500 bg-teal-500/10'
+                        : 'border-editor-border hover:border-editor-muted'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Tv size={16} className={cowriteStructure === 'episodes' ? 'text-teal-400' : 'text-editor-muted'} />
+                      <h4 className="font-semibold text-sm text-editor-text">Episode Structure</h4>
+                    </div>
+                    <p className="text-[11px] text-editor-muted leading-relaxed">
+                      Episodes with cliffhangers (TV series, web serials)
+                    </p>
+                  </button>
+
+                  {/* Blank Canvas card */}
+                  <button
+                    type="button"
+                    onClick={() => { setCowriteStructure('blank'); }}
+                    className={`p-3 rounded-lg border text-left transition-colors ${
+                      cowriteStructure === 'blank'
+                        ? 'border-gray-500 bg-gray-500/10'
+                        : 'border-editor-border hover:border-editor-muted'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <FileText size={16} className={cowriteStructure === 'blank' ? 'text-gray-400' : 'text-editor-muted'} />
+                      <h4 className="font-semibold text-sm text-editor-text">Blank Canvas</h4>
+                    </div>
+                    <p className="text-[11px] text-editor-muted leading-relaxed">
+                      Start with just a Story Root, add structure yourself
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* ── Count Input (only for acts or episodes) ── */}
+              {cowriteStructure !== 'blank' && (
+                <div>
+                  <label className="input-label">
+                    Number of {cowriteStructure === 'episodes' ? 'Episodes' : 'Acts'}
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={cowriteCount}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val)) {
+                        setCowriteCount(Math.max(1, Math.min(12, val)));
+                      }
+                    }}
+                    className="input w-24"
+                  />
+                  <p className="text-xs text-editor-muted mt-1">
+                    {cowriteStructure === 'episodes'
+                      ? 'How many episodes in your series? (1-12)'
+                      : 'How many acts in your story? (1-12, default: 3)'
+                    }
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Help text */}
           <p className="text-sm text-editor-muted">
             You can change the title and add more details later.
           </p>

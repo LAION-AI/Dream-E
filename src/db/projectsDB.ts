@@ -593,7 +593,17 @@ export async function createProject(
     // - Edges: each plot → each act with relationship data (4×3 = 12 edges)
     // This gives users an immediate working structure to start fleshing out.
     if (options.mode === 'cowrite') {
-      // Create Story Root node at the top center
+      // Determine which structure template to use. Defaults to 'acts' for
+      // backwards compatibility when cowriteStructure is not specified.
+      const structure = options.cowriteStructure || 'acts';
+      const isEpisode = structure === 'episodes';
+      // Default count: 3 for acts, 6 for episodes. Clamped to 1-12 range.
+      const structureCount = Math.max(1, Math.min(12,
+        options.cowriteCount ?? (isEpisode ? 6 : 3)
+      ));
+
+      // Create Story Root node at the top center — always present regardless
+      // of which structure template is chosen.
       const rootNode: StoryNode = {
         id: generateId('node'),
         type: 'storyRoot',
@@ -612,71 +622,91 @@ export async function createProject(
         },
       };
 
-      // Create 4 Plot nodes — each represents a different narrative thread.
-      // Spread horizontally below the Story Root for a clean visual layout.
-      const plotConfigs = [
-        { name: 'Main Plot', plotType: 'Main Plot', x: 100 },
-        { name: 'Relationship', plotType: 'Relationship Plot', x: 400 },
-        { name: 'Character Development', plotType: 'Character Development Plot', x: 700 },
-        { name: 'Antagonist', plotType: 'Antagonist Plot', x: 1000 },
-      ];
-      const plotNodes = plotConfigs.map(cfg => ({
-        id: generateId('node'),
-        type: 'plot' as const,
-        position: { x: cfg.x, y: 280 },
-        label: cfg.name,
-        data: { name: cfg.name, plotType: cfg.plotType, description: '' },
-      }));
+      if (structure === 'blank') {
+        // BLANK TEMPLATE: Only the Story Root, no plots or acts.
+        // The user adds structure manually or via the AI chat.
+        nodes = [rootNode] as StoryNode[];
+        settings.startNodeId = rootNode.id;
+        edges = [] as StoryEdge[];
+      } else {
+        // ACT or EPISODE TEMPLATE: Root + 4 plots + N acts/episodes + edges.
 
-      // Create 3 Act nodes — the classical three-act structure.
-      // Positioned in a row below the plot nodes.
-      const actNodes = [1, 2, 3].map((num, i) => ({
-        id: generateId('node'),
-        type: 'act' as const,
-        position: { x: 200 + i * 350, y: 600 },
-        label: `Act ${num}`,
-        data: { actNumber: num, name: `Act ${num}`, description: '' },
-      }));
+        // Create 4 Plot nodes — each represents a different narrative thread.
+        // Spread horizontally below the Story Root for a clean visual layout.
+        const plotConfigs = [
+          { name: 'Main Plot', plotType: 'Main Plot', x: 100 },
+          { name: 'Relationship', plotType: 'Relationship Plot', x: 400 },
+          { name: 'Character Development', plotType: 'Character Development Plot', x: 700 },
+          { name: 'Antagonist', plotType: 'Antagonist Plot', x: 1000 },
+        ];
+        const plotNodes = plotConfigs.map(cfg => ({
+          id: generateId('node'),
+          type: 'plot' as const,
+          position: { x: cfg.x, y: 280 },
+          label: cfg.name,
+          data: { name: cfg.name, plotType: cfg.plotType, description: '' },
+        }));
 
-      nodes = [rootNode, ...plotNodes, ...actNodes] as StoryNode[];
-      settings.startNodeId = rootNode.id;
-
-      // Root → Plot edges: connect the Story Root to each plot node
-      const rootToPlotEdges = plotNodes.map(p => ({
-        id: generateId('edge'),
-        source: rootNode.id,
-        target: p.id,
-      }));
-
-      // Plot → Act edges: each plot connects to each act with relationship
-      // metadata describing how that plot thread manifests in that act.
-      // Uses the 'relationship' edge type with plotInvolvement data field.
-      const plotToActEdges: Array<{
-        id: string;
-        source: string;
-        target: string;
-        type: string;
-        data: { relationshipType: string; description: string; status: string; history: string; plotInvolvement: string };
-      }> = [];
-      for (const plot of plotNodes) {
-        for (const act of actNodes) {
-          plotToActEdges.push({
-            id: generateId('edge'),
-            source: plot.id,
-            target: act.id,
-            type: 'relationship',
+        // Create N act nodes. The label and data vary based on whether we're
+        // using the act structure or the episode structure.
+        const structureLabel = isEpisode ? 'Episode' : 'Act';
+        const actNodes = Array.from({ length: structureCount }, (_, i) => {
+          const num = i + 1;
+          return {
+            id: generateId('node'),
+            type: 'act' as const,
+            position: { x: 200 + i * 350, y: 600 },
+            label: `${structureLabel} ${num}`,
             data: {
-              relationshipType: 'Act-Plot',
+              actNumber: num,
+              name: `${structureLabel} ${num}`,
               description: '',
-              status: '',
-              history: '',
-              plotInvolvement: '',
+              ...(isEpisode ? { isEpisode: true } : {}),
             },
-          });
-        }
-      }
+          };
+        });
 
-      edges = [...rootToPlotEdges, ...plotToActEdges] as StoryEdge[];
+        nodes = [rootNode, ...plotNodes, ...actNodes] as StoryNode[];
+        settings.startNodeId = rootNode.id;
+
+        // Root → Plot edges: connect the Story Root to each plot node
+        const rootToPlotEdges = plotNodes.map(p => ({
+          id: generateId('edge'),
+          source: rootNode.id,
+          target: p.id,
+        }));
+
+        // Plot → Act/Episode edges: each plot connects to each act/episode
+        // with relationship metadata describing how that plot thread manifests
+        // in that structural unit. Uses the 'relationship' edge type with
+        // plotInvolvement data field.
+        const plotToActEdges: Array<{
+          id: string;
+          source: string;
+          target: string;
+          type: string;
+          data: { relationshipType: string; description: string; status: string; history: string; plotInvolvement: string };
+        }> = [];
+        for (const plot of plotNodes) {
+          for (const act of actNodes) {
+            plotToActEdges.push({
+              id: generateId('edge'),
+              source: plot.id,
+              target: act.id,
+              type: 'relationship',
+              data: {
+                relationshipType: isEpisode ? 'Episode-Plot' : 'Act-Plot',
+                description: '',
+                status: '',
+                history: '',
+                plotInvolvement: '',
+              },
+            });
+          }
+        }
+
+        edges = [...rootToPlotEdges, ...plotToActEdges] as StoryEdge[];
+      }
     } else if (options.addStarterContent !== false) {
       // Game mode — add the default Dream Room starter scene
       const startNode = createStarterSceneNode();
