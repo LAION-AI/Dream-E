@@ -235,12 +235,16 @@ function drawFrame(
   ctx.fillText(title, width * 0.05, height - overlayH * 0.2);
 }
 
-/** Get the type badge string for a node */
+/** Get the type badge string for a node — respects isEpisode flag */
 function getTypeBadge(node: StoryNode): string {
   switch (node.type) {
     case 'storyRoot': return 'Story Root';
     case 'plot': return `Plot: ${(node.data as PlotNodeData).plotType || 'Arc'}`;
-    case 'act': return `Act ${(node.data as ActNodeData).actNumber || '?'}`;
+    case 'act': {
+      const d = node.data as ActNodeData;
+      const prefix = d.isEpisode ? 'Episode' : 'Act';
+      return `${prefix} ${d.actNumber || '?'}`;
+    }
     case 'cowriteScene': return 'Scene';
     case 'shot': return 'Shot';
     default: return node.type;
@@ -295,12 +299,20 @@ async function runExport(
     ...audioDest.stream.getAudioTracks(),
   ]);
 
-  // Determine supported mimeType
-  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+  // Determine supported mimeType — prefer MP4 if browser supports it,
+  // fall back to WebM. Chrome 128+ supports MP4 MediaRecorder.
+  const mimeType = MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2')
+    ? 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'
+    : MediaRecorder.isTypeSupported('video/mp4')
+    ? 'video/mp4'
+    : MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
     ? 'video/webm;codecs=vp9,opus'
     : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
     ? 'video/webm;codecs=vp8,opus'
     : 'video/webm';
+
+  const isMP4 = mimeType.startsWith('video/mp4');
+  console.log(`[VideoExport] Using mimeType: ${mimeType} (MP4: ${isMP4})`);
 
   const recorder = new MediaRecorder(combinedStream, {
     mimeType,
@@ -444,7 +456,9 @@ export default function VideoExporter({ isOpen, onClose }: VideoExporterProps) {
     if (state.phase !== 'done') return;
     const a = document.createElement('a');
     a.href = state.blobUrl;
-    a.download = `${project?.info?.title || 'dream-e-export'}.webm`;
+    // Use .mp4 extension if browser supports MP4 MediaRecorder, otherwise .webm
+    const ext = MediaRecorder.isTypeSupported('video/mp4') ? 'mp4' : 'webm';
+    a.download = `${project?.info?.title || 'dream-e-export'}.${ext}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -606,7 +620,7 @@ export default function VideoExporter({ isOpen, onClose }: VideoExporterProps) {
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-green-500 hover:bg-green-600 text-white transition-colors"
               >
                 <Download size={16} />
-                Download .webm
+                Download Video
               </button>
             </>
           ) : null}
