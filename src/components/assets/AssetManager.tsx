@@ -146,6 +146,39 @@ export default function AssetManager({ isOpen, onClose }: AssetManagerProps) {
       }
     });
 
+    // Scan co-write nodes (storyRoot, plot, act, cowriteScene, shot)
+    // These use 'image', 'voiceoverAudio', 'backgroundMusic' fields.
+    const COWRITE_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene', 'shot']);
+    currentProject.nodes.forEach((node) => {
+      if (!COWRITE_TYPES.has(node.type)) return;
+      const d = node.data as Record<string, unknown>;
+      const nodeInfo = { nodeId: node.id, nodeName: node.label || (d.title as string) || (d.name as string) || node.type };
+
+      // Helper to add an asset
+      const addAsset = (url: string, type: 'image' | 'music' | 'voiceover') => {
+        if (!url || typeof url !== 'string') return;
+        const fp = getAssetFingerprint(url);
+        const existing = assetMap.get(fp);
+        if (existing) {
+          existing.usedInNodes.push(nodeInfo);
+        } else {
+          assetMap.set(fp, {
+            id: `${type}-${assetMap.size}`,
+            type,
+            url,
+            fingerprint: fp,
+            name: names[fp] || '',
+            usedInNodes: [nodeInfo],
+          });
+        }
+      };
+
+      if (d.image) addAsset(d.image as string, 'image');
+      if (d.backgroundImage) addAsset(d.backgroundImage as string, 'image');
+      if (d.backgroundMusic) addAsset(d.backgroundMusic as string, 'music');
+      if (d.voiceoverAudio) addAsset(d.voiceoverAudio as string, 'voiceover');
+    });
+
     // Also scan entities for reference images and default music
     (currentProject.entities || []).forEach((entity) => {
       const entityInfo = {

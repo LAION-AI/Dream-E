@@ -1124,7 +1124,7 @@ export const useProjectStore = create<ProjectState>()(
 const SCENE_ASSET_FIELDS = ['backgroundImage', 'backgroundMusic', 'voiceoverAudio'] as const;
 
 /** Co-write node types that have asset fields (image, voiceoverAudio, backgroundMusic) */
-const COWRITE_NODE_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene']);
+const COWRITE_NODE_TYPES = new Set(['storyRoot', 'plot', 'act', 'cowriteScene', 'shot']);
 const COWRITE_ASSET_FIELDS = ['image', 'voiceoverAudio', 'backgroundMusic'] as const;
 
 /** Fields on Entity that hold large binary assets */
