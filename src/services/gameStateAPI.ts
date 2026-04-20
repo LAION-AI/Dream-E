@@ -1485,12 +1485,30 @@ const handleUpdateStoryRoot: CommandHandler = (params, store, project) => {
     }
   }
 
+  // Entity state changes: validate type strictly before accepting.
+  if (params.entityStateChanges !== undefined) {
+    const esc = params.entityStateChanges;
+    if (typeof esc === 'object' && esc !== null && !Array.isArray(esc)) {
+      data.entityStateChanges = esc as Record<string, string>;
+    } else {
+      // Save all other updated fields first, then report the type error
+      store.updateNode(rootNode.id, { data } as any);
+      return {
+        success: false,
+        rootNodeId: rootNode.id,
+        error: `entityStateChanges must be a JSON object like {"entity_id": "description"} but received ${Array.isArray(esc) ? 'array' : typeof esc}. Other fields were saved.`,
+        suggestion: 'Retry with entityStateChanges as an object: {"entity_id_here": "Describe all changes for this entity at the story level..."}',
+      };
+    }
+  }
+
   store.updateNode(rootNode.id, { data } as any);
 
   return {
     success: true,
     rootNodeId: rootNode.id,
     updated: Object.keys(params),
+    entityStateChanges: data.entityStateChanges ?? {},
   };
 };
 
@@ -1609,11 +1627,39 @@ const handleUpdatePlot: CommandHandler = (params, store, project) => {
   if (params.description !== undefined) dataUpdates.description = params.description;
   if (params.customPlotType !== undefined) dataUpdates.customPlotType = params.customPlotType;
 
+  // Entity state changes: validate type strictly before accepting.
+  // If wrong type: save all other fields first, then return failure so the
+  // co-write agentic loop stays active and the agent sees the error.
+  if (params.entityStateChanges !== undefined) {
+    const esc = params.entityStateChanges;
+    if (typeof esc === 'object' && esc !== null && !Array.isArray(esc)) {
+      dataUpdates.entityStateChanges = esc;
+    } else {
+      // Save other valid fields before returning the error
+      if (Object.keys(dataUpdates).length > 0) {
+        updates.data = { ...(node.data as any), ...dataUpdates };
+        store.updateNode(plotNodeId, updates as any);
+      }
+      return {
+        success: false,
+        plotNodeId,
+        error: `entityStateChanges must be a JSON object like {"entity_id": "description"} but received ${Array.isArray(esc) ? 'array' : typeof esc}. Other fields were saved.`,
+        suggestion: 'Retry with entityStateChanges as an object: {"entity_id_here": "Describe all changes for this entity during this plot..."}',
+      };
+    }
+  }
+
   if (Object.keys(dataUpdates).length > 0) {
     updates.data = { ...(node.data as any), ...dataUpdates };
   }
   store.updateNode(plotNodeId, updates as any);
-  return { success: true, plotNodeId, updated: Object.keys(params).filter(k => k !== 'plotNodeId') };
+  const savedEsc = (updates.data as any)?.entityStateChanges;
+  return {
+    success: true,
+    plotNodeId,
+    updated: Object.keys(params).filter(k => k !== 'plotNodeId'),
+    entityStateChanges: savedEsc ?? (node.data as any).entityStateChanges ?? {},
+  };
 };
 
 /**
@@ -1642,11 +1688,14 @@ const handleListPlots: CommandHandler = (_params, _store, project) => {
     success: true,
     plots: plots.map(p => {
       const data = p.data as PlotNodeData;
+      const esc = data.entityStateChanges;
+      const escSafe = (esc && typeof esc === 'object' && !Array.isArray(esc)) ? esc : {};
       return {
         plotNodeId: p.id,
         name: data.name,
         plotType: data.plotType,
         description: data.description?.slice(0, 200),
+        entityStateChanges: escSafe,
       };
     }),
   };
@@ -1676,6 +1725,7 @@ const handleCreateAct: CommandHandler = (params, store, project) => {
       actNumber,
       name: (params.name as string) || `Act ${actNumber}`,
       description: (params.description as string) || '',
+      ...(params.turningPoint !== undefined ? { turningPoint: String(params.turningPoint) } : {}),
     } as ActNodeData,
   } as any);
 
@@ -1708,12 +1758,40 @@ const handleUpdateAct: CommandHandler = (params, store, project) => {
     dataUpdates.name = params.name;
   }
   if (params.description !== undefined) dataUpdates.description = params.description;
+  // turningPoint doubles as the "Cliffhanger" field for episode nodes
+  if (params.turningPoint !== undefined) dataUpdates.turningPoint = String(params.turningPoint);
+
+  // Entity state changes: validate type strictly before accepting.
+  if (params.entityStateChanges !== undefined) {
+    const esc = params.entityStateChanges;
+    if (typeof esc === 'object' && esc !== null && !Array.isArray(esc)) {
+      dataUpdates.entityStateChanges = esc;
+    } else {
+      if (Object.keys(dataUpdates).length > 0) {
+        updates.data = { ...(node.data as any), ...dataUpdates };
+        store.updateNode(actNodeId, updates as any);
+      }
+      return {
+        success: false,
+        actNodeId,
+        error: `entityStateChanges must be a JSON object like {"entity_id": "description"} but received ${Array.isArray(esc) ? 'array' : typeof esc}. Other fields were saved.`,
+        suggestion: 'Retry with entityStateChanges as an object: {"entity_id_here": "Describe all changes for this entity during this act..."}',
+      };
+    }
+  }
 
   if (Object.keys(dataUpdates).length > 0) {
     updates.data = { ...(node.data as any), ...dataUpdates };
   }
   store.updateNode(actNodeId, updates as any);
-  return { success: true, actNodeId, updated: Object.keys(params).filter(k => k !== 'actNodeId') };
+  const savedData = (updates.data as any) ?? node.data as any;
+  return {
+    success: true,
+    actNodeId,
+    updated: Object.keys(params).filter(k => k !== 'actNodeId'),
+    turningPoint: savedData?.turningPoint ?? '',
+    entityStateChanges: savedData?.entityStateChanges ?? {},
+  };
 };
 
 /**
@@ -1743,11 +1821,14 @@ const handleListActs: CommandHandler = (_params, _store, project) => {
     acts: acts
       .map(a => {
         const data = a.data as ActNodeData;
+        const esc = data.entityStateChanges;
+        const escSafe = (esc && typeof esc === 'object' && !Array.isArray(esc)) ? esc : {};
         return {
           actNodeId: a.id,
           actNumber: data.actNumber,
           name: data.name,
           description: data.description?.slice(0, 200),
+          entityStateChanges: escSafe,
         };
       })
       .sort((a, b) => a.actNumber - b.actNumber),
@@ -2103,6 +2184,25 @@ const handleUpdateCowriteScene: CommandHandler = (params, store, project) => {
   if (params.description !== undefined) dataUpdates.description = params.description;
   if (params.sceneAction !== undefined) dataUpdates.sceneAction = params.sceneAction;
 
+  // Entity state changes: validate type strictly before accepting.
+  if (params.entityStateChanges !== undefined) {
+    const esc = params.entityStateChanges;
+    if (typeof esc === 'object' && esc !== null && !Array.isArray(esc)) {
+      dataUpdates.entityStateChanges = esc;
+    } else {
+      if (Object.keys(dataUpdates).length > 0) {
+        updates.data = { ...(node.data as any), ...dataUpdates };
+        store.updateNode(sceneNodeId, updates as any);
+      }
+      return {
+        success: false,
+        sceneNodeId,
+        error: `entityStateChanges must be a JSON object like {"entity_id": "description"} but received ${Array.isArray(esc) ? 'array' : typeof esc}. Other fields were saved.`,
+        suggestion: 'Retry with entityStateChanges as an object: {"entity_id_here": "Describe all changes for this entity during this scene..."}',
+      };
+    }
+  }
+
   // Handle entities array update — validate entity IDs exist
   if (params.entities !== undefined) {
     const entities = params.entities as Array<{
@@ -2127,10 +2227,12 @@ const handleUpdateCowriteScene: CommandHandler = (params, store, project) => {
     updates.data = { ...(node.data as any), ...dataUpdates };
   }
   store.updateNode(sceneNodeId, updates as any);
+  const savedEsc = (updates.data as any)?.entityStateChanges;
   return {
     success: true,
     sceneNodeId,
     updated: Object.keys(params).filter(k => k !== 'sceneNodeId'),
+    entityStateChanges: savedEsc ?? (node.data as any).entityStateChanges ?? {},
   };
 };
 

@@ -1,0 +1,186 @@
+===========================================================================
+CO-WRITE CHAT: DIAGNOSIS & FIX PROPOSAL
+===========================================================================
+Date: 2026-03-26
+Analyst: Claude Code
+
+===========================================================================
+PHASE 1: PROBLEM IDENTIFICATION
+===========================================================================
+
+SYMPTOM: The AI ignores co-write rules — it executes commands in its first
+response instead of discussing the story with the user first. It should
+ask questions, make proposals, and wait for confirmation before executing
+any <<<SW_CMD:...>>> commands.
+
+ROOT CAUSE: The system prompt is far too long. The co-write preamble
+structure is:
+
+  1. [~350 words] Critical rules (Rule 1-6)
+  2. [~50 words]  "Your Role" section (first copy)
+  3. [~5234 words] CHARACTER_DEPTH_GUIDE.md (entire guide!)
+  4. [~50 words]  "Your Role" section (DUPLICATE - second copy)
+  5. [~200 words] Co-Write Data Model
+  6. [~300 words] Mandatory Workflow Order
+  7. [~300 words] Confirmation Protocol
+  8. [~200 words] Walking-Through Mode
+  9. [~150 words] Teaching Mode
+  10. [~100 words] Context Awareness
+  11. [~150 words] Co-Write Scene Nodes
+  12. [~80 words]  Command Format + Agentic Loop
+  13. [~60 words]  Important Rules
+  14. [~500 words] Command Reference
+
+  TOTAL: ~7,724 words / ~50,000 characters in the system prompt
+
+ISSUES IDENTIFIED:
+
+1. GUIDE PLACEMENT BURIES RULES
+   The 5234-word Character Depth Guide is placed BETWEEN the critical rules
+   (at the top) and the operational instructions (workflow, confirmation
+   protocol, data model). By the time the model reads through the entire
+   guide, it has largely "forgotten" the critical rules. LLMs attend more
+   strongly to the beginning and end of the context, not the middle
+   (the "lost in the middle" problem, documented by Liu et al. 2023).
+
+2. DUPLICATED "YOUR ROLE" SECTION
+   Lines 983-989 and 996-1001 in gameStateAPI.registry.ts contain the
+   exact same "Your Role" text. The first copy appears before the guide,
+   the second after. This wastes ~50 words and signals confusion in the
+   prompt structure.
+
+3. SYSTEM PROMPT TOO LONG FOR RELIABLE RULE COMPLIANCE
+   Research and practice show that shorter system prompts with clear
+   structure yield much more reliable instruction following. A system prompt
+   of ~650 words (rules + workflow + commands) would be far more effective
+   than one with ~7700 words where the rules are 5000 words away from the
+   commands.
+
+4. GUIDE IS REFERENCE MATERIAL, NOT INSTRUCTIONS
+   The CHARACTER_DEPTH_GUIDE is reference material that the AI should
+   *apply* when writing characters. It doesn't need to be in the system
+   prompt — it works just as well (or better) in the user message context,
+   where it appears alongside the actual project state the AI is working
+   with.
+
+===========================================================================
+PHASE 2: FIX PLAN
+===========================================================================
+
+STRATEGY: Move the Character Depth Guide from the system prompt to the
+user message context for co-write mode. Keep the system prompt short and
+focused on rules only.
+
+CHANGES:
+
+FILE 1: src/services/gameStateAPI.registry.ts
+  - Remove ${CHARACTER_DEPTH_GUIDE} from the co-write preamble
+  - Remove duplicate "Your Role" section
+  - Replace the guide injection with a short reference note:
+    "Apply the principles from the Character Depth Guide (included in
+    the game context below) when helping develop characters."
+  - Keep the guide in the game-mode preamble as-is (it works there)
+
+  BEFORE: ~7700 words system prompt
+  AFTER:  ~2500 words system prompt (67% reduction)
+
+FILE 2: src/services/gameStateAPI.context.ts
+  - Import CHARACTER_DEPTH_GUIDE from @/data/characterDepthGuide
+  - In the co-write branch of getGameContext(), append the guide at the
+    END of the context, AFTER all the structural data (story root, plots,
+    acts, etc.)
+  - Label it clearly:
+    "[CHARACTER DEPTH REFERENCE GUIDE — Apply these principles when
+    developing characters and stories]"
+
+  This ensures:
+  - The guide is available for the AI to reference
+  - It's in the user message, not the system prompt
+  - It appears AFTER the state data, so it doesn't obscure the current
+    project state the AI needs to read
+
+FILE 3: test-cowrite-chat.mjs (test harness)
+  - Update to match the new prompt structure
+  - Add guide injection to the fake game context
+
+NO CHANGES TO:
+  - Game-mode system prompt (the guide stays in the system prompt for game
+    mode, where it works well because the game mode prompt is structured
+    differently and the guide serves as creative writing guidance)
+  - Open World writer system prompt (same reasoning)
+  - Any component files, stores, or UI code
+  - The characterDepthGuide.ts data module
+
+===========================================================================
+PHASE 3: TESTING PLAN
+===========================================================================
+
+After making changes:
+1. Run `npx tsc --noEmit` to verify no TypeScript errors
+2. Run the test harness with all 3 test cases
+3. Restart the Vite dev server
+
+Test cases:
+  Test 1: "Ich will eine Agentengeschichte schreiben"
+    → Expected: Questions about the story idea, NO commands
+  Test 2: "Help me write a story about vampires and AI"
+    → Expected: Questions about Story Root, NO commands
+  Test 3: "Füll alles aus, mach einfach"
+    → Expected: Commands are OK (blanket permission)
+
+===========================================================================
+PHASE 4: RISK ASSESSMENT
+===========================================================================
+
+LOW RISK:
+  - The guide content is identical — it just moves from system prompt to
+    user message context
+  - Game mode is completely unaffected (different code path)
+  - Open World mode is completely unaffected (different prompt source)
+  - The guide is still available to the AI for every co-write interaction
+
+MEDIUM RISK:
+  - The guide in the user context adds ~5000 words to every user message,
+    which increases per-message token usage. However, this is offset by
+    removing it from the system prompt (which was also sent with every
+    request). Net token change: approximately zero.
+
+===========================================================================
+IMPLEMENTATION STATUS: COMPLETE
+===========================================================================
+
+Changes made:
+
+1. src/services/gameStateAPI.registry.ts
+   - Removed ~5234-word CHARACTER_DEPTH_GUIDE from co-write system prompt
+   - Removed duplicate "Your Role" section
+   - Replaced with 2-line summary referencing the guide in game context
+   - Game-mode preamble is UNCHANGED (guide stays there)
+
+2. src/services/gameStateAPI.context.ts
+   - Added import of CHARACTER_DEPTH_GUIDE
+   - In co-write mode, the guide is now appended at the END of the game
+     context (user message), after all structural data
+   - Labeled: [CHARACTER DEPTH REFERENCE GUIDE — Apply these principles...]
+
+3. test-cowrite-chat.mjs
+   - Updated to match new prompt structure
+   - Guide is now in the fake game context, not in the system prompt
+
+4. TypeScript compilation: PASSED (npx tsc --noEmit — no errors)
+
+VERIFICATION:
+- TypeScript compilation: PASSED (0 errors)
+- System prompt word count: BEFORE ~7724 → AFTER ~2414 (67% reduction)
+- User message word count: ~5361 (includes guide as reference)
+- Guide content: IDENTICAL (moved, not changed)
+- Game mode prompt: UNCHANGED
+- Vite dev server: RESTARTED (PID 7752)
+- Music server: STILL RUNNING (PID 8320)
+
+NEXT STEPS FOR USER:
+- Run test harness with your API key:
+    node test-cowrite-chat.mjs <GOOGLE_API_KEY> [MODEL]
+  (MODEL defaults to gemini-2.0-flash if not specified)
+- Open the browser and test co-write chat manually
+- Verify game-mode chat still works as expected

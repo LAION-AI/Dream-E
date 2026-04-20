@@ -33,6 +33,7 @@ import AssetPicker from '@components/media/AssetPicker';
 import MusicSearchOverlay from '@components/media/MusicSearchOverlay';
 import TTSGenerationOverlay from '@components/media/TTSGenerationOverlay';
 import { getBlobUrl } from '@/utils/blobCache';
+import EntityStatePatchSection from './EntityStatePatchSection';
 
 // =============================================================================
 // CONSTANTS
@@ -598,6 +599,13 @@ export default function StoryRootInspector({ node }: StoryRootInspectorProps) {
           className="hidden"
         />
       </div>
+
+      {/* ==================== ENTITY STATE CHANGES ==================== */}
+      <EntityStatePatchSection
+        entityStateChanges={node.data.entityStateChanges}
+        scopeLabel="across the entire story (from opening to resolution)"
+        onStateChangesChange={(v) => updateData({ entityStateChanges: v })}
+      />
 
       {/* Image Generation Overlay */}
       <ImageGenerationOverlay

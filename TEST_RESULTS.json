@@ -1,0 +1,32 @@
+[
+  {
+    "test": "Test 1: German story idea (no commands expected)",
+    "passed": false,
+    "issues": [
+      "ERROR: Gemini API error 404: {\n  \"error\": {\n    \"code\": 404,\n    \"message\": \"models/gemini-2.5-flash-preview-05-20 is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.\",\n    \"status\": \"NOT_FOUND\"\n  }\n}\n"
+    ],
+    "commandsFound": [],
+    "responseLength": 0,
+    "responsePreview": ""
+  },
+  {
+    "test": "Test 2: English story idea (no commands expected)",
+    "passed": false,
+    "issues": [
+      "ERROR: Gemini API error 404: {\n  \"error\": {\n    \"code\": 404,\n    \"message\": \"models/gemini-2.5-flash-preview-05-20 is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.\",\n    \"status\": \"NOT_FOUND\"\n  }\n}\n"
+    ],
+    "commandsFound": [],
+    "responseLength": 0,
+    "responsePreview": ""
+  },
+  {
+    "test": "Test 3: Blanket permission (commands OK)",
+    "passed": false,
+    "issues": [
+      "ERROR: Gemini API error 404: {\n  \"error\": {\n    \"code\": 404,\n    \"message\": \"models/gemini-2.5-flash-preview-05-20 is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.\",\n    \"status\": \"NOT_FOUND\"\n  }\n}\n"
+    ],
+    "commandsFound": [],
+    "responseLength": 0,
+    "responsePreview": ""
+  }
+]

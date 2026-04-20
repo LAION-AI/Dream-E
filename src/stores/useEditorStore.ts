@@ -216,10 +216,18 @@ interface EditorState {
    *
    * In game mode this value is ignored (all node types are always shown).
    */
-  activeCanvas: 'story' | 'character';
+  activeCanvas: 'story' | 'character' | 'stateChange';
 
-  /** Switch between the story and character canvas tabs */
-  setActiveCanvas: (canvas: 'story' | 'character') => void;
+  /** Switch between the story, character, and state-change canvas tabs */
+  setActiveCanvas: (canvas: 'story' | 'character' | 'stateChange') => void;
+
+  /**
+   * Entity ID to pre-select when opening the State Change Canvas.
+   * Set this before switching to 'stateChange' canvas to deep-link
+   * from the entity manager.
+   */
+  stateChangeEntityId: string | null;
+  setStateChangeEntityId: (id: string | null) => void;
 }
 
 /**
@@ -284,6 +292,7 @@ export const useEditorStore = create<EditorState>()(
       pendingUploads: 0,
       focusNodeId: null,
       activeCanvas: 'story',
+      stateChangeEntityId: null,
 
       // ==================== VIEWPORT ACTIONS ====================
 
@@ -438,6 +447,10 @@ export const useEditorStore = create<EditorState>()(
 
       setActiveCanvas: (canvas) => {
         set({ activeCanvas: canvas });
+      },
+
+      setStateChangeEntityId: (id) => {
+        set({ stateChangeEntityId: id });
       },
     }),
     {

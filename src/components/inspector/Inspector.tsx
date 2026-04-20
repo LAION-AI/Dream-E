@@ -64,8 +64,6 @@ export default function Inspector() {
   // Use targeted selectors to avoid re-rendering on unrelated store changes
   const selectedNodeId = useProjectStore(s => s.selectedNodeId);
   const selectedEdgeId = useProjectStore(s => s.selectedEdgeId);
-  const getNode = useProjectStore(s => s.getNode);
-  const getEdge = useProjectStore(s => s.getEdge);
   const selectNode = useProjectStore(s => s.selectNode);
   const selectEdge = useProjectStore(s => s.selectEdge);
   const { closePanel } = useEditorStore();
@@ -80,11 +78,23 @@ export default function Inspector() {
   const location = useLocation();
   const isCowriteMode = location.pathname.startsWith('/cowrite');
 
-  // Get the selected node data
-  const selectedNode = selectedNodeId ? getNode(selectedNodeId) : null;
+  // Subscribe directly to the node's data in the project store so the
+  // inspector re-renders whenever API commands mutate node fields (e.g.
+  // entityStateChanges). Using the stable getNode() function reference
+  // does NOT trigger a re-render when node data changes — only a direct
+  // selector into currentProject.nodes does.
+  const selectedNode = useProjectStore(s =>
+    s.selectedNodeId
+      ? (s.currentProject?.nodes.find(n => n.id === s.selectedNodeId) ?? null)
+      : null
+  );
 
-  // Get the selected edge data (only relevant if no node is selected)
-  const selectedEdge = !selectedNode && selectedEdgeId ? getEdge(selectedEdgeId) : null;
+  // Subscribe directly to edge data for the same reason.
+  const selectedEdge = useProjectStore(s =>
+    !s.selectedNodeId && s.selectedEdgeId
+      ? (s.currentProject?.edges.find(e => e.id === s.selectedEdgeId) ?? null)
+      : null
+  );
 
   // If nothing selected, don't render
   if (!selectedNode && !selectedEdge) {

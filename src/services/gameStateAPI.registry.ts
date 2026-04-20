@@ -688,6 +688,7 @@ export const COMMANDS: CommandMeta[] = [
       { name: 'mainCharacter', type: '{name, role}', required: false, description: 'Main character object with name and role' },
       { name: 'antagonist', type: '{name, role}', required: false, description: 'Antagonist object with name and role' },
       { name: 'supportingCharacters', type: '[{name, archetype}]', required: false, description: 'Array of supporting characters with name and archetype' },
+      { name: 'entityStateChanges', type: 'object', required: false, description: 'Dict { entityId: "change description" } — for each entity that changes, provide a detailed description including physical, emotional, psychological, social, medical changes and the rationale' },
     ],
     returns: '{rootNodeId, updated}',
   },
@@ -722,6 +723,7 @@ export const COMMANDS: CommandMeta[] = [
       { name: 'plotType', type: 'string', required: false, description: 'New plot type', validValues: ['Main Plot', 'Relationship Plot', 'Antagonist Plot', 'Character Development Plot', 'Subplot', 'Custom'] },
       { name: 'description', type: 'string', required: false, description: 'New description' },
       { name: 'customPlotType', type: 'string', required: false, description: 'New custom plot type label' },
+      { name: 'entityStateChanges', type: 'object', required: false, description: 'Dict { entityId: "change description" } — for each entity that changes, provide a detailed description including physical, emotional, psychological, social, medical changes and the rationale' },
     ],
     returns: '{plotNodeId, updated}',
   },
@@ -746,25 +748,28 @@ export const COMMANDS: CommandMeta[] = [
   {
     name: 'create_act',
     group: 'cowrite',
-    description: 'Create a new act node',
+    description: 'Create a new act or episode node',
     params: [
-      { name: 'actNumber', type: 'number', required: true, description: 'Act number (e.g. 1, 2, 3)' },
-      { name: 'name', type: 'string', required: false, description: 'Act display name (e.g. "The Setup")' },
-      { name: 'description', type: 'string', required: false, description: 'Description of what happens in this act' },
+      { name: 'actNumber', type: 'number', required: true, description: 'Act/episode number (e.g. 1, 2, 3)' },
+      { name: 'name', type: 'string', required: false, description: 'Display name (e.g. "The Setup", "Pilot")' },
+      { name: 'description', type: 'string', required: false, description: 'Description of what happens in this act/episode' },
+      { name: 'turningPoint', type: 'string', required: false, description: 'For acts: the key event that propels the story into the next act. For episodes: the cliffhanger — the unresolved question or shock that hooks the audience for the next episode.' },
     ],
     returns: '{actNodeId}',
   },
   {
     name: 'update_act',
     group: 'cowrite',
-    description: 'Update act node fields',
+    description: 'Update act or episode node fields',
     params: [
-      { name: 'actNodeId', type: 'string', required: true, description: 'Act node ID' },
-      { name: 'actNumber', type: 'number', required: false, description: 'New act number' },
+      { name: 'actNodeId', type: 'string', required: true, description: 'Act/episode node ID' },
+      { name: 'actNumber', type: 'number', required: false, description: 'New act/episode number' },
       { name: 'name', type: 'string', required: false, description: 'New name' },
       { name: 'description', type: 'string', required: false, description: 'New description' },
+      { name: 'turningPoint', type: 'string', required: false, description: 'For acts: the key event that propels the story into the next act. For episodes: the cliffhanger — the unresolved question or shocking revelation at the end of the episode that makes the audience desperate to watch the next one. This is the dedicated field for cliffhangers; do NOT put cliffhangers in description.' },
+      { name: 'entityStateChanges', type: 'object', required: false, description: 'Dict { entityId: "change description" } — for each entity that changes, provide a detailed description including physical, emotional, psychological, social, medical changes and the rationale' },
     ],
-    returns: '{actNodeId, updated}',
+    returns: '{actNodeId, updated, turningPoint}',
   },
   {
     name: 'delete_act',
@@ -892,6 +897,7 @@ export const COMMANDS: CommandMeta[] = [
       { name: 'description', type: 'string', required: false, description: 'New description' },
       { name: 'sceneAction', type: 'string', required: false, description: 'Freeform scene action text' },
       { name: 'entities', type: '[{entityId, startState, objective, changes, endState}]', required: false, description: 'Array of entity participation entries' },
+      { name: 'entityStateChanges', type: 'object', required: false, description: 'Dict { entityId: "change description" } — for each entity that changes, provide a detailed description including physical, emotional, psychological, social, medical changes and the rationale' },
     ],
     returns: '{sceneNodeId, updated}',
   },
@@ -1066,6 +1072,17 @@ Your job is to DISCUSS the story with the user, ask questions, make suggestions,
 ## CHARACTER DEPTH & NARRATIVE QUALITY — FULL REFERENCE
 ${CHARACTER_DEPTH_GUIDE}
 
+## CHARACTER DEVELOPMENT — NON-NEGOTIABLE PRINCIPLE
+Characters must grow over the course of the story with genuine nuance. At every node level, ask: what did this character *learn*, *unlearn*, or *reframe* during this interval? What belief, assumption, or coping strategy shifted? A reader should feel that something important happened inside the person — not just around them.
+
+Track for every significant character across their arc:
+- **Insight gained**: Something they now understand about themselves, another person, or the world
+- **Belief revision**: A conviction, prejudice, or assumption that weakens, strengthens, or inverts
+- **Strategy shift**: They now approach problems differently — more cautiously, more ruthlessly, with new allies or methods
+- **Emotional residue**: The lasting feeling this interval leaves (shame, relief, resolve, grief, numbness)
+
+This principle applies when writing descriptions, scene actions, and entity state changes. Show inner shifts through action and consequence — not just surface events.
+
 ## REMINDER: RULES STILL APPLY AFTER READING THE GUIDE ABOVE
 Do NOT let the guide above put you into "writing mode". You are still in CO-WRITING MODE where:
 - Your FIRST response must be PURE TEXT (no <<<SW_CMD:...>>> blocks)
@@ -1080,7 +1097,7 @@ You have access to a layered narrative planning system:
 - **Story Root**: The central story document — title, genre, target audience, logline/punchline, main character, antagonist, supporting characters, protagonist goal, and a full synopsis. This is the story's "DNA" — everything else flows from it.
 - **Entities**: Characters, locations, objects, and concepts in the entity database. Each entity has a name, description, category, and a structured **profile** (appearance, personality, backstory, motivations, relationships, etc.). Entities are the building blocks that populate every level of the story.
 - **Plot Nodes**: Narrative arcs (Main Plot, Relationship Plot, Antagonist Plot, Character Development Plot, Subplot, Custom). Each plot tracks a through-line of causally connected events. Plots are auto-connected to the Story Root.
-- **Act Nodes**: Structural acts (e.g., Act 1: Setup, Act 2: Confrontation, Act 3: Resolution). Acts divide the story into major phases, each with a turning point that propels the narrative forward. NOTE: The project may use either an ACT structure (traditional screenplay/novel) or an EPISODE structure (TV series/web serial). Check the [Current Game State] to see which — episode nodes have \`isEpisode: true\` in their data and are labeled "Episode N" instead of "Act N". If episodes are used, treat each episode like an act but with a cliffhanger ending instead of a turning point. The storytelling principles are the same.
+- **Act / Episode Nodes**: Structural units that divide the story into major phases. Each has: \`name\`, \`description\` (what happens), and \`turningPoint\` (the key structural beat at the end). **\`turningPoint\` is the dedicated field — for act-structure projects it holds the turning point; for episode-structure projects it holds the cliffhanger.** Never put cliffhangers in \`description\`. The project may use ACT structure (screenplay/novel) or EPISODE structure (TV series/web serial) — check [Current Game State] which labels them "Act N" or "Episode N". Episode nodes show the \`turningPoint\` field as "Cliffhanger" in the UI.
 - **Co-Write Scene Nodes**: The fundamental unit of storytelling — a discrete moment in the narrative. Each scene belongs to an act and tracks which entities participate, their start state, objective, changes, and end state. Scenes also have a freeform "scene action" field for the full blow-by-blow plan.
 - **Character Nodes**: Visual character cards on the character canvas, linked to entities.
 - **Relationships**: Edges between characters (with relationship type, description, beginning, act-by-act development, and ending) and between acts and plots (with plot involvement descriptions).
@@ -1098,8 +1115,11 @@ Create character entities with detailed profiles. Use \`create_entity\` with a \
 **Step 3 — PLOT NODES** (only after step 2):
 The project starts with 4 default plots (Main Plot, Relationship, Character Development, Antagonist). Fill each with a description of what that arc covers. Use \`update_plot\`. Do NOT create additional plots unless the user asks.
 
-**Step 4 — ACT NODES** (only after step 3):
-Fill out each act's description and turning point. Use \`update_act\`. Explain what turning points are if the user doesn't know. Update the act-plot relationship edges (\`update_relationship\` with \`plotInvolvement\`) to define which parts of each plot unfold in each act.
+**Step 4 — ACT / EPISODE NODES** (only after step 3):
+Fill out each act/episode's \`description\` and \`turningPoint\` using \`update_act\`.
+- For **act-structure** projects: \`turningPoint\` = the pivotal event that closes the act and propels the story forward.
+- For **episode-structure** projects: \`turningPoint\` = the **cliffhanger** — the unresolved question, shocking revelation, or dire threat at the end of the episode that makes the audience desperate to watch the next one. This field is labelled "Cliffhanger" in the UI for episodes. **Always write cliffhangers into the \`turningPoint\` field, NOT into \`description\`.**
+Update the act-plot relationship edges (\`update_relationship\` with \`plotInvolvement\`) to define which parts of each plot unfold in each act.
 
 **Step 5 — SCENES** (only after steps 1-4 are COMPLETE):
 Only NOW create co-write scenes. Use \`create_cowrite_scene\` with \`actNodeId\`.
@@ -1202,8 +1222,8 @@ Turning point descriptions should be 100-200 words explaining:
 - How it raises the stakes
 - What choice it forces on the protagonist
 
-### Scene Descriptions
-Scene descriptions should be 300-500 words covering the full action.
+### Scene Descriptions and Prose (\`sceneAction\`)
+The \`description\` field is a 100–200 word overview (what happens, which entities, which plots — structural metadata). The \`sceneAction\` field is the actual novel text: full literary prose, 400–1000 words of finished fiction. Write \`sceneAction\` as if it will be printed directly in the book — not as a plan, not as a summary. Every scene's \`sceneAction\` must be gripping, specific, and free of filler. If concatenated in act order, all \`sceneAction\` fields must read as a continuous, polished novel.
 
 ### QUALITY STANDARDS
 - Stories MUST contain unexpected but justified twists
@@ -1214,20 +1234,65 @@ Scene descriptions should be 300-500 words covering the full action.
 - Include moments of humor, beauty, and quiet reflection between crises
 - Dialogue should be indirect — characters rarely say exactly what they mean
 
-## CO-WRITE SCENE NODES — Detailed Scene Planning
+## CO-WRITE SCENE NODES — Scene Writing Rules (STRICTLY ENFORCED)
 
-Co-write scenes (type: \`cowriteScene\`) are the granular building blocks of the story. Each scene:
-- Has a **title** and **description** (overview of what happens)
-- Tracks **entities** — an array of \`{entityId, startState, objective, changes, endState}\` entries that document how each character/location/object participates
-- Has a **sceneAction** field for freeform blow-by-blow planning
-- Can have an **image** for visual reference
-- Connects to its parent **act** via an edge (use \`actNodeId\` param in \`create_cowrite_scene\` for auto-connection)
+Co-write scenes (type: \`cowriteScene\`) are the atomic units of the story. Every scene you write must satisfy ALL of the following requirements without exception.
 
-When creating scenes, think about:
-- **Scene purpose**: Every scene should advance the plot, reveal character, or both. If a scene does neither, it probably shouldn't exist.
-- **Conflict**: What is the source of tension? Who wants what, and why can't they have it easily?
-- **Change**: At least one entity should be different at the end than at the beginning.
-- **Connection**: How does this scene connect to the scenes before and after it? What information or emotional state carries over?
+### STRUCTURAL REQUIREMENTS — Non-Negotiable
+
+**1. A scene is a child of its act/episode.**
+Always pass \`actNodeId\` when calling \`create_cowrite_scene\`. A scene without a parent act is structurally invalid. Never create a floating scene.
+
+**2. A scene must advance at least one plot — and be linked to it.**
+Every scene must serve at least one of the project's plot threads (Main Plot, Relationship Plot, Character Development Plot, Antagonist Plot, or a Subplot). After creating a scene, use \`create_relationship\` to draw an edge from the scene to the plot node(s) it advances. The \`plotInvolvement\` field on that relationship should name the specific event or function this scene serves in that plot (e.g., "Alice discovers Bob's betrayal — inciting event of the Relationship Plot"). A scene may belong to multiple plots simultaneously — one scene can advance the main plot AND a relationship subplot at the same time.
+
+**3. Something must change in every scene — or the scene must not exist.**
+Entity state changes are MANDATORY. If writing a scene produces zero changes to any character, location, or object, that scene has no narrative value and should not be written at all. Before finalising a scene, ask: *What is different about the world after this scene that was not true before?* If the answer is "nothing", delete the scene and merge its content into an adjacent one. Use \`entityStateChanges\` in \`update_cowrite_scene\` to record every meaningful change.
+
+**4. Scenes within the same act are siblings and must be ordered.**
+After creating each scene (except the last one in the act), use \`create_relationship\` to connect it to its immediate successor scene in the act. This creates the sibling chain: Scene 1 → Scene 2 → Scene 3 … The last scene in an act needs no successor within the act (the act-to-act structure handles continuity). When presenting scenes to the user, always describe their order within the act.
+
+### PROSE QUALITY — The Novel Standard
+
+**5. The \`sceneAction\` field IS the novel.**
+Write \`sceneAction\` as **full, publication-quality prose** — the actual text a reader would read in the finished novel. This means: complete sentences, vivid sensory detail, rendered dialogue, character interiority (thoughts, feelings, impulses), physical action. Not a plan, not bullet points, not a summary — the actual scene written as literary fiction. When all scenes in an act are concatenated in order, the result must read as a coherent chapter of a novel.
+
+**6. No filler, no fluff — every sentence must earn its place.**
+Strip out anything that does not: (a) advance a plot, (b) reveal character, or (c) change the state of the world. Transitional prose, atmospheric description, and interiority are all valid — but only when they serve the story. If a paragraph could be removed without any loss to the reader's understanding or emotional experience, cut it. The enemy of good scene writing is comfortable, habitual prose that sounds like a story without being one.
+
+**7. Scenes must be interesting — not merely adequate.**
+Apply the "maximum capacity" principle: every character in the scene must act at the maximum of their intelligence, resourcefulness, and emotional intensity given who they are. Avoid the first, most obvious version of the scene. Ask: *What is the most dramatically charged version of this event? What unexpected detail would make this scene memorable?* Use indirect dialogue (characters rarely say what they mean), specific sensory detail (not "a bird" but "a crow dragging a crust across the wet cobblestones"), and at least one moment of surprise or subverted expectation per scene.
+
+**8. Dual-use: novel AND optional cinematic layer.**
+Scene prose is the primary deliverable. Shots are optional: if the user adds shots to a scene, those shots form the cinematic storyboard layer for that scene. Scenes with no shots export directly as novel chapters. Scenes with shots can be used to produce a visual/film version. Do not require shots for a scene to be complete.
+
+### CHECKLIST — Before finalising any scene, verify:
+- [ ] \`actNodeId\` is set (scene is a child of its act)
+- [ ] At least one \`create_relationship\` links this scene to a plot node
+- [ ] \`entityStateChanges\` is populated with at least one meaningful change
+- [ ] A successor-scene relationship exists (unless this is the last scene of the act)
+- [ ] \`sceneAction\` contains full novel prose, not a planning outline
+- [ ] The scene contains no content that does not serve a plot
+
+---
+
+## CO-WRITE SHOT NODES — Cinematic Layer (Optional)
+
+Shots are the optional cinematic breakdown of a scene. They exist only when the user wants to turn the story into a film/video storyboard. A project can be exported as a novel using only scenes — shots are never required.
+
+### Shot rules:
+
+**1. A shot is a child of its scene.**
+Always pass \`parentNodeId\` (the scene's ID) when calling \`create_shot\`. A shot without a parent scene is invalid.
+
+**2. Each shot must show something new and narratively important.**
+A shot is not a re-description of what the scene already said. Every shot must contribute a specific visual element that: (a) advances story information, (b) reveals character, or (c) creates an emotional or tonal effect the prose alone cannot. If the shot shows nothing that matters to the story, delete it. Examples of valid shots: a close-up of a character's hands shaking while they sign a document; a wide establishing shot showing the scale of a ruined city; an eyeline match cut that reveals a character has been watching someone else the whole time.
+
+**3. Shots are siblings within a scene — order them.**
+After creating each shot (except the last in the scene), use \`create_relationship\` to chain it to its successor. Shot 1 → Shot 2 → Shot 3 …
+
+**4. Shot \`description\` = director's instruction.**
+Write the shot description as a specific, technical instruction: camera angle (close-up, wide, OTS, POV), movement (static, dolly, handheld), focal point, duration/pacing note, and the key visual information it delivers. Example: "ECU on Alice's face as she reads the letter — her expression shifts from relief to horror over 4 seconds. No dialogue. Score drops out. Cut when her jaw tightens."
 
 ## HOW TO EXECUTE COMMANDS (AFTER USER CONFIRMS)
 
@@ -1264,6 +1329,12 @@ When the user confirms your proposal (says "yes", "ja", "mach das", "go ahead", 
 ### IMPORTANT: You can chain multiple commands in ONE response:
 After confirmation, output ALL the commands needed in a single message. For example, fill the story root AND create characters in the same response if the user approved both.
 
+### PARALLEL IMAGE GENERATION — always batch images:
+Image commands (generate_node_image, generate_entity_image) run **in parallel** when in the same response. If you need to generate images for multiple nodes, put ALL generate_node_image / generate_entity_image calls in one response — they fire simultaneously (3 images = same time as 1). Non-image commands run first in order, then all image commands fire at once.
+
+### ENTITY IMAGE PROMPTS — always use portrait framing:
+When generating an image for a character entity, ALWAYS frame it as a close-up portrait showing the upper body and face clearly. The character must fill the frame — never show them as a small or distant figure. Use prompts like "portrait, upper body shot, face clearly visible, looking at camera" to enforce this.
+
 ## Agentic Loop
 After commands execute, results are sent back with the updated game state. You can then:
 - Verify what was written ("I've updated the Story Root. Here's what it says now...")
@@ -1271,6 +1342,52 @@ After commands execute, results are sent back with the updated game state. You c
 - Fix any errors if commands failed
 
 The loop ends when you respond with NO commands (just text).
+
+## ENTITY STATE TRACKING — entityStateChanges
+
+Every co-writing node (StoryRoot, Plot, Act, CoWriteScene, Shot) has an \`entityStateChanges\` field for tracking how entities evolve.
+
+### Format: Dictionary { entityId → change description }
+\`\`\`json
+{
+  "entity_ALICE_ID": "Physical: deep slash wound on left arm, still bleeding. Emotional: frightened and shaken — no longer feels invincible. Belief: abandoned conviction that violence is never justified after witnessing the massacre. Goal shift: now wants revenge rather than escape. Rationale: the mercenaries attacked without provocation and killed her companion.",
+  "entity_TAVERN_ID": "Structural: upper floor collapsed after explosion, bar counter cracked. Ownership: owner dead — location now unmanaged. Atmosphere: acrid smoke, debris everywhere, emergency lighting only. Rationale: grenade thrown during the firefight."
+}
+\`\`\`
+
+Key = entity ID (exact, from [Current Game State])
+Value = freeform string covering ALL meaningful changes for that entity during this time interval:
+- **Characters**: physical changes (appearance, injuries, clothing), emotional state, mood, psychological shifts (beliefs, habits, worldview), social changes (relationships, status, alliances), medical condition, goals, intentions, subconscious needs
+- **Locations**: structural changes, atmosphere, damage, ownership, accessibility
+- **Objects**: condition, enchantment, ownership, location
+- **Groups/Concepts/Mechanics**: rule changes, ideological shifts, organizational developments
+
+Always include a rationale (why/how the change happened) embedded in the description.
+
+### CHARACTER ARC & DETAIL DEPTH
+
+**Characters must grow.** Over the course of the story, characters should develop with genuine nuance — not just accumulate wounds or victories. At every level (story, plot, act, scene) ask: what did this character *learn*, *unlearn*, or *reframe* during this interval? What belief, assumption, or coping strategy shifted — even slightly? A reader should feel that something important was gained or lost inside the person, not just on the surface.
+
+Concretely, for each character entry consider:
+- **Insight gained**: Did they understand something about themselves, another person, or the world that they couldn't see before?
+- **Belief revision**: Has a conviction, prejudice, or article of faith weakened, strengthened, or inverted?
+- **Strategy shift**: Are they now solving problems differently — more cautiously, more ruthlessly, with new allies or methods?
+- **Emotional residue**: What feeling does this interval leave behind as a lasting trace (shame, relief, grief, resolve, numbness)?
+
+**Scale detail to node scope** — entries must be long enough to fully narrate the change:
+- **StoryRoot** (entire story arc): entries should be comprehensive, multi-paragraph summaries of the full character journey — every major internal shift across the whole narrative.
+- **Plot node** (a complete plot arc): entries should cover the full arc of this subplot in depth — opening state, turning points, and closing state, with all belief and strategy changes explained.
+- **Act / Episode node**: entries should clearly trace the character from act-open to act-close — what happened, why it matters internally, and what it costs or yields emotionally.
+- **CoWriteScene / Shot node**: entries can be shorter but must still be specific and complete — name the exact change, its cause, and its emotional resonance. No vague filler like "she felt sad."
+
+Write in a style that is emotionally intelligent, dramatically interesting, and precise — factual about what happens, honest about the inner life, free of purple prose and unnecessary adjectives. Every sentence should earn its place.
+
+**When to populate**:
+- When the user **explicitly asks** to update / fill in / record entity state changes for a node — use the appropriate update command (update_cowrite_scene / update_act / update_plot / update_story_root) with the entityStateChanges parameter.
+- When you update a node's description or scene action and entities change meaningfully, also include entityStateChanges in the same command call.
+- Use exact entity IDs from [Current Game State] → Entities section.
+- The node IDs to target are shown in [Current Game State] → CO-WRITING STRUCTURE section.
+- Existing entityStateChanges for each node are shown in the context as "entityStateChanges(N): entity_id1, entity_id2". You can extend or replace them.
 
 ## IMPORTANT RULES
 - Always check [Current Game State] for existing IDs before referencing them
@@ -1318,6 +1435,17 @@ The following Character Depth Guide is your mandatory reference for writing psyc
 
 ${CHARACTER_DEPTH_GUIDE}
 
+## CHARACTER DEVELOPMENT — NON-NEGOTIABLE PRINCIPLE
+Characters must grow over the course of the story with genuine nuance. At every scene, ask: what does this character *learn*, *unlearn*, or *reframe* here? What belief, assumption, or coping strategy shifts — even slightly? Players should feel that something important is happening inside people, not just around them.
+
+For every significant character, track across the story arc:
+- **Insight gained**: Something they now understand about themselves, another person, or the world
+- **Belief revision**: A conviction, prejudice, or assumption that weakens, strengthens, or inverts
+- **Strategy shift**: They now approach problems differently — more cautiously, more ruthlessly, with new allies or methods
+- **Emotional residue**: The lasting feeling this arc leaves (shame, relief, resolve, grief, numbness)
+
+When writing scene text: show the character's inner shifts through action, dialogue, and thought — not just through what happens to them externally. A character who survives a battle unchanged is less interesting than one who survives it and can no longer pray, or now can.
+
 ## Your Role
 - Help the user design, write, and refine their interactive stories
 - Create and modify scenes, entities, variables, and connections when asked
@@ -1339,6 +1467,22 @@ Output command blocks inline in your response:
 <<</SW_CMD>>>
 
 Multiple commands per response are fine — they execute in order.
+
+## PARALLEL IMAGE GENERATION — batch for speed
+Image commands (generate_scene_image, generate_entity_image, generate_node_image) run IN PARALLEL when issued in the same response. Always batch multiple image requests into one response — they all fire simultaneously (N images = same time as 1 image).
+
+Example — generate 3 images at once (put them all in one response):
+  <<<SW_CMD:generate_node_image>>>
+  {"targetId": "scene_A", "prompt": "..."}
+  <<</SW_CMD>>>
+  <<<SW_CMD:generate_node_image>>>
+  {"targetId": "scene_B", "prompt": "..."}
+  <<</SW_CMD>>>
+  <<<SW_CMD:generate_node_image>>>
+  {"targetId": "scene_C", "prompt": "..."}
+  <<</SW_CMD>>>
+
+Non-image commands still run sequentially (first), then all image commands fire at once.
 
 ## AGENTIC LOOP — Multi-Step Execution
 You operate in an agentic loop. After your commands execute, the RESULTS are sent back to you along with the updated game state. You can then:
@@ -1368,7 +1512,7 @@ patch_entity_profile with operations: [{"op":"replace","path":"/relationships/en
 ## IMAGE GENERATION — Think Before You Generate
 Before generating ANY image, mentally compose the visual by considering:
 1. **Scene images**: What is the setting? Time of day? Weather? Key objects in frame? Characters present? Camera angle? Art style and mood?
-2. **Entity images**: What does this character/location/object look like? Reference the entity's profile (appearance, atmosphere, properties) and translate those into visual descriptions.
+2. **Entity images**: What does this character/location/object look like? Reference the entity's profile (appearance, atmosphere, properties) and translate those into visual descriptions. For **character entities**, ALWAYS frame as a close-up portrait showing the upper body and face clearly — the character must fill the frame, never appear small or distant. Include "portrait, upper body shot, face clearly visible" in the prompt.
 3. **Consistency**: If generating images for the same character across scenes, reference their appearance from the profile to keep them visually consistent.
 4. **Prompt quality**: Write prompts like an art director — be specific about composition, lighting, style, colors, and mood. Bad: "a forest". Good: "Dense ancient forest at twilight, massive gnarled oak trees with glowing moss, shafts of golden light piercing through the canopy, mysterious fog at ground level, fantasy art style, rich colors".
 

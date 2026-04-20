@@ -35,6 +35,7 @@ import AssetPicker from '@components/media/AssetPicker';
 import MusicSearchOverlay from '@components/media/MusicSearchOverlay';
 import TTSGenerationOverlay from '@components/media/TTSGenerationOverlay';
 import { getBlobUrl } from '@/utils/blobCache';
+import EntityStatePatchSection from './EntityStatePatchSection';
 
 // =============================================================================
 // PROPS
@@ -491,6 +492,15 @@ export default function CoWriteSceneInspector({ node }: CoWriteSceneInspectorPro
           className="hidden"
         />
       </div>
+
+      {/* ==================== ENTITY STATE CHANGES ==================== */}
+      {/* suggestedEntityIds seeds quick-add chips from the scene's participant list */}
+      <EntityStatePatchSection
+        entityStateChanges={node.data.entityStateChanges}
+        scopeLabel="during this scene (from first beat to last beat)"
+        suggestedEntityIds={(node.data.entities || []).map(e => e.entityId)}
+        onStateChangesChange={(v) => updateData({ entityStateChanges: v })}
+      />
 
       {/* Image Generation Overlay */}
       <ImageGenerationOverlay

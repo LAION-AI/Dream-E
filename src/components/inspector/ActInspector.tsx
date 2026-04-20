@@ -28,6 +28,7 @@ import AssetPicker from '@components/media/AssetPicker';
 import MusicSearchOverlay from '@components/media/MusicSearchOverlay';
 import TTSGenerationOverlay from '@components/media/TTSGenerationOverlay';
 import { getBlobUrl } from '@/utils/blobCache';
+import EntityStatePatchSection from './EntityStatePatchSection';
 
 // =============================================================================
 // PROPS
@@ -327,6 +328,13 @@ export default function ActInspector({ node }: ActInspectorProps) {
       </div>
 
       {/* Image Generation Overlay */}
+      {/* ==================== ENTITY STATE CHANGES ==================== */}
+      <EntityStatePatchSection
+        entityStateChanges={node.data.entityStateChanges}
+        scopeLabel={`throughout this ${isEpisode ? 'episode' : 'act'} (from opening to final scene)`}
+        onStateChangesChange={(v) => updateData({ entityStateChanges: v })}
+      />
+
       <ImageGenerationOverlay
         isOpen={imageGenOpen}
         onClose={() => setImageGenOpen(false)}

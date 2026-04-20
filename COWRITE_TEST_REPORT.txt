@@ -1,0 +1,391 @@
+================================================================================
+CO-WRITE MODE CHAT API — END-TO-END TEST REPORT
+================================================================================
+Date: 2026-03-25
+Test: Simulate user asking AI to co-write a tech comedy about AI and vampires
+Message: "Hilf mir eine Geschichte über KI und Vampire zu schreiben.
+         Es soll eine Tech-Komödie sein."
+
+================================================================================
+1. FILES ANALYZED
+================================================================================
+
+  src/services/gameStateAPI.registry.ts   — Command registry + system prompt gen
+  src/services/gameStateAPI.context.ts    — Game context builder (state snapshot)
+  src/services/aiChatService.ts           — Agentic loop bridge
+  src/services/gameStateAPI.types.ts      — Type definitions
+
+================================================================================
+2. FLOW TRACE
+================================================================================
+
+When the user sends a co-write chat message, the following happens:
+
+  1. aiChatService.sendChatMessage() is called
+  2. buildUserMessage() constructs: "[Current Game State]\n" + getGameContext() + "\n\n" + userText
+  3. streamOneMessage() is called, which:
+     a. Reads project mode from useProjectStore (mode='cowrite')
+     b. Calls generateSystemPrompt('cowrite') to build the system prompt
+     c. Reads writer settings from useImageGenStore (provider, model, apiKey)
+     d. POSTs to /api/chat with {message, systemPrompt, provider, model, apiKey}
+  4. The server streams back SSE chunks
+  5. Response is parsed for <<<SW_CMD:xxx>>> blocks
+  6. Commands are executed and results fed back in the agentic loop
+
+================================================================================
+3. CO-WRITE PREAMBLE ANALYSIS
+================================================================================
+
+The co-write preamble (lines 956-989) contains:
+
+  [OK] Writing teacher role description
+  [OK] 5 critical rules at the TOP:
+       1. NEVER execute commands without confirmation
+       2. NEVER use create_scene (use create_cowrite_scene)
+       3. NEVER generate images unless asked
+       4. NEVER skip the workflow order
+       5. NEVER use update_scene or create_scene
+  [OK] Command format (<<<SW_CMD:...>>>)
+  [OK] Agentic loop explanation
+  [OK] "Respond in the same language the user writes in"
+
+VERDICT: The preamble itself is well-structured. Rules are clear and at the top.
+
+================================================================================
+4. CRITICAL ISSUES FOUND
+================================================================================
+
+ISSUE #1: COMMAND REFERENCE NOT FILTERED BY MODE
+=================================================
+SEVERITY: CRITICAL
+LOCATION: gameStateAPI.registry.ts, lines 1207-1241
+
+The generateSystemPrompt() function builds the COMMAND REFERENCE section by
+iterating over ALL 60+ commands in the COMMANDS array. It does NOT filter by
+project mode. This means in co-write mode, the AI sees:
+
+  GAME-MODE COMMANDS THAT SHOULD NOT APPEAR IN CO-WRITE:
+  -------------------------------------------------------
+  Scene Commands (8):
+    create_scene, update_scene, delete_scene, add_choice,
+    update_choice, delete_choice, set_choice_condition, remove_choice_condition
+
+  Connection Commands (3):
+    connect_nodes, disconnect_nodes, reconnect_edge
+
+  Variable Commands (3):
+    create_variable, update_variable, delete_variable
+
+  Media Commands (15):
+    generate_scene_image, generate_entity_image, set_scene_image,
+    remove_scene_image, set_entity_image, remove_entity_image,
+    set_scene_music, remove_scene_music, set_scene_voiceover,
+    remove_scene_voiceover, set_entity_voice, remove_entity_voice,
+    set_entity_music, remove_entity_music, generate_scene_voiceover
+
+  Modifier Commands (3):
+    create_modifier, update_modifier, delete_modifier
+
+  Branch Commands (3):
+    create_branch, update_branch, delete_branch
+
+  Comment Commands (3):
+    create_comment, update_comment, delete_comment
+
+  Project Commands (3):
+    set_start_node, update_project_info, update_notes
+
+  Query Commands (5):
+    get_scene_details, get_entity_details, list_scenes, list_entities,
+    list_variables
+
+  Music Commands (4):
+    search_music, get_music_track, assign_music_to_scene, list_music_genres
+
+  TOTAL GAME-MODE COMMANDS LEAKING INTO CO-WRITE: ~47 commands
+  TOTAL CO-WRITE COMMANDS: ~21 commands
+
+The AI sees 47 irrelevant commands with full documentation. This is a stronger
+signal than the 5-line "don't use these" warning. LLMs follow reference docs
+more than prohibitions.
+
+IMPACT: AI sometimes uses create_scene instead of create_cowrite_scene.
+AI sometimes generates images unprompted. AI sometimes creates variables,
+modifiers, or branches that don't exist in co-write mode.
+
+
+ISSUE #2: DETAILED CO-WRITE WORKFLOW IN WRONG PREAMBLE
+========================================================
+SEVERITY: CRITICAL
+LOCATION: gameStateAPI.registry.ts, lines 1074-1197
+
+The game-mode preamble (used when isCowrite=false) contains a large section
+titled "## CO-WRITING MODE — Story Development Partnership" (lines 1074-1197).
+This section includes:
+
+  - The mandatory workflow order (Steps 1-5)
+  - The absolute confirmation protocol
+  - Walking-through mode instructions
+  - Teaching mode instructions
+  - Context awareness rules
+  - Co-write scene planning guidance
+  - Available co-write tools list
+
+This entire section (~120 lines, ~2500 tokens) is:
+  - INCLUDED in the game-mode prompt (where it's irrelevant and wastes tokens)
+  - NOT INCLUDED in the co-write prompt (where it's essential!)
+
+The co-write preamble (lines 956-989) only has a brief 5-rule summary.
+The detailed Step 1-5 workflow, teaching mode, walking-through mode, and
+confirmation protocol are MISSING from the co-write system prompt.
+
+IMPACT: In co-write mode, the AI lacks the detailed workflow guidance. It may
+skip steps, not teach storytelling concepts, not use the walking-through mode,
+and not follow the step-by-step progression (Root → Characters → Plots → Acts
+→ Scenes).
+
+
+ISSUE #3: EMPTY STORY ROOT FIELDS NOT SHOWN IN CONTEXT
+========================================================
+SEVERITY: MINOR
+LOCATION: gameStateAPI.context.ts, lines 121-143
+
+The buildCowriteContext() function uses conditional guards:
+  if (d.title) lines.push(`  Title: ${d.title}`);
+  if (d.genre) lines.push(`  Genre: ${d.genre}`);
+  ...etc.
+
+For a fresh co-write project, ALL fields are empty, so the context shows:
+
+  Story Root: [node_root]
+
+...with nothing below it. The AI has to infer emptiness rather than seeing it
+explicitly. A clearer context would show:
+
+  Story Root: [node_root]
+    Title: (empty)
+    Genre: (empty)
+    Target Audience: (empty)
+    Punchline: (empty)
+    Main Character: (empty)
+    Antagonist: (empty)
+    Supporting Characters: (none)
+    Protagonist Goal: (empty)
+    Summary: (empty)
+
+IMPACT: Minor. The AI should still understand the fields are empty, but explicit
+"(empty)" markers make it immediately obvious which fields need filling, helping
+the AI follow the Step 1 workflow.
+
+
+================================================================================
+5. VERIFICATION: DOES THE PROMPT PREVENT UNWANTED BEHAVIOR?
+================================================================================
+
+Q: Does the prompt clearly tell the AI NOT to create_scene?
+A: YES — Rules #2 and #5 say so. BUT the COMMAND REFERENCE still lists
+   create_scene with full docs, undermining the prohibition. FAIL.
+
+Q: Does the prompt clearly tell the AI NOT to generate images?
+A: YES — Rule #3 says so. BUT generate_scene_image, generate_entity_image
+   are in the COMMAND REFERENCE with full docs. PARTIAL FAIL.
+
+Q: Does the prompt tell the AI to start with Story Root?
+A: YES in the game-mode preamble (Step 1). NO in the co-write preamble.
+   The co-write preamble's Rule #4 says "NEVER skip the workflow order"
+   but doesn't define the workflow order. FAIL.
+
+Q: Does the prompt tell the AI to ask for confirmation?
+A: YES — Rule #1 in the co-write preamble. The co-write preamble also says
+   "only output commands AFTER the user has confirmed your proposal."
+   But the DETAILED confirmation protocol is in the game-mode preamble. PARTIAL.
+
+Q: Does the prompt tell the AI to respond in the user's language?
+A: YES — line 970: "You respond in the same language the user writes in." PASS.
+
+
+================================================================================
+6. EXPECTED AI BEHAVIOR (CORRECT)
+================================================================================
+
+Given the user message in German asking for a tech comedy about AI and vampires:
+
+1. AI should respond IN GERMAN
+2. AI should recognize this is a fresh project (all fields empty)
+3. AI should start with Step 1: Story Root
+4. AI should propose story root values (title, genre, logline, characters, goal)
+5. AI should NOT execute any commands — just describe the plan
+6. AI should wait for user confirmation
+7. AI should NOT use create_scene
+8. AI should NOT generate images
+
+With the current prompt (issues unfixed), the AI MIGHT:
+- Use create_scene instead of create_cowrite_scene (sees it in reference)
+- Skip to creating scenes (no Step 1-5 workflow in co-write preamble)
+- Generate images (sees generate_scene_image in reference)
+- Execute commands without confirmation (detailed protocol not in co-write preamble)
+
+
+================================================================================
+7. PROPOSED FIXES
+================================================================================
+
+FIX #1: FILTER COMMAND REFERENCE BY MODE
+-----------------------------------------
+In generateSystemPrompt(), filter the COMMANDS array based on mode before
+building the reference section.
+
+Define which groups are allowed per mode:
+
+  COWRITE_GROUPS = ['cowrite', 'entities', 'project']
+  COWRITE_QUERY_COMMANDS = ['get_entity_details', 'list_entities', 'list_variables']
+  GAME_EXCLUDED_GROUPS = ['cowrite']
+
+For co-write mode:
+  - Include all 'cowrite' group commands
+  - Include all 'entities' group commands (shared)
+  - Include update_project_info and update_notes from 'project' group
+  - Include get_entity_details, list_entities, list_variables from 'query'
+  - EXCLUDE everything else
+
+For game mode:
+  - Include everything EXCEPT 'cowrite' group commands
+
+
+FIX #2: MOVE CO-WRITE WORKFLOW TO CO-WRITE PREAMBLE
+-----------------------------------------------------
+Move the detailed co-write workflow section (lines 1074-1197) from the
+game-mode preamble into the co-write preamble. The co-write preamble should
+contain:
+  1. Current 5 critical rules (keep at top)
+  2. Role description
+  3. The mandatory workflow order (Steps 1-5) — MOVED FROM GAME PREAMBLE
+  4. The confirmation protocol — MOVED FROM GAME PREAMBLE
+  5. Walking-through mode — MOVED FROM GAME PREAMBLE
+  6. Teaching mode — MOVED FROM GAME PREAMBLE
+  7. Context awareness — MOVED FROM GAME PREAMBLE
+  8. Co-write scene guidance — MOVED FROM GAME PREAMBLE
+  9. Command format and agentic loop
+
+Remove lines 1074-1197 from the game-mode preamble entirely.
+
+
+FIX #3: SHOW EMPTY FIELDS IN CONTEXT
+--------------------------------------
+In buildCowriteContext(), always show all story root fields, with "(empty)"
+for missing values:
+
+  lines.push(`  Title: ${d.title || '(empty)'}`);
+  lines.push(`  Genre: ${d.genre || '(empty)'}`);
+  ...etc.
+
+This makes the context self-documenting and helps the AI see at a glance
+what needs to be filled.
+
+
+================================================================================
+8. IMPLEMENTATION PLAN
+================================================================================
+
+Files to modify:
+  1. src/services/gameStateAPI.registry.ts
+     - Add mode filtering to generateSystemPrompt()
+     - Move co-write workflow from game preamble to co-write preamble
+     - Remove co-write section from game preamble
+
+  2. src/services/gameStateAPI.context.ts
+     - Update buildCowriteContext() to show empty fields
+
+Verification:
+  - Run `npx tsc --noEmit` after changes to verify TypeScript compiles
+  - The fixes are purely in the system prompt text and context builder
+  - No functional changes to command execution or agentic loop
+  - No changes to UI, stores, or other services
+
+Risk assessment:
+  - LOW RISK: These are text-only changes to the system prompt
+  - The command handlers, types, and execution logic are untouched
+  - The only behavioral change is which commands the AI sees in its reference
+  - Game mode behavior is unchanged (it still sees all game commands)
+
+
+================================================================================
+8. FIXES APPLIED
+================================================================================
+
+All three fixes have been implemented and verified:
+
+FIX #1 APPLIED: Command reference filtered by mode
+  File: src/services/gameStateAPI.registry.ts (lines 1188-1216)
+  - Co-write mode now sees 35 commands (was 80)
+    - 21 cowrite group commands
+    - 9 entities group commands (shared)
+    - 3 query commands (get_entity_details, list_entities, list_variables)
+    - 2 project commands (update_project_info, update_notes)
+  - Game mode now sees 59 commands (was 80)
+    - All groups EXCEPT cowrite (21 co-write commands removed)
+  - REMOVED from co-write reference: create_scene, update_scene, delete_scene,
+    add_choice, connect_nodes, create_modifier, create_branch, create_comment,
+    generate_scene_image, search_music, assign_music_to_scene, and 36 more
+    game-mode commands
+
+FIX #2 APPLIED: Co-write workflow moved to co-write preamble
+  File: src/services/gameStateAPI.registry.ts (lines 956-1095)
+  - The co-write preamble now includes:
+    * 5 critical rules (kept at top)
+    * Full data model description
+    * Mandatory workflow order (Steps 1-5)
+    * Absolute confirmation protocol
+    * Walking-through mode
+    * Teaching mode
+    * Context awareness rules
+    * Co-write scene planning guidance
+    * Command format + agentic loop
+    * Important rules
+  - Game-mode preamble no longer contains co-write section (~120 lines removed)
+  - Net effect: co-write preamble is comprehensive; game preamble is focused
+
+FIX #3 APPLIED: Empty fields shown explicitly in context
+  File: src/services/gameStateAPI.context.ts (lines 121-143)
+  - Story root now always shows all fields
+  - Empty fields display as "(empty)" instead of being omitted
+  - Supporting characters show "(none)" when empty
+  - AI can immediately see which fields need filling
+
+VERIFICATION:
+  - TypeScript compilation: PASS (npx tsc --noEmit — zero errors)
+  - Command count verification: PASS (35 co-write, 59 game)
+  - No game-mode commands in co-write reference: PASS
+  - No co-write workflow in game preamble: PASS
+  - Empty fields shown in context: PASS
+
+
+================================================================================
+9. POST-FIX VERIFICATION CHECKLIST
+================================================================================
+
+To verify these fixes work in the live application:
+
+[ ] Open a co-write project in the app
+[ ] Open browser DevTools console
+[ ] Send a message like "Hilf mir eine Geschichte zu schreiben"
+[ ] In the Network tab, inspect the POST to /api/chat
+[ ] Verify the systemPrompt field does NOT contain "create_scene" (game-mode)
+[ ] Verify the systemPrompt field DOES contain "MANDATORY WORKFLOW ORDER"
+[ ] Verify the systemPrompt field DOES contain "CONFIRMATION PROTOCOL"
+[ ] Verify the message field shows story root fields as "(empty)"
+[ ] Verify the AI responds in German and starts with Story Root
+[ ] Verify the AI does NOT execute commands without confirmation
+
+To verify game mode is unaffected:
+
+[ ] Open a game mode project
+[ ] Send a message like "Create a fantasy scene"
+[ ] Verify the systemPrompt does NOT contain co-write workflow sections
+[ ] Verify the AI uses create_scene (not create_cowrite_scene)
+[ ] Verify the AI can access all game-mode commands normally
+
+
+================================================================================
+END OF REPORT
+================================================================================

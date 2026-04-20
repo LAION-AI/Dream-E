@@ -76,7 +76,6 @@ Every significant location where scenes take place must have a profile and refer
 | `connected_locations` | How this location relates geographically to other important locations |
 | `inhabitants` | Who lives or works here; what kind of people frequent it |
 | `history` | Relevant backstory of the location |
-| `dangers` | Threats, hazards, or tensions present at this location |
 | `current_state` | What condition the location is in at the start of the story |
 
 **Reference image requirements:**
@@ -127,11 +126,12 @@ Organizations, companies, nations, factions, families, cults, guilds — any col
 | `culture` | Internal values, rituals, codes of conduct, beliefs |
 | `weakness` | Vulnerabilities, internal tensions, blind spots |
 
-**Reference image requirements:**
+**Reference image (recommended, not mandatory):**
 - **Framing**: Either a group emblem/crest/logo OR a representative gathering/scene
 - **If emblem**: Clean graphic design on dark/neutral background
 - **If group scene**: Key members visible, environment reflecting the group's domain
 - **Prompt must reflect**: The group's `type` and `culture`
+- Having a reference image is encouraged — it helps the user visualize the faction and ensures visual consistency when the group appears in node images
 
 ### 2.5 Concepts
 
@@ -148,10 +148,11 @@ Abstract game mechanics, magic systems, technologies, social structures, philoso
 | `related_concepts` | Other concepts this interacts with or depends on |
 | `visual_representation` | How this concept manifests visually (for image generation) |
 
-**Reference image requirements:**
+**Reference image (recommended, not mandatory):**
 - **Framing**: Symbolic or illustrative — showing the concept in action
 - **Prompt must include**: The `visual_representation` field description
 - **Style should match**: The project's overall art direction
+- Concepts are abstract, so not all concepts benefit from an image — but where the concept has a clear visual manifestation (e.g., a magic system, a technology), an image helps ground it for the user
 
 ---
 
@@ -171,7 +172,7 @@ The Story Root is the DNA of the entire story. Every other node derives from it.
 
 5. **Protagonist Goal** — The main character's concrete objective that drives the story's main arc. Must be specific, achievable, and have clear stakes for failure.
 
-6. **Summary** — 300–500 words. A complete synopsis from inciting incident through climax to resolution. Must include:
+6. **Summary** — 100+ words (ideally 300–500). A complete synopsis from inciting incident through climax to resolution. Must include:
    - The inciting incident
    - All major plot points and turning points
    - Character arcs (how protagonist and antagonist change)
@@ -218,7 +219,7 @@ The Story Root is the DNA of the entire story. Every other node derives from it.
 | `antagonist.role` | Non-empty |
 | `supportingCharacters` | At least 1 entry with name + archetype |
 | `protagonistGoal` | Non-empty, specific and concrete |
-| `summary` | 300–500 words |
+| `summary` | 100+ words (ideally 300–500) |
 | `image` | Present (generated) |
 | `entityStateChanges` | At least entries for protagonist, antagonist, and key supporting characters |
 
@@ -235,7 +236,7 @@ ASSERT: Story Root main character has name and role
 ASSERT: Story Root antagonist has name and role
 ASSERT: Story Root has at least 1 supporting character
 ASSERT: Story Root protagonist goal is not empty
-ASSERT: Story Root summary is at least 300 words
+ASSERT: Story Root summary is at least 100 words
 ASSERT: Story Root has an image
 ASSERT: Protagonist entity exists in world database
 ASSERT: Protagonist entity has complete profile (all mandatory character fields)
@@ -272,7 +273,7 @@ Plots are the causal event chains that give the story its structure. Each plot t
 
    a. **Name and Type** — Set via `update_plot`
 
-   b. **Description** — 500–800 words covering:
+   b. **Description** — 100+ words (ideally 500–800 for rich plots) covering:
       - The full arc of this plot thread from first event to resolution
       - Key events and turning points within this thread
       - Which characters are involved and how
@@ -303,7 +304,7 @@ Plots are the causal event chains that give the story its structure. Each plot t
 |---|---|
 | `name` | Non-empty |
 | `plotType` | One of: main, relationship, antagonist, character_development, subplot, custom |
-| `description` | 500–800 words |
+| `description` | 100+ words (ideally 500–800 for rich plots) |
 | `image` | Present (generated) |
 | `entityStateChanges` | Entries for all entities identified as important to this plot |
 
@@ -312,7 +313,7 @@ Plots are the causal event chains that give the story its structure. Each plot t
 ```
 ASSERT: All planned plots have been created (count matches agreed number)
 ASSERT: Every plot has a name and plotType
-ASSERT: Every plot description is at least 500 words
+ASSERT: Every plot description is at least 100 words
 ASSERT: Every plot has an image
 ASSERT: Every plot has entityStateChanges with at least 1 entry
 ASSERT: Every entity referenced in plot entityStateChanges exists in world database
@@ -343,7 +344,7 @@ Acts (traditional screenplay/novel) or Episodes (TV series/web serial) divide th
 
    a. **Name** — Descriptive title (e.g., "The Setup", "Betrayal", "The Reckoning")
 
-   b. **Description** — Detailed account of what happens in this act. For acts: 300–500 words. For episodes: 400–600 words (since episodes are more self-contained). Must include:
+   b. **Description** — Detailed account of what happens in this act. For acts: 100+ words (ideally 300–500). For episodes: 100+ words (ideally 400–600 for episodes) (since episodes are more self-contained). Must include:
       - Opening situation
       - Key events in sequence
       - Character decisions and their consequences
@@ -387,7 +388,7 @@ Acts (traditional screenplay/novel) or Episodes (TV series/web serial) divide th
 |---|---|
 | `name` | Non-empty |
 | `actNumber` | Integer, unique |
-| `description` | 300–500 words (acts) or 400–600 words (episodes) |
+| `description` | 100+ words (ideally 300–500) (acts) or 100+ words (ideally 400–600 for episodes) (episodes) |
 | `turningPoint` | Non-empty — turning point (acts) or cliffhanger (episodes). Written in the `turningPoint` field, NOT in `description`. |
 | `image` | Present (generated) |
 | `entityStateChanges` | Entries for all entities important to this act |
@@ -399,7 +400,7 @@ Run these checks after completing act N, before starting act N+1:
 
 ```
 ASSERT: Act N has name, description, turningPoint, and image
-ASSERT: Act N description is at least 300 words
+ASSERT: Act N description is at least 100 words
 ASSERT: Act N turningPoint is not empty and is NOT duplicated in description
 ASSERT: Act N has relationship edges to ALL defined plots
 ASSERT: Each act-plot relationship has plotInvolvement text
@@ -454,7 +455,7 @@ Scenes are the fundamental narrative units. Each scene is a discrete moment with
       - **Dialogue**: Where appropriate, include or reference key dialogue
       - **Pacing**: Match the scene's dramatic function (slow for tension-building, fast for action)
       - **Transitions**: Opening connects smoothly to the previous scene's ending; closing sets up the next scene
-      - **Length**: 200–500 words for the scene action/description field, depending on scene complexity
+      - **Length**: 100+ words for the scene action/description field, depending on scene complexity
 
    c. **Entity Participation** — Set the `entities` array: for each entity in this scene, define:
       - `entityId` — the entity's world database ID
@@ -485,7 +486,7 @@ Scenes are the fundamental narrative units. Each scene is a discrete moment with
 | Field | Requirement |
 |---|---|
 | `title` | Non-empty |
-| `description` | Detailed scene overview / action text (200–500 words) |
+| `description` | Detailed scene overview / action text (100+ words) |
 | `sceneAction` | Blow-by-blow plan of the scene's dramatic beats |
 | `entities` | At least 1 entity participation entry |
 | `entityStateChanges` | Entries for all participating entities that change in this scene |

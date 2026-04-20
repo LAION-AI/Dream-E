@@ -1,0 +1,362 @@
+================================================================================
+HYPRLAB API — Audio Transcription (ASR) Guide
+================================================================================
+
+This guide explains how to send audio files to the HyprLab API for automatic
+speech recognition (ASR / transcription) using Gemini models.
+
+HyprLab provides access to Google's Gemini models through an OpenAI-compatible
+API. This means you can use the same endpoint for text, images, AND audio.
+
+================================================================================
+1. OVERVIEW
+================================================================================
+
+Base URL:     https://api.hyprlab.io/v1
+Endpoint:     POST /chat/completions  (OpenAI-compatible format)
+Auth:         Bearer token (HyprLab API key)
+Audio format: Base64-encoded audio in the message content
+
+HyprLab wraps Google Gemini's multimodal capabilities in an OpenAI-compatible
+interface. Audio is sent as an inline base64 part in the chat messages array,
+just like you'd send an image.
+
+================================================================================
+2. MODELS THAT SUPPORT AUDIO INPUT
+================================================================================
+
+These Gemini models on HyprLab accept audio input:
+
+  Model Name                   Context    Best For
+  -----------------------------------------------------------
+  gemini-3.1-flash-lite        1M         Fast ASR (cheapest)
+  gemini-3-flash               1M         Balanced speed/quality
+  gemini-3.1-pro               1M         Highest accuracy
+
+Recommended for ASR: gemini-3.1-flash-lite (fast + cheap)
+Recommended for audio understanding: gemini-3.1-pro (best reasoning)
+
+================================================================================
+3. HOW DREAM-E CURRENTLY DOES ASR (Direct Gemini API)
+================================================================================
+
+Dream-E's current ASR flow (for reference):
+
+1. Browser records audio via MediaRecorder API (webm/opus codec)
+2. Audio Blob is converted to base64 string (no data: URL prefix)
+3. Client sends POST /api/transcribe-audio with:
+   { audioData: "base64...", mimeType: "audio/webm", googleApiKey: "...", model: "gemini-2.5-flash-lite" }
+4. Server calls Gemini's generateContent endpoint with audio as inlineData
+5. Gemini returns transcribed text
+6. Text is appended to the chat input
+
+================================================================================
+4. SENDING AUDIO TO HYPRLAB (OpenAI-Compatible Format)
+================================================================================
+
+Method A: Using the Chat Completions endpoint (RECOMMENDED)
+-----------------------------------------------------------
+
+HyprLab's OpenAI-compatible API accepts audio in the messages array.
+The audio is base64-encoded and included as a content part.
+
+curl example:
+
+  # First, encode your audio file to base64:
+  AUDIO_B64=$(base64 -w0 recording.webm)
+
+  # Then send it to HyprLab:
+  curl https://api.hyprlab.io/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer YOUR_HYPRLAB_API_KEY" \
+    -d '{
+      "model": "gemini-3.1-flash-lite",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "input_audio",
+              "input_audio": {
+                "data": "'$AUDIO_B64'",
+                "format": "wav"
+              }
+            },
+            {
+              "type": "text",
+              "text": "Transcribe exactly what is spoken in this audio. Output ONLY the transcribed text."
+            }
+          ]
+        }
+      ],
+      "temperature": 0,
+      "max_tokens": 2048
+    }'
+
+Response format (OpenAI-compatible):
+
+  {
+    "id": "chatcmpl-abc123",
+    "object": "chat.completion",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "This is the transcribed text from the audio."
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1234,
+      "completion_tokens": 56,
+      "total_tokens": 1290
+    }
+  }
+
+The transcribed text is in: response.choices[0].message.content
+
+
+Method B: Using Gemini's native format through HyprLab
+------------------------------------------------------
+
+HyprLab also supports Gemini's native multimodal format (inlineData):
+
+  curl https://api.hyprlab.io/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer YOUR_HYPRLAB_API_KEY" \
+    -d '{
+      "model": "gemini-3.1-flash-lite",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "image_url",
+              "image_url": {
+                "url": "data:audio/webm;base64,YOUR_BASE64_AUDIO_HERE"
+              }
+            },
+            {
+              "type": "text",
+              "text": "Transcribe this audio recording. Output only the spoken text."
+            }
+          ]
+        }
+      ],
+      "temperature": 0,
+      "max_tokens": 2048
+    }'
+
+Note: Even though the field is called "image_url", OpenAI-compatible APIs
+accept any media type (including audio) as a data URL. The MIME type in
+the data URL (audio/webm, audio/wav, etc.) tells the model what it is.
+
+
+================================================================================
+5. SUPPORTED AUDIO FORMATS
+================================================================================
+
+Format          MIME Type           Notes
+------------------------------------------------------------
+WebM/Opus       audio/webm          Browser default (MediaRecorder)
+WAV             audio/wav           Uncompressed, larger files
+MP3             audio/mpeg          Compressed, widely supported
+OGG             audio/ogg           Open format
+FLAC            audio/flac          Lossless compression
+M4A             audio/mp4           Apple format
+
+Recommendation: Use audio/webm (browser default from MediaRecorder).
+It's compact and well-supported by Gemini models.
+
+================================================================================
+6. PYTHON EXAMPLE
+================================================================================
+
+import requests
+import base64
+
+# Read and encode the audio file
+with open("recording.webm", "rb") as f:
+    audio_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+# Send to HyprLab
+response = requests.post(
+    "https://api.hyprlab.io/v1/chat/completions",
+    headers={
+        "Content-Type": "application/json",
+        "Authorization": "Bearer YOUR_HYPRLAB_API_KEY",
+    },
+    json={
+        "model": "gemini-3.1-flash-lite",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_audio",
+                        "input_audio": {
+                            "data": audio_b64,
+                            "format": "webm",
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": "Transcribe exactly what is spoken. Output ONLY the text.",
+                    },
+                ],
+            }
+        ],
+        "temperature": 0,
+        "max_tokens": 2048,
+    },
+)
+
+result = response.json()
+transcript = result["choices"][0]["message"]["content"]
+print("Transcript:", transcript)
+
+================================================================================
+7. JAVASCRIPT/NODE.JS EXAMPLE
+================================================================================
+
+const fs = require('fs');
+
+async function transcribeAudio(audioFilePath, apiKey) {
+  // Read and encode the audio file
+  const audioBuffer = fs.readFileSync(audioFilePath);
+  const audioB64 = audioBuffer.toString('base64');
+
+  const response = await fetch('https://api.hyprlab.io/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gemini-3.1-flash-lite',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_audio',
+              input_audio: {
+                data: audioB64,
+                format: 'webm',  // or 'wav', 'mp3', etc.
+              },
+            },
+            {
+              type: 'text',
+              text: 'Transcribe exactly what is spoken. Output ONLY the text.',
+            },
+          ],
+        },
+      ],
+      temperature: 0,
+      max_tokens: 2048,
+    }),
+  });
+
+  const result = await response.json();
+  return result.choices[0].message.content;
+}
+
+// Usage:
+transcribeAudio('recording.webm', 'YOUR_HYPRLAB_API_KEY')
+  .then(text => console.log('Transcript:', text));
+
+================================================================================
+8. BROWSER EXAMPLE (from microphone recording)
+================================================================================
+
+// Step 1: Record audio from microphone
+const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+const chunks = [];
+
+recorder.ondataavailable = (e) => chunks.push(e.data);
+recorder.start();
+
+// ... user speaks ...
+
+// Step 2: Stop recording and convert to base64
+recorder.stop();
+const blob = new Blob(chunks, { type: 'audio/webm' });
+const reader = new FileReader();
+reader.readAsDataURL(blob);
+reader.onloadend = async () => {
+  // reader.result = "data:audio/webm;base64,ABC123..."
+  const base64 = reader.result.split(',')[1]; // strip data URL prefix
+
+  // Step 3: Send to HyprLab
+  const response = await fetch('https://api.hyprlab.io/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer YOUR_HYPRLAB_API_KEY',
+    },
+    body: JSON.stringify({
+      model: 'gemini-3.1-flash-lite',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'input_audio', input_audio: { data: base64, format: 'webm' } },
+          { type: 'text', text: 'Transcribe exactly what is spoken.' },
+        ],
+      }],
+      temperature: 0,
+      max_tokens: 2048,
+    }),
+  });
+
+  const result = await response.json();
+  console.log('Transcript:', result.choices[0].message.content);
+};
+
+================================================================================
+9. TIPS & BEST PRACTICES
+================================================================================
+
+1. Use temperature=0 for ASR. You want deterministic, accurate transcription,
+   not creative interpretation.
+
+2. Keep recordings under 25MB. Larger files should be split into chunks.
+   Most recordings from a browser mic are well under this limit.
+
+3. Use WebM/Opus format from the browser (default MediaRecorder output).
+   It's compact and high quality.
+
+4. The prompt matters. "Transcribe exactly what is spoken" produces better
+   results than just "What does this say?" because it tells the model to
+   output verbatim text.
+
+5. For multi-language audio, add "Transcribe in the original language" to
+   the prompt. Otherwise the model may translate to English.
+
+6. Handle silence: Check for "[no speech detected]" or empty responses
+   and show a user-friendly message.
+
+7. The same endpoint works for audio UNDERSTANDING too — not just
+   transcription. You can ask "Summarize what is said in this audio"
+   or "What emotion is the speaker conveying?"
+
+================================================================================
+10. PRICING (as of March 2026)
+================================================================================
+
+Model                    Input              Output
+-------------------------------------------------------
+gemini-3.1-flash-lite    $0.10 / 1M tokens  $0.60 / 1M tokens
+gemini-3-flash           $0.20 / 1M tokens  $1.20 / 1M tokens
+gemini-3.1-pro           $0.80 / 1M tokens  $4.80 / 1M tokens
+
+Audio tokens are counted similarly to image tokens — a few seconds of
+audio typically uses 1,000-5,000 tokens depending on length and quality.
+
+A typical 10-second voice recording costs approximately:
+- gemini-3.1-flash-lite: ~$0.001 (less than a tenth of a cent)
+- gemini-3.1-pro:        ~$0.005
+
+================================================================================

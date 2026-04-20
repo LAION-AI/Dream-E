@@ -42,6 +42,9 @@ import {
   User,
   Layers,
   Camera,
+  Clapperboard,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 /**
@@ -208,7 +211,7 @@ interface ToolbarProps {
   /** Whether the editor is in co-write mode */
   isCowriteMode?: boolean;
   /** Which canvas tab is active in co-write mode */
-  activeCanvas?: 'story' | 'character';
+  activeCanvas?: 'story' | 'character' | 'stateChange';
   /** Whether the project already has a StoryRoot node (max 1 allowed) */
   hasStoryRoot?: boolean;
 
@@ -218,6 +221,24 @@ interface ToolbarProps {
   onChatToggle?: () => void;
   /** Whether the chat panel is currently open (for visual active indicator) */
   isChatOpen?: boolean;
+
+  // ── CO-WRITE VISIBILITY TOGGLES ──
+
+  /**
+   * When true, Act/Episode nodes are hidden from the canvas.
+   * Only visible in co-write mode story canvas.
+   */
+  hideEpisodes?: boolean;
+  /** Toggle visibility of Act/Episode nodes */
+  onToggleEpisodes?: () => void;
+
+  /**
+   * When true, Plot nodes are hidden from the canvas.
+   * Only visible in co-write mode story canvas.
+   */
+  hidePlots?: boolean;
+  /** Toggle visibility of Plot nodes */
+  onTogglePlots?: () => void;
 }
 
 /**
@@ -249,6 +270,10 @@ export default function Toolbar({
   hasStoryRoot = false,
   onChatToggle,
   isChatOpen = false,
+  hideEpisodes = false,
+  onToggleEpisodes,
+  hidePlots = false,
+  onTogglePlots,
 }: ToolbarProps) {
   /**
    * Handle drag start
@@ -461,6 +486,62 @@ export default function Toolbar({
 
       {/* Separator — pushes the chat button and help text to the bottom */}
       <div className="flex-1" />
+
+      {/* ── VISIBILITY TOGGLES (co-write story canvas only) ──
+       * Allow the author to hide Act/Episode and Plot nodes to reduce visual
+       * clutter when focusing on scenes or shot sequences. The nodes still
+       * exist in the project — they're just hidden from the canvas view.
+       * Toggling back restores them instantly (no data loss). */}
+      {isCowriteMode && activeCanvas === 'story' && (
+        <div className="mx-2 flex flex-col gap-2">
+          {/* Thin separator before visibility toggles */}
+          <div className="h-px bg-editor-border" />
+
+          {/* Toggle Episodes / Acts visibility */}
+          {onToggleEpisodes && (
+            <button
+              onClick={onToggleEpisodes}
+              className={`
+                w-full aspect-square rounded-lg flex flex-col items-center justify-center
+                transition-colors border-2
+                ${hideEpisodes
+                  ? 'bg-indigo-500/5 border-indigo-500/30 text-indigo-500/40'
+                  : 'bg-indigo-500/10 border-indigo-500 text-indigo-400'}
+              `}
+              title={hideEpisodes ? 'Show Episodes / Acts' : 'Hide Episodes / Acts'}
+            >
+              {hideEpisodes
+                ? <EyeOff size={18} />
+                : <Eye size={18} />}
+              <span className="text-[8px] mt-0.5 font-medium leading-tight text-center">
+                {hideEpisodes ? 'Acts\nHidden' : 'Acts'}
+              </span>
+            </button>
+          )}
+
+          {/* Toggle Plots visibility */}
+          {onTogglePlots && (
+            <button
+              onClick={onTogglePlots}
+              className={`
+                w-full aspect-square rounded-lg flex flex-col items-center justify-center
+                transition-colors border-2
+                ${hidePlots
+                  ? 'bg-amber-500/5 border-amber-500/30 text-amber-500/40'
+                  : 'bg-amber-500/10 border-amber-500 text-amber-400'}
+              `}
+              title={hidePlots ? 'Show Plots' : 'Hide Plots'}
+            >
+              {hidePlots
+                ? <EyeOff size={18} />
+                : <Eye size={18} />}
+              <span className="text-[8px] mt-0.5 font-medium leading-tight text-center">
+                {hidePlots ? 'Plots\nHidden' : 'Plots'}
+              </span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Chat toggle button — shown in co-write mode so the author can open
        * the AI chat panel from the toolbar without reaching for Ctrl+Shift+C.

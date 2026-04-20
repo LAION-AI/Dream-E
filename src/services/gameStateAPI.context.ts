@@ -108,6 +108,23 @@ export function getGameContext(): string {
 }
 
 /**
+ * Safely render entityStateChanges for context output.
+ * Guards against the field being stored as a string (old/corrupt format)
+ * instead of the expected Record<string, string>.
+ */
+function escLine(esc: unknown): string | null {
+  if (!esc) return null;
+  if (typeof esc === 'string') {
+    // Old string format — surface a warning so the AI knows to fix it
+    return `entityStateChanges: (CORRUPT: stored as string, use update command to replace with object format)`;
+  }
+  if (typeof esc !== 'object' || Array.isArray(esc)) return null;
+  const keys = Object.keys(esc as object);
+  if (keys.length === 0) return null;
+  return `entityStateChanges(${keys.length}): ${keys.join(', ')}`;
+}
+
+/**
  * Build the co-write context lines showing story root, plots, acts,
  * character nodes, and relationship edges. Called only when the project
  * is in co-write mode.
@@ -141,6 +158,9 @@ function buildCowriteContext(project: Project): string[] {
     }
     lines.push(`  Protagonist Goal: ${d.protagonistGoal || '(empty)'}`);
     lines.push(`  Summary: ${d.summary ? `${d.summary.slice(0, 200)}${d.summary.length > 200 ? '...' : ''}` : '(empty)'}`);
+    // Show entity state changes so the AI can see and update them
+    const rootEscLine = escLine(d.entityStateChanges);
+    lines.push(`  ${rootEscLine ?? 'entityStateChanges: (none)'}`);
   } else {
     lines.push('Story Root: (none)');
   }
@@ -155,6 +175,8 @@ function buildCowriteContext(project: Project): string[] {
       const desc = d.description ? ` — ${d.description.slice(0, 100)}` : '';
       const hasImg = d.image ? ' [img]' : '';
       lines.push(`  [${p.id}] "${d.name}" (${d.plotType})${hasImg}${desc}`);
+      const plotEscLine = escLine(d.entityStateChanges);
+      if (plotEscLine) lines.push(`    ${plotEscLine}`);
     }
   } else {
     lines.push('  (none)');
@@ -184,6 +206,12 @@ function buildCowriteContext(project: Project): string[] {
       const nodeLabel = d.isEpisode ? 'Episode' : 'Act';
       const episodeFlag = d.isEpisode ? ' [episode]' : '';
       lines.push(`  [${a.id}] ${nodeLabel} ${d.actNumber}: "${d.name}"${episodeFlag}${desc}`);
+      if (d.turningPoint) {
+        const tpLabel = d.isEpisode ? 'cliffhanger' : 'turningPoint';
+        lines.push(`    ${tpLabel}: ${d.turningPoint.slice(0, 150)}${d.turningPoint.length > 150 ? '...' : ''}`);
+      }
+      const actEscLine = escLine(d.entityStateChanges);
+      if (actEscLine) lines.push(`    ${actEscLine}`);
     }
   } else {
     lines.push('  (none)');
@@ -206,6 +234,8 @@ function buildCowriteContext(project: Project): string[] {
       );
       const parentInfo = parentEdge ? ` (act: ${parentEdge.source})` : '';
       lines.push(`  [${s.id}] "${d.title || 'Untitled'}"${entBadge}${parentInfo}${desc}`);
+      const sceneEscLine = escLine(d.entityStateChanges);
+      if (sceneEscLine) lines.push(`    ${sceneEscLine}`);
     }
   }
 
@@ -224,6 +254,8 @@ function buildCowriteContext(project: Project): string[] {
       );
       const parentInfo = parentEdge ? ` (parent: ${parentEdge.source})` : '';
       lines.push(`  [${s.id}] "${d.title || 'Untitled'}"${parentInfo}${desc}`);
+      const shotEscLine = escLine(d.entityStateChanges);
+      if (shotEscLine) lines.push(`    ${shotEscLine}`);
     }
   }
 

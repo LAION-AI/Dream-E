@@ -1,0 +1,368 @@
+================================================================================
+CO-WRITE MODE — FULL PROMPT ANALYSIS
+Generated: 2026-03-25
+================================================================================
+
+This file reconstructs the EXACT prompt that the AI would receive when:
+1. A co-write project is open (mode='cowrite')
+2. The user asks: "Hilf mir eine Geschichte über KI und Vampire zu schreiben.
+   Es soll eine Tech-Komödie sein."
+
+It is split into two parts:
+  PART A: System Prompt (from generateSystemPrompt('cowrite'))
+  PART B: User Message (from buildUserMessage(userText))
+
+================================================================================
+PART A — SYSTEM PROMPT (co-write mode)
+================================================================================
+
+You are a professional writing teacher, story consultant, and co-author embedded in Dream-E's Co-Writing Mode. You help users develop complete, well-structured stories from concept to detailed scene outlines.
+
+## CRITICAL RULES — READ THESE FIRST
+1. **NEVER execute commands without confirmation.** Always describe what you plan to do first, then WAIT for the user to confirm before executing any commands. The ONLY exception is if the user explicitly says "just do it" or "fill everything out".
+2. **NEVER use the game-mode `create_scene` command.** In co-writing mode, use `create_cowrite_scene` instead.
+3. **NEVER generate images unless the user explicitly asks for images.** Do not call `generate_node_image`, `generate_scene_image`, or `generate_entity_image` on your own.
+4. **NEVER skip the workflow order.** Story Root must be filled BEFORE characters, characters BEFORE plots, plots BEFORE acts, acts BEFORE scenes.
+5. **NEVER use `update_scene` or `create_scene`.** These are game-mode commands. In co-write mode, the story canvas uses `update_story_root`, `update_plot`, `update_act`, `create_cowrite_scene`, `update_cowrite_scene`.
+
+## Your Role
+[...writing teacher role text...]
+
+## Command Format
+Output command blocks inline:
+
+<<<SW_CMD:action_name>>>
+{"param": "value"}
+<<</SW_CMD>>>
+
+BUT REMEMBER: only output commands AFTER the user has confirmed your proposal.
+
+## Agentic Loop
+After commands execute, results are sent back. You can chain multiple steps, but ALWAYS within the confirmed scope.
+
+
+## COMMAND REFERENCE                    <<<<< THIS IS THE PROBLEM >>>>>
+
+### Scene Commands                      <<<<< GAME-MODE: SHOULD NOT BE HERE
+
+**create_scene** — Create a new scene node
+Params: {label: string, storyText: string, speakerName: string (optional), choices: [{label: string}] (optional)}
+Returns: {nodeId, choiceIds[]}
+
+**update_scene** — Update scene text, speaker, or label
+[...full reference...]
+
+**delete_scene** — Delete a scene and all its connected edges
+[...full reference...]
+
+**add_choice** — Add a new choice button to a scene
+[...full reference...]
+
+**update_choice** — Update a choice's label
+[...full reference...]
+
+**delete_choice** — Delete a choice from a scene
+[...full reference...]
+
+**set_choice_condition** — Set a visibility condition on a choice
+[...full reference...]
+
+**remove_choice_condition** — Remove the condition from a choice
+[...full reference...]
+
+### Connection Commands                 <<<<< GAME-MODE: SHOULD NOT BE HERE
+
+**connect_nodes** — Create an edge between two nodes
+[...full reference...]
+
+**disconnect_nodes** — Remove an edge
+[...full reference...]
+
+**reconnect_edge** — Change where an edge points
+[...full reference...]
+
+### Entity Commands                     <<<<< SHARED: OK TO KEEP
+
+**create_entity** — Create a new entity
+[...full reference...]
+
+[...etc...]
+
+### Variable Commands                   <<<<< GAME-MODE: NOT NEEDED IN CO-WRITE
+
+**create_variable** — Create a new game variable
+[...full reference...]
+
+### Media Commands                      <<<<< GAME-MODE: MOST SHOULD NOT BE HERE
+(generate_scene_image, set_scene_image, etc.)
+
+### Modifier Node Commands              <<<<< GAME-MODE: SHOULD NOT BE HERE
+(create_modifier, update_modifier, delete_modifier)
+
+### Branch Node Commands                <<<<< GAME-MODE: SHOULD NOT BE HERE
+(create_branch, update_branch, delete_branch)
+
+### Comment Node Commands               <<<<< GAME-MODE: SHOULD NOT BE HERE
+(create_comment, update_comment, delete_comment)
+
+### Project Commands                    <<<<< GAME-MODE: MOSTLY NOT NEEDED
+(set_start_node, update_project_info, update_notes)
+
+### Query Commands                      <<<<< SHARED: PARTIALLY RELEVANT
+(get_scene_details — game mode; get_entity_details — OK; etc.)
+
+### RPG Music Search & Assignment       <<<<< GAME-MODE: SHOULD NOT BE HERE
+(search_music, get_music_track, assign_music_to_scene, list_music_genres)
+
+### Co-Writing Mode Commands            <<<<< CO-WRITE: THIS IS THE CORRECT SET
+(update_story_root, get_story_root, create_plot, update_plot, etc.)
+
+
+================================================================================
+PART B — USER MESSAGE (from buildUserMessage)
+================================================================================
+
+[Current Game State]
+Project: "Test Co-Write"
+Mode: cowrite
+Start Node: node_root
+
+Scenes (0):
+  (none)
+
+Entities (0):
+  (none)
+
+Variables (1):
+  [var_health] Health (integer) = 100
+
+Edges (16):
+  [edge_root_plot1] node_root → node_plot1
+  [edge_root_plot2] node_root → node_plot2
+  [edge_root_plot3] node_root → node_plot3
+  [edge_root_plot4] node_root → node_plot4
+  [... more edges for acts, etc.]
+
+[CO-WRITING STRUCTURE]
+Story Root: [node_root]
+  (all fields empty — title, genre, audience, punchline, characters, goal, summary)
+
+Plots (4):
+  [node_plot1] "Main Plot" (Main Plot) —
+  [node_plot2] "Relationship" (Relationship Plot) —
+  [node_plot3] "Character Development" (Character Development Plot) —
+  [node_plot4] "Antagonist" (Antagonist Plot) —
+
+Acts (3):
+  [node_act1] Act 1: "Act 1" —
+  [node_act2] Act 2: "Act 2" —
+  [node_act3] Act 3: "Act 3" —
+
+Relationships (0):
+  (none)
+
+---
+User: Hilf mir eine Geschichte über KI und Vampire zu schreiben. Es soll eine Tech-Komödie sein.
+
+
+================================================================================
+ANALYSIS — ISSUES FOUND
+================================================================================
+
+ISSUE #1 (CRITICAL): COMMAND REFERENCE NOT FILTERED BY MODE
+=============================================================
+
+The `generateSystemPrompt()` function (line 1207-1241 in gameStateAPI.registry.ts)
+iterates over ALL commands and adds them ALL to the COMMAND REFERENCE section,
+regardless of whether the project is in 'game' or 'cowrite' mode.
+
+This means when the AI is in co-write mode, it sees:
+  - create_scene (GAME-MODE — contradicts rule #2 and #5 in the preamble)
+  - update_scene (GAME-MODE — contradicts rule #5)
+  - delete_scene, add_choice, update_choice, delete_choice (GAME-MODE)
+  - set_choice_condition, remove_choice_condition (GAME-MODE)
+  - connect_nodes, disconnect_nodes, reconnect_edge (GAME-MODE)
+  - create_variable, update_variable, delete_variable (GAME-MODE)
+  - generate_scene_image (GAME-MODE — contradicts rule #3)
+  - set_scene_image, remove_scene_image (GAME-MODE)
+  - set_scene_music, remove_scene_music, set_scene_voiceover, remove_scene_voiceover (GAME-MODE)
+  - create_modifier, update_modifier, delete_modifier (GAME-MODE)
+  - create_branch, update_branch, delete_branch (GAME-MODE)
+  - create_comment, update_comment, delete_comment (GAME-MODE)
+  - set_start_node (GAME-MODE)
+  - search_music, assign_music_to_scene (GAME-MODE)
+  - generate_scene_voiceover (GAME-MODE)
+
+That's ~40 game-mode commands that SHOULD NOT appear in the co-write prompt.
+
+IMPACT: The AI has a strong tendency to use commands it sees in its reference,
+even when the preamble says not to. Having `create_scene` with full parameter
+documentation RIGHT THERE is a stronger signal than a "don't use this" warning.
+This is likely why the AI sometimes creates game-mode scenes in co-write mode.
+
+RECOMMENDED FIX: Filter commands by mode. In co-write mode, only include:
+  - 'cowrite' group (all co-write commands)
+  - 'entities' group (shared — entities are used in both modes)
+  - 'query' group — ONLY: get_entity_details, list_entities
+  - 'project' group — ONLY: update_project_info, update_notes
+  - 'media' group — ONLY: generate_node_image (already listed in cowrite group actually)
+
+Actually, the simplest approach: define allowed groups per mode.
+  - game mode: scenes, connections, entities, variables, media, modifiers, branches,
+               comments, project, query, music
+  - cowrite mode: cowrite, entities, query (subset), project (subset)
+
+Or even better: add a `modes` field to each command that specifies which modes it's
+available in, then filter during prompt generation.
+
+
+ISSUE #2 (MODERATE): REDUNDANT CO-WRITE PREAMBLE IN GAME-MODE PROMPT
+=====================================================================
+
+The game-mode preamble (lines 1074-1197) contains a MASSIVE "CO-WRITING MODE"
+section that describes the co-write workflow, confirmation protocol, teaching mode,
+etc. This is ~120 lines of co-write-specific instructions embedded in the
+game-mode prompt.
+
+This means when a GAME-MODE project is open, the AI still receives all the
+co-write instructions (Story Root, Plots, Acts, walking-through mode, etc.).
+This wastes tokens and may confuse the model in game mode.
+
+IMPACT: Minor — the game-mode preamble starts with "expert storyteller and game
+design assistant" and the co-write section is labeled "CO-WRITING MODE", so
+the AI can distinguish. But it's ~2500 extra tokens of irrelevant context.
+
+RECOMMENDED FIX: Move the "CO-WRITING MODE" section (lines 1074-1197) from the
+game-mode preamble to only appear in the co-write preamble.
+
+Wait — actually, looking again: the game-mode preamble on line 990 starts after
+the ternary `isCowrite ? ...cowrite_preamble... : ...game_preamble...`. The
+game-mode preamble runs from line 990 to line 1205. Lines 1074-1197 ("CO-WRITING
+MODE") are part of the game-mode preamble.
+
+This IS a problem. The game-mode prompt should NOT include all the co-write
+workflow instructions. It should be in the co-write preamble instead.
+
+But actually — both preambles are used via the ternary on line 956. When
+isCowrite is true, the co-write preamble (lines 956-989) is used. When false,
+the game-mode preamble (lines 990-1205) is used. The co-write section in the
+game preamble (lines 1074-1197) is only included in game mode — NOT in co-write
+mode!
+
+This means the detailed co-write workflow instructions (teaching mode, walking-
+through mode, confirmation protocol, mandatory workflow order, etc.) are ONLY
+in the game-mode prompt and NOT in the co-write prompt!
+
+Wait — let me re-read. The co-write preamble (lines 956-989) does contain:
+  - Critical rules
+  - Role description
+  - Command format
+  - Agentic loop
+
+But it does NOT contain:
+  - The mandatory workflow order (Step 1-5)
+  - The confirmation protocol details
+  - The walking-through mode
+  - The teaching mode
+  - The co-write scene planning guidance
+  - The context awareness rules
+
+All of those are in lines 1074-1197 which are part of the GAME-MODE preamble!
+
+ISSUE #2 REVISED: The detailed co-write workflow is in the WRONG preamble.
+It's in the game-mode preamble (where it's wasted) and NOT in the co-write
+preamble (where it's needed).
+
+Wait, I need to look at this more carefully...
+
+Actually, re-reading the structure: The game-mode preamble is one long string
+from line 990 to line 1205 (the closing backtick). That entire string, including
+the co-write section, is used when `isCowrite = false`. So in game mode, the AI
+sees co-write instructions. In co-write mode (isCowrite = true), the AI uses the
+shorter preamble (lines 956-989) which does NOT have the detailed workflow.
+
+So the situation is:
+  - Co-write mode gets: SHORT preamble (5 critical rules, role, format) + ALL commands
+  - Game mode gets: LONG preamble (including full co-write workflow) + ALL commands
+
+This is BACKWARDS. The co-write mode should get the detailed workflow, and the
+game mode should NOT have co-write instructions at all.
+
+
+ISSUE #3 (MINOR): PREAMBLE SAYS "RESPOND IN USER'S LANGUAGE" BUT ONLY IN SHORT VERSION
+========================================================================================
+
+The co-write preamble (line 970) says "You respond in the same language the
+user writes in" but this is a brief mention. The detailed teaching mode section
+(which is in the wrong preamble) does not repeat this, and neither does the
+game-mode prompt.
+
+IMPACT: The AI should still detect German input and respond in German because
+the instruction is there, but it could be stronger.
+
+
+ISSUE #4 (MINOR): EMPTY FIELDS NOT SHOWN IN CONTEXT
+=====================================================
+
+In `buildCowriteContext()` (gameStateAPI.context.ts, lines 121-143), the story
+root fields are shown with `if (d.title)` guards. This means EMPTY fields are
+simply omitted from the context. The AI doesn't see:
+  Title: (empty)
+  Genre: (empty)
+  etc.
+
+It just sees "Story Root: [node_root]" with nothing below it. The AI has to
+infer that all fields are empty, which is less clear than explicitly showing
+"(empty)".
+
+IMPACT: Minor. The workflow instructions tell the AI to check `get_story_root`,
+so it would discover the empty fields. But showing them explicitly would be clearer.
+
+
+================================================================================
+SUMMARY OF ISSUES
+================================================================================
+
+#   SEVERITY   DESCRIPTION
+1   CRITICAL   Command reference includes ALL 60+ commands in co-write mode.
+               The AI sees create_scene, create_modifier, etc. despite
+               being told not to use them.
+
+2   CRITICAL   Detailed co-write workflow (Steps 1-5, confirmation protocol,
+               teaching mode, walking-through mode) is in the GAME-MODE
+               preamble, not the co-write preamble. Co-write mode only gets
+               a short 5-rule summary.
+
+3   MINOR      Empty story root fields not explicitly shown in context.
+
+4   MINOR      Language instruction could be stronger.
+
+
+================================================================================
+PROPOSED FIXES
+================================================================================
+
+FIX #1: Filter commands by mode in generateSystemPrompt()
+----------------------------------------------------------
+Add a `modes` field to CommandMeta (optional, defaults to both modes).
+Filter commands before building the reference section.
+
+Co-write mode should see ONLY:
+  - All 'cowrite' group commands
+  - All 'entities' group commands (shared)
+  - get_entity_details, list_entities from 'query' group
+  - update_project_info, update_notes from 'project' group
+
+Game mode should see ONLY:
+  - All non-'cowrite' group commands
+
+FIX #2: Move co-write workflow to co-write preamble
+----------------------------------------------------
+Move lines 1074-1197 (the entire "CO-WRITING MODE" section) from the
+game-mode preamble into the co-write preamble, appended after the
+short intro.
+
+FIX #3: Show empty fields in context
+--------------------------------------
+In buildCowriteContext(), show all story root fields, marking empty ones
+as "(empty)" so the AI can see exactly what needs filling.

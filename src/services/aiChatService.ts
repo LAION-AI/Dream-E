@@ -295,12 +295,44 @@ export function sendChatMessage(
         }
 
         // ── Step 4: Execute commands and collect results ────────────
+        //
+        // IMAGE GENERATION COMMANDS RUN IN PARALLEL:
+        // generate_node_image / generate_scene_image / generate_entity_image are
+        // pure side-effects (they don't produce data that subsequent commands
+        // depend on). Running them simultaneously cuts wall-clock time from
+        // N × 5s to ~5s regardless of how many images are requested.
+        //
+        // All other commands run sequentially first (they may create nodes that
+        // image gen commands will target).
+        const IMAGE_GEN_COMMANDS = new Set([
+          'generate_node_image',
+          'generate_scene_image',
+          'generate_entity_image',
+        ]);
+
+        const seqCmds = commands.filter(c => !IMAGE_GEN_COMMANDS.has(c.action));
+        const parCmds = commands.filter(c =>  IMAGE_GEN_COMMANDS.has(c.action));
+
         const iterationResults: { name: string; result: string }[] = [];
-        for (const cmd of commands) {
+
+        // Sequential commands first (order matters — may create target nodes)
+        for (const cmd of seqCmds) {
           onToolCallStart(cmd.action);
           const result = await executeCommand(cmd.action, cmd.params);
           iterationResults.push({ name: result.name, result: result.result });
           allToolCalls.push({ name: result.name, result: result.result });
+        }
+
+        // Image gen commands in parallel — all fire simultaneously
+        if (parCmds.length > 0) {
+          parCmds.forEach(cmd => onToolCallStart(cmd.action));
+          const parResults = await Promise.all(
+            parCmds.map(cmd => executeCommand(cmd.action, cmd.params))
+          );
+          for (const result of parResults) {
+            iterationResults.push({ name: result.name, result: result.result });
+            allToolCalls.push({ name: result.name, result: result.result });
+          }
         }
 
         // ── Step 5: Show execution summary in the chat stream ──────

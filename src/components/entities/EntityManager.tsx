@@ -28,6 +28,7 @@ import {
   Sparkles,
   FolderOpen,
   Volume2,
+  GitBranch,
   type LucideIcon,
 } from 'lucide-react';
 import type { EntityCategory, Entity, SceneNode, EntityStateChangeEvent } from '@/types';
@@ -41,6 +42,7 @@ import ProfileViewer from './ProfileViewer';
 import ImageGenerationOverlay from '@components/media/ImageGenerationOverlay';
 import TTSGenerationOverlay from '@components/media/TTSGenerationOverlay';
 import AssetPicker from '@components/media/AssetPicker';
+import { useEditorStore } from '@stores/useEditorStore';
 
 // =============================================================================
 // DESCRIPTION TEMPLATES — schema-inspired heading prompts
@@ -320,6 +322,9 @@ export default function EntityManager({ isOpen, onClose, category }: EntityManag
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Entity | null>(null);
 
+  const setActiveCanvas      = useEditorStore(s => s.setActiveCanvas);
+  const setStateChangeEntity = useEditorStore(s => s.setStateChangeEntityId);
+
   /** State for image generation overlay */
   const [imageGenOpen, setImageGenOpen] = useState(false);
   /** State for asset picker (images) */
@@ -381,6 +386,7 @@ export default function EntityManager({ isOpen, onClose, category }: EntityManag
       }))
       .sort((a, b) => a.depth - b.depth);
   }, [selectedEntity, currentProject, config.linkedField, nodeDepths]);
+
 
   // ---------------------------------------------------------------------------
   // HANDLERS
@@ -679,9 +685,25 @@ export default function EntityManager({ isOpen, onClose, category }: EntityManag
                   </p>
                 </div>
 
-                {/* 4. PROFILE — Structured data displayed as formatted card */}
+                {/* 4. PROFILE */}
                 <div>
-                  <label className="input-label">Profile</label>
+                  <label className="input-label flex items-center gap-2">
+                    Profile
+                    <button
+                      onClick={() => {
+                        if (selectedEntity) {
+                          setStateChangeEntity(selectedEntity.id);
+                          setActiveCanvas('stateChange');
+                          onClose();
+                        }
+                      }}
+                      className="ml-auto flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-violet-900/30 border border-violet-500/30 text-violet-300 hover:bg-violet-900/50 transition-colors font-normal"
+                      title="Open State Change Canvas for this entity"
+                    >
+                      <GitBranch size={11} />
+                      State Change Timeline
+                    </button>
+                  </label>
                   <ProfileViewer
                     profile={selectedEntity.profile}
                     onProfileChange={(newProfile) => handleUpdateField({ profile: newProfile } as any)}
@@ -845,6 +867,7 @@ export default function EntityManager({ isOpen, onClose, category }: EntityManag
           title={selectedEntity ? `Select Voice — ${selectedEntity.name}` : 'Select Voice'}
         />
       )}
+
     </>
   );
 }

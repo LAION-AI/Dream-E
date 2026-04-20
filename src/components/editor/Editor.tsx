@@ -120,6 +120,7 @@ import RelationshipEdge from '../edges/RelationshipEdge';
 import Toolbar from './Toolbar';
 import Inspector from '../inspector/Inspector';
 import CanvasTabBar from './CanvasTabBar';
+import StateChangeCanvas from '@components/canvas/StateChangeCanvas';
 
 /**
  * NODE TYPES REGISTRY
@@ -250,6 +251,12 @@ function EditorInner() {
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [showVideoExport, setShowVideoExport] = useState(false);
   const [isAISettingsOpen, setIsAISettingsOpen] = useState(false);
+
+  // Co-write canvas visibility toggles.
+  // When true the node type is excluded from the story canvas view.
+  // Nodes still exist in the project — they're just hidden from display.
+  const [hideEpisodes, setHideEpisodes] = useState(false);
+  const [hidePlots, setHidePlots] = useState(false);
 
   // Import state
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -414,12 +421,23 @@ function EditorInner() {
       // ── DUAL-CANVAS FILTERING (CO-WRITE MODE) ──
       // In co-write mode, only show the node types belonging to the active
       // canvas tab. In game mode (visibleTypes === null), show everything.
+      // Additionally apply the user-controlled visibility toggles for
+      // Act/Episode nodes and Plot nodes in the story canvas.
+      // stateChange tab reuses the story node set (ReactFlow is hidden behind it anyway)
       const visibleTypes = isCowriteMode
-        ? (activeCanvas === 'story' ? STORY_NODE_TYPES : CHARACTER_NODE_TYPES)
+        ? (activeCanvas === 'character' ? CHARACTER_NODE_TYPES : STORY_NODE_TYPES)
         : null; // null = show all (game mode)
 
       const capturedNodes = visibleTypes
-        ? capturedNodesRaw.filter(n => visibleTypes.has(n.type))
+        ? capturedNodesRaw.filter(n => {
+            if (!visibleTypes.has(n.type)) return false;
+            // Apply user visibility toggles (story canvas only)
+            if (activeCanvas === 'story') {
+              if (hideEpisodes && n.type === 'act') return false;
+              if (hidePlots && n.type === 'plot') return false;
+            }
+            return true;
+          })
         : capturedNodesRaw;
 
       // Filter edges: only keep edges where BOTH source and target are visible.
@@ -547,7 +565,7 @@ function EditorInner() {
         }
       };
     }
-  }, [projectNodes, projectEdges, selectedNodeId, selectedEdgeId, setNodes, setEdges, syncTrigger, activeCanvas, isCowriteMode]);
+  }, [projectNodes, projectEdges, selectedNodeId, selectedEdgeId, setNodes, setEdges, syncTrigger, activeCanvas, isCowriteMode, hideEpisodes, hidePlots]);
 
   /**
    * Find the scene node with the longest path from the start node.
@@ -1681,6 +1699,10 @@ function EditorInner() {
             hasStoryRoot={hasStoryRoot}
             onChatToggle={() => setIsChatOpen((prev) => !prev)}
             isChatOpen={isChatOpen}
+            hideEpisodes={hideEpisodes}
+            onToggleEpisodes={() => setHideEpisodes((prev) => !prev)}
+            hidePlots={hidePlots}
+            onTogglePlots={() => setHidePlots((prev) => !prev)}
           />
         )}
 
@@ -1694,8 +1716,15 @@ function EditorInner() {
             />
           )}
 
-          {/* React Flow canvas container */}
-          <div className="flex-1 relative">
+          {/* State Change Canvas — shown when stateChange tab is active */}
+          {isCowriteMode && activeCanvas === 'stateChange' && (
+            <div className="flex-1 relative">
+              <StateChangeCanvas />
+            </div>
+          )}
+
+          {/* React Flow canvas container — hidden when stateChange tab is active */}
+          <div className="flex-1 relative" style={{ display: isCowriteMode && activeCanvas === 'stateChange' ? 'none' : undefined }}>
           <ReactFlow
             nodes={nodes}
             edges={edges}

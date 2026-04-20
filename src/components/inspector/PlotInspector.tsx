@@ -29,6 +29,7 @@ import AssetPicker from '@components/media/AssetPicker';
 import MusicSearchOverlay from '@components/media/MusicSearchOverlay';
 import TTSGenerationOverlay from '@components/media/TTSGenerationOverlay';
 import { getBlobUrl } from '@/utils/blobCache';
+import EntityStatePatchSection from './EntityStatePatchSection';
 
 // =============================================================================
 // CONSTANTS
@@ -337,6 +338,13 @@ export default function PlotInspector({ node }: PlotInspectorProps) {
           className="hidden"
         />
       </div>
+
+      {/* ==================== ENTITY STATE CHANGES ==================== */}
+      <EntityStatePatchSection
+        entityStateChanges={node.data.entityStateChanges}
+        scopeLabel="throughout this plot arc (from first to last scene)"
+        onStateChangesChange={(v) => updateData({ entityStateChanges: v })}
+      />
 
       {/* Image Generation Overlay */}
       <ImageGenerationOverlay
