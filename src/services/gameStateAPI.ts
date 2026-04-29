@@ -21,6 +21,7 @@ import type { Project, StoryNode, Entity, Variable, StoryEdge, StoryRootNodeData
 import type { APIResult } from './gameStateAPI.types';
 import { ValidationError } from './gameStateAPI.types';
 import { COMMANDS } from './gameStateAPI.registry';
+import { runLifecycleChecks } from './lifecycleChecks';
 import { useImageGenStore } from '@/stores/useImageGenStore';
 import { blobUrlToBase64 } from '@/utils/blobCache';
 
@@ -2067,6 +2068,26 @@ const handleGenerateNodeImage: CommandHandler = async (params, _store, project) 
     );
   }
 
+  // Collect reference images from entityIds param for visual consistency.
+  // This ensures character portraits, location art, etc. are used as visual
+  // constraints so generated images match existing entity reference images.
+  const referenceImages: string[] = [];
+  const entityIds = params.entityIds as string[] | undefined;
+  if (entityIds && Array.isArray(entityIds)) {
+    for (const eid of entityIds) {
+      const ent = (project.entities || []).find(e => e.id === eid);
+      if (ent?.referenceImage) {
+        if (ent.referenceImage.startsWith('data:')) {
+          referenceImages.push(ent.referenceImage);
+        } else if (ent.referenceImage.startsWith('blob:')) {
+          const base64 = await blobUrlToBase64(ent.referenceImage);
+          if (base64) referenceImages.push(base64);
+        }
+      }
+    }
+  }
+
+  const settings = getImageGenSettings();
   const res = await fetch('/api/generate-image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2074,7 +2095,9 @@ const handleGenerateNodeImage: CommandHandler = async (params, _store, project) 
       prompt,
       width: (params.width as number) || 512,
       height: (params.height as number) || 512,
-      ...getImageGenSettings(),
+      ...settings,
+      // Only include reference images for Gemini provider (which supports them)
+      ...(settings.provider === 'gemini' && referenceImages.length > 0 ? { referenceImages } : {}),
     }),
   });
   const data = await res.json();
@@ -2096,7 +2119,7 @@ const handleGenerateNodeImage: CommandHandler = async (params, _store, project) 
     freshStore.updateEntity(targetId, { referenceImage: data.dataUrl } as any);
   }
 
-  return { success: true, targetId, imageGenerated: true };
+  return { success: true, targetId, imageGenerated: true, referenceImagesUsed: referenceImages.length };
 };
 
 // ─── Co-Write Scenes ─────────────────────────────────────────────────
@@ -2575,6 +2598,35 @@ const handleListShots: CommandHandler = (_params, _store, project) => {
 };
 
 // =============================================================================
+// LIFECYCLE STATUS COMMAND
+// =============================================================================
+
+/**
+ * Run lifecycle assertions and return a structured report.
+ * Allows the agent to explicitly check project completeness on demand.
+ */
+const handleGetLifecycleStatus: CommandHandler = (params, _store, project) => {
+  const phase = params.phase as string | undefined;
+  const targetNodeId = params.targetNodeId as string | undefined;
+  const report = runLifecycleChecks(project, { phase, targetNodeId });
+  return {
+    success: true,
+    currentPhase: report.currentPhase,
+    reports: report.reports.map(r => ({
+      phase: r.phase,
+      passCount: r.passCount,
+      failCount: r.failCount,
+      assertions: r.assertions.filter(a => !a.passed).map(a => ({
+        id: a.id,
+        description: a.description,
+        severity: a.severity,
+        suggestion: a.suggestion,
+      })),
+    })),
+  };
+};
+
+// =============================================================================
 // HANDLER MAP
 // =============================================================================
 
@@ -2683,6 +2735,8 @@ const handlers: Record<string, CommandHandler> = {
   update_shot: handleUpdateShot,
   delete_shot: handleDeleteShot,
   list_shots: handleListShots,
+  // Lifecycle
+  get_lifecycle_status: handleGetLifecycleStatus,
 };
 
 // =============================================================================

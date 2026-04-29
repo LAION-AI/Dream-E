@@ -864,14 +864,15 @@ export const COMMANDS: CommandMeta[] = [
   {
     name: 'generate_node_image',
     group: 'cowrite',
-    description: 'Generate an image for any co-write node (root, plot, act, scene, shot) or entity',
+    description: 'Generate an image for any co-write node (root, plot, act, scene, shot) or entity. Pass entityIds to attach reference images for visual consistency (character portraits, location art).',
     params: [
       { name: 'targetId', type: 'string', required: true, description: 'Node ID or entity ID to generate image for' },
       { name: 'prompt', type: 'string', required: true, description: 'Image generation prompt (be vivid and detailed)' },
+      { name: 'entityIds', type: 'string[]', required: false, description: 'Entity IDs whose reference images should be used as visual constraints for consistency (characters, locations, objects visible in the image). ALWAYS include this for character/location consistency.' },
       { name: 'width', type: 'number', required: false, description: 'Width in pixels', defaultValue: 512 },
       { name: 'height', type: 'number', required: false, description: 'Height in pixels', defaultValue: 512 },
     ],
-    returns: '{targetId, imageGenerated: true}',
+    returns: '{targetId, imageGenerated: true, referenceImagesUsed: number}',
   },
 
   // -- Co-Write Scenes --
@@ -1005,6 +1006,18 @@ export const COMMANDS: CommandMeta[] = [
     ],
     returns: '{ sceneId, message }',
     notes: 'Requires Google API key and TTS enabled in AI Settings.',
+  },
+
+  // ── Lifecycle ──
+  {
+    name: 'get_lifecycle_status',
+    group: 'cowrite',
+    description: 'Run lifecycle assertions and return a status report for the current project phase. Shows which fields are missing, which entities lack profiles or images, and which connections are needed.',
+    params: [
+      { name: 'phase', type: 'string', required: false, description: 'Specific phase to check', validValues: ['story_root', 'plots', 'acts', 'scenes', 'all'] },
+      { name: 'targetNodeId', type: 'string', required: false, description: 'Specific node ID to check (for act/scene-level assertions)' },
+    ],
+    returns: '{currentPhase, reports: [{phase, passCount, failCount, assertions[]}]}',
   },
 ];
 
@@ -1184,6 +1197,76 @@ When working in co-write mode, you MUST:
 - **Track what's empty vs filled**: Don't suggest filling in fields that are already complete unless the user asks to revise them.
 - **Maintain consistency**: If the story root says the genre is "Sci-Fi", don't suggest fantasy-themed plot arcs. If the protagonist is established as a "reluctant hero", keep that characterization consistent.
 - **Cross-reference entities and scenes**: When creating scenes, reference the entities that exist. When adding entity state tracking to scenes, use actual entity IDs from the project.
+
+## LIFECYCLE PHASE AWARENESS
+
+Every message you receive includes a [LIFECYCLE CHECK] block showing automated assertion results. These assertions enforce the co-writing lifecycle specification — ensuring completeness, consistency, and proper entity management at each phase of story development.
+
+**How to respond to the lifecycle check:**
+
+1. **[REQUIRED] failures are blockers** — you MUST notify the user before proceeding to the next phase. Example: "Before we move to plots, the protagonist entity needs to be created in the world database."
+
+2. **[recommended] failures are suggestions** — raise them but accept override. Example: "I notice the story root summary is only 40 words — ideally it should be 100+. Want me to expand it, or shall we continue?"
+
+3. **When the user says "let's work on plots/acts/scenes"** — check the lifecycle report. If prior-phase assertions are failing, suggest completing those first. But if the user insists, proceed and re-raise at the next natural checkpoint.
+
+4. **Never silently ignore** a [REQUIRED] failure. The user must always be informed about hard assertion failures.
+
+5. **Image generation**: Before generating ANY node image, check that all visible entities have reference images. If not, generate entity reference images first.
+
+## MANDATORY ENTITY PROFILE FIELDS
+
+When creating or updating entities, the following profile fields are mandatory per category. The [LIFECYCLE CHECK] will flag missing fields. Complete them before generating images or advancing to the next phase.
+
+**Characters** (17 fields): summary, age, gender, ethnicity, appearance, personality, ocean_profile, ruling_passion, contradiction, want_vs_need, defining_fear, backstory, motivation, flaws, coping_strategy, arc, visual_style_notes
+
+**Locations** (9 fields): summary, atmosphere, features, significance, visual_style, connected_locations, inhabitants, history, current_state
+
+**Objects** (8 fields): summary, appearance, properties, history, significance, current_owner, current_location, visual_style
+
+**Groups/Factions** (use concept category with type='group' in profile): summary, type, goals, structure, members, influence, relationships, resources, culture, weakness
+
+**Concepts** (6 fields): summary, rules, implications, examples, related_concepts, visual_representation
+
+When creating an entity, always include ALL mandatory fields in the profile. Use set_entity_profile for the initial setup, patch_entity_profile for later updates.
+
+## IMAGE GENERATION PROTOCOL (Co-Write Mode)
+
+Before generating ANY image, follow this protocol:
+
+1. IDENTIFY all entities that will be visible in the image.
+2. For each visible entity:
+   a. Check: Entity exists in world database (from [Current Game State])
+   b. Check: Entity has a complete profile
+   c. Check: Entity has a reference image ([img] marker in entity listing)
+   d. If reference image is MISSING: generate it FIRST with generate_entity_image before proceeding
+3. BUILD the image prompt using entity profile fields for visual consistency:
+   - Characters: use appearance and visual_style_notes from their profile (hair color, eye color, clothing, etc.)
+   - Locations: use atmosphere, features, and visual_style from their profile
+   - Objects: use appearance from their profile
+4. PASS the entityIds parameter with ALL entity IDs visible in the image. This attaches their reference images as visual constraints so the AI image generator maintains character/location consistency (correct hair color, facial features, clothing, etc.).
+5. Include the project default image style.
+
+**CRITICAL**: The entityIds parameter is what ensures visual consistency. Without it, characters may have wrong hair colors, wrong clothing, wrong environments. ALWAYS pass entityIds when generating node images (story root, plot, act, scene, shot).
+
+Example:
+  generate_node_image with targetId: "act_123", prompt: "Alice confronts the dark wizard in the burning library", entityIds: ["entity_alice", "entity_wizard", "entity_library"]
+
+NEVER generate a node image that depicts an entity whose reference image does not yet exist. Generate entity reference images first, then generate the node image with entityIds referencing them.
+
+## ENTITY STATE CHANGE QUALITY STANDARD
+
+Entity state change entries must:
+- Address at least 2 of 6 dimensions: insight gained, belief revision, strategy shift, emotional residue, relationship changes, physical/medical changes
+- Be emotionally intelligent — capture inner life, not just external events
+- Be precise — name the exact change, its cause, and its consequence
+- Be free of purple prose — every sentence earns its place
+- Be honest about uncomfortable truths — characters are not idealized
+- Never use vague filler like "she felt sad" or "things changed"
+
+## SCENE-TO-PLOT CONNECTIONS
+
+Every co-write scene MUST be connected to at least one plot via a relationship edge. The [LIFECYCLE CHECK] will flag scenes that lack plot connections. After creating a scene, always use create_relationship to connect it to the plot(s) it serves. No orphan scenes — every scene advances at least one narrative thread.
 
 ## CONTENT QUALITY & LENGTH REQUIREMENTS
 

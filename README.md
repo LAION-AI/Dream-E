@@ -21,6 +21,7 @@ Everything runs **locally in your browser**. No server, no cloud account, no dat
 - [How It Works](#how-it-works)
   - [The Block-Based Editor (Learn Programming)](#the-block-based-editor-learn-programming)
   - [Open World Mode (AI-Powered)](#open-world-mode-ai-powered)
+  - [Co-Writing Mode (AI-Assisted Story Development)](#co-writing-mode-ai-assisted-story-development)
 - [Tech Stack](#tech-stack)
 - [Prerequisites](#prerequisites)
 - [Installation & Startup](#installation--startup)
@@ -97,6 +98,7 @@ Dream-E bridges the gap between creative storytelling and programming education.
 | **Save/Load** | Multiple save slots per project with auto-save |
 | **Undo/Redo** | Full edit history with memory-optimized snapshots |
 | **Export/Import** | Download as `.dream-e.zip`, share with others, backup your work |
+| **Co-Writing Mode** | Structured story development with lifecycle assertions, entity tracking, and AI co-author |
 | **In-App Chat** | AI assistant that can modify your project via 56+ game state commands |
 | **Offline-First** | All data in browser IndexedDB — works without internet after first load |
 | **Memory Optimized** | Blob URL asset offloading, thumbnail caching, concurrent limits — handles 100+ scene projects |
@@ -152,6 +154,26 @@ The AI maintains consistency across hundreds of scenes by tracking:
 - Variable state (HP, reputation, inventory)
 - Story timeline with scene summaries
 - Character arcs and plot threads
+
+### Co-Writing Mode (AI-Assisted Story Development)
+
+Co-Writing Mode is a structured story development environment where an AI co-author guides you through building a complete narrative — from concept to scenes — using a rigorous lifecycle process:
+
+```
+Story Root → Plots → Acts/Episodes → Scenes → Shots (optional)
+```
+
+**Key features of Co-Writing Mode:**
+
+- **Lifecycle Assertion System**: Automated checks verify completeness at every phase — missing entity profiles, absent reference images, empty descriptions, disconnected scenes. The AI co-author is notified of gaps and suggests fixes before advancing.
+- **Entity State Tracking**: Every node (story root, plot, act, scene) tracks how characters, locations, and objects evolve via `entityStateChanges` — a dictionary mapping entity IDs to detailed change descriptions.
+- **Mandatory Entity Profiles**: Characters require 17 profile fields (appearance, personality, OCEAN profile, arc, etc.), locations require 9, objects require 8. The lifecycle system flags incomplete profiles.
+- **Visual Consistency Protocol**: When generating images for any node, entity reference images are attached as visual constraints via the `entityIds` parameter, ensuring characters maintain correct hair color, clothing, and features across all images.
+- **Phase Gates**: Before advancing from Story Root to Plots, Plots to Acts, or Acts to Scenes, the system verifies prerequisites are met (profiles complete, images generated, state changes recorded).
+- **Plot Connections**: Every scene must connect to at least one plot — no orphan scenes allowed. Act-plot relationships track which parts of each plot unfold in each act.
+- **Turning Points & Cliffhangers**: Acts have a dedicated `turningPoint` field (labelled "Cliffhanger" for episode-structure projects) that is separate from the description.
+
+The lifecycle specification is documented in detail in [`CO_WRITING_LIFECYCLE.md`](CO_WRITING_LIFECYCLE.md).
 
 ---
 
@@ -472,7 +494,9 @@ Dream-E/
 │   │   ├── ttsService.ts             # Chunked streaming TTS
 │   │   ├── aiChatService.ts          # In-app chat agent loop
 │   │   ├── gameStateAPI.ts           # 56+ game state commands
-│   │   └── gameStateAPI.registry.ts  # Command metadata & system prompt
+│   │   ├── gameStateAPI.registry.ts  # Command metadata & system prompt
+│   │   ├── gameStateAPI.context.ts   # Game state context builder
+│   │   └── lifecycleChecks.ts        # Co-write lifecycle assertions
 │   │
 │   ├── utils/                        # Utilities
 │   │   ├── blobCache.ts              # Asset offloading (base64 → blob URLs)

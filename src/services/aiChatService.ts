@@ -25,6 +25,7 @@
 import { executeCommand } from './gameStateAPI';
 import { generateSystemPrompt } from './gameStateAPI.registry';
 import { getGameContext } from './gameStateAPI.context';
+import { runLifecycleChecks } from './lifecycleChecks';
 import { useImageGenStore } from '@/stores/useImageGenStore';
 import { useProjectStore } from '@/stores/useProjectStore';
 
@@ -59,6 +60,17 @@ export function resetAgentContext() {
  */
 function buildUserMessage(userText: string): string {
   let msg = '[Current Game State]\n' + getGameContext() + '\n\n';
+
+  // For co-write projects: inject lifecycle assertion report so the agent
+  // is aware of missing fields, incomplete profiles, and gate requirements.
+  const project = useProjectStore.getState().currentProject;
+  if (project?.mode === 'cowrite') {
+    const report = runLifecycleChecks(project);
+    if (report.formattedContext) {
+      msg += report.formattedContext + '\n\n';
+    }
+  }
+
   msg += userText;
   return msg;
 }
@@ -79,7 +91,7 @@ function buildResultsMessage(
     'get_scene_details', 'get_entity_details', 'list_scenes', 'list_entities',
     'list_variables', 'search_music', 'get_music_track', 'list_music_genres',
     'get_story_root', 'list_plots', 'list_acts', 'list_relationships',
-    'list_cowrite_scenes',
+    'list_cowrite_scenes', 'get_lifecycle_status',
   ]);
 
   let msg = '[Command Execution Results]\n';

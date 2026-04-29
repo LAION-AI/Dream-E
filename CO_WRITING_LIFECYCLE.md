@@ -594,12 +594,22 @@ Before generating ANY image (node image, entity image, or story image):
 3. BUILD the image prompt:
    a. Include the scene/node context (what is happening)
    b. For each visible character: include `appearance` and `visual_style_notes` from profile
+      (hair color, eye color, build, clothing — verbatim from the profile)
    c. For each visible location: include `atmosphere`, `features`, and `visual_style` from profile
    d. For each visible object: include `appearance` from profile
    e. Include the project's `defaultImageStyle` setting
-   f. Include entity IDs so the API can attach reference images automatically
-4. GENERATE the image with all reference images attached
+4. PASS entityIds PARAMETER: The `generate_node_image` command accepts an `entityIds`
+   array — a list of entity IDs whose reference images will be attached as visual
+   constraints. This is CRITICAL for character consistency (correct hair color,
+   facial features, clothing, body type). Without entityIds, the image generator
+   only has text to work from and WILL produce inconsistent characters.
+5. GENERATE the image with entityIds attached — the API will automatically
+   include the reference images for visual consistency.
 ```
+
+**IMPORTANT**: The `entityIds` parameter is what prevents visual inconsistency bugs
+(e.g., a blonde character rendered with black hair). The text prompt alone is not
+sufficient — the reference images provide the ground truth for how characters look.
 
 ### 8.2 Entity Reference Image Triggers
 
