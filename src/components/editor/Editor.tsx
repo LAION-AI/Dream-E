@@ -100,6 +100,8 @@ import NotesEditor from '../notes/NotesEditor';
 import { AISettingsModal } from '../settings/AISettingsModal';
 import ChatWindow from '../chat/ChatWindow';
 import VideoExporter from '../player/VideoExporter';
+import { useTranslation } from '@/i18n/useTranslation';
+import type { Language } from '@/i18n/translations';
 
 // Import custom node components
 import SceneNodeComponent from '../nodes/SceneNode';
@@ -161,6 +163,20 @@ const nodeTypes: NodeTypes = {
 const STORY_NODE_TYPES = new Set(['scene', 'comment', 'storyRoot', 'plot', 'act', 'cowriteScene', 'shot']);
 const CHARACTER_NODE_TYPES = new Set(['character']);
 
+/** Compact language switcher for the top bar. Toggles between EN and DE. */
+function LanguageSwitcher() {
+  const { language, setLanguage } = useTranslation();
+  return (
+    <button
+      onClick={() => setLanguage(language === 'en' ? 'de' : 'en')}
+      className="px-2 py-1 rounded text-xs font-bold border border-editor-border text-editor-muted hover:text-editor-text hover:bg-editor-border transition-colors"
+      title={language === 'en' ? 'Auf Deutsch umschalten' : 'Switch to English'}
+    >
+      {language === 'en' ? 'DE' : 'EN'}
+    </button>
+  );
+}
+
 /**
  * EDITOR WRAPPER
  * Provides ReactFlowProvider context so the inner component can use useReactFlow().
@@ -183,6 +199,7 @@ function EditorInner() {
   const location = useLocation();
   // Detect if we're under the /cowrite route prefix to navigate back correctly.
   const isCowriteMode = location.pathname.startsWith('/cowrite');
+  const { t } = useTranslation();
 
   // ── R1 FIX: GRANULAR SELECTORS ──
   // Instead of selecting the entire project (which triggers re-render on ANY
@@ -1474,7 +1491,7 @@ function EditorInner() {
             leftIcon={<Database size={16} />}
             onClick={() => setIsVariableManagerOpen(true)}
           >
-            Variables
+            {t('topbar.variables')}
           </Button>
 
           {/* Assets */}
@@ -1484,7 +1501,7 @@ function EditorInner() {
             leftIcon={<ImageIcon size={16} />}
             onClick={() => setIsAssetManagerOpen(true)}
           >
-            Assets
+            {t('topbar.assets')}
           </Button>
 
           {/* World Building Dropdown */}
@@ -1495,15 +1512,15 @@ function EditorInner() {
               leftIcon={<BookOpen size={16} />}
               onClick={() => setIsWorldMenuOpen(!isWorldMenuOpen)}
             >
-              World
+              {t('topbar.world')}
             </Button>
             {isWorldMenuOpen && (
               <div className="absolute top-full right-0 mt-1 w-48 bg-editor-surface border border-editor-border rounded-lg shadow-xl z-50 py-1">
                 {([
-                  { category: 'character' as const, icon: Users, label: 'Characters' },
-                  { category: 'location' as const, icon: MapPin, label: 'Locations' },
-                  { category: 'object' as const, icon: Package, label: 'Objects' },
-                  { category: 'concept' as const, icon: Lightbulb, label: 'Game Concepts' },
+                  { category: 'character' as const, icon: Users, label: t('world.characters') },
+                  { category: 'location' as const, icon: MapPin, label: t('world.locations') },
+                  { category: 'object' as const, icon: Package, label: t('world.objects') },
+                  { category: 'concept' as const, icon: Lightbulb, label: t('world.concepts') },
                 ]).map(({ category, icon: ItemIcon, label }) => (
                   <button
                     key={category}
@@ -1527,9 +1544,9 @@ function EditorInner() {
             size="sm"
             leftIcon={<MessageCircle size={16} />}
             onClick={() => setIsChatOpen(true)}
-            title="Open Chat (Ctrl+Shift+C)"
+            title={t('toolbar.chat') + ' (Ctrl+Shift+C)'}
           >
-            Chat
+            {t('topbar.chat')}
           </Button>
 
           {/* Notes */}
@@ -1539,7 +1556,7 @@ function EditorInner() {
             leftIcon={<StickyNote size={16} />}
             onClick={() => setIsNotesOpen(true)}
           >
-            Notes
+            {t('topbar.notes')}
           </Button>
 
           {/* AI Settings */}
@@ -1549,8 +1566,11 @@ function EditorInner() {
             leftIcon={<Settings size={16} />}
             onClick={() => setIsAISettingsOpen(true)}
           >
-            AI
+            {t('topbar.settings')}
           </Button>
+
+          {/* Language Switcher */}
+          <LanguageSwitcher />
 
           {/* Help */}
           <Button
@@ -1559,7 +1579,7 @@ function EditorInner() {
             leftIcon={<HelpCircle size={16} />}
             onClick={() => setIsHelpOpen(true)}
           >
-            Help
+            {t('topbar.help')}
           </Button>
 
           <div className="w-px h-6 bg-editor-border mx-2" />
@@ -1572,7 +1592,7 @@ function EditorInner() {
             disabled={pendingUploads > 0}
             onClick={saveProject}
           >
-            {pendingUploads > 0 ? 'Uploading...' : 'Save'}
+            {pendingUploads > 0 ? t('topbar.saving') : t('topbar.save')}
           </Button>
 
           {/* Save As (Export) */}

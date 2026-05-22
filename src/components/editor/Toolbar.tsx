@@ -25,7 +25,7 @@
  * =============================================================================
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Film,
   GitBranch,
@@ -46,6 +46,7 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
+import { useTranslation } from '@/i18n/useTranslation';
 
 /**
  * NODE TYPE DEFINITION
@@ -275,6 +276,15 @@ export default function Toolbar({
   hidePlots = false,
   onTogglePlots,
 }: ToolbarProps) {
+  const { t, language } = useTranslation();
+
+  /** Translate node type labels/descriptions based on current language */
+  const translateNode = (n: NodeTypeInfo): NodeTypeInfo => ({
+    ...n,
+    label: t(`toolbar.${n.type}`) !== `toolbar.${n.type}` ? t(`toolbar.${n.type}`) : n.label,
+    description: t(`toolbar.${n.type}.desc`) !== `toolbar.${n.type}.desc` ? t(`toolbar.${n.type}.desc`) : n.description,
+  });
+
   /**
    * Handle drag start
    * Sets the node type data for the drop handler.
@@ -314,6 +324,9 @@ export default function Toolbar({
       : cowriteStoryExtraTypes;
     visibleNodeTypes = [...storyBaseTypes, ...extras];
   }
+
+  // Apply translations to node labels and descriptions
+  visibleNodeTypes = visibleNodeTypes.map(translateNode);
 
   return (
     <aside className="w-toolbar bg-editor-surface border-r border-editor-border flex flex-col py-4 gap-2">
@@ -543,10 +556,10 @@ export default function Toolbar({
         </div>
       )}
 
-      {/* Chat toggle button — shown in co-write mode so the author can open
-       * the AI chat panel from the toolbar without reaching for Ctrl+Shift+C.
+      {/* Chat toggle button — opens the AI chat panel from the toolbar.
+       * Available in both game and co-write modes.
        * Highlighted when the chat panel is currently open. */}
-      {isCowriteMode && onChatToggle && (
+      {onChatToggle && (
         <div className="mx-2">
           <button
             onClick={onChatToggle}
@@ -568,7 +581,7 @@ export default function Toolbar({
       {/* Help text at bottom */}
       <div className="px-2 text-center">
         <p className="text-xs text-editor-muted">
-          Drag to canvas
+          {t('toolbar.drag')}
         </p>
       </div>
     </aside>

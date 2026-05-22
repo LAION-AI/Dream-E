@@ -8,9 +8,9 @@ Dream-E is two things at once:
 
 2. **An open-world visual novel engine** powered by AI (Google Gemini, OpenAI, or any compatible LLM) that generates scenes, images, music, and voiceover dynamically based on player choices — creating infinite, open-ended narratives that never run out of content.
 
-Everything runs **locally in your browser**. No server, no cloud account, no data collection. Your projects are stored in the browser's IndexedDB and never leave your machine.
+Dream-E runs as a **self-hosted web application** with a built-in Express server. Projects are stored server-side in SQLite. Multi-user support with Google OAuth, admin panel for managing users and AI provider configuration, and per-user quotas.
 
-**No external tools required** — just `npm install`, `npm run dev`, and configure your API keys in the AI Settings panel. Dream-E ships as a standalone Vite + React app with a built-in API middleware layer. All AI calls (image gen, TTS, LLM) go directly to provider APIs from the dev server. No Claude Code, no CLI dependencies, no third-party backends.
+**Quick start**: `npm install`, set your admin email, `npm run dev`, and configure AI providers in the admin panel (`/admin`). Dream-E ships with a Vite + React frontend and an Express API backend. All AI calls (image gen, TTS, LLM, ASR) are proxied through the server using admin-configured API keys — users never see or handle API credentials.
 
 ---
 
@@ -186,16 +186,27 @@ The lifecycle specification is documented in detail in [`CO_WRITING_LIFECYCLE.md
 | [Vite](https://vitejs.dev) 5 | Build tool & dev server |
 | [React Flow (@xyflow/react)](https://reactflow.dev) 12 | Visual node editor canvas |
 | [Zustand](https://zustand-demo.pmnd.rs) 4 + Immer | State management with immutable updates |
-| [Dexie.js](https://dexie.org) 3 | IndexedDB wrapper (local database) |
+| [Dexie.js](https://dexie.org) 3 | IndexedDB wrapper (client-side cache) |
 | [Tailwind CSS](https://tailwindcss.com) 3 | Utility-first styling |
 | [Howler.js](https://howlerjs.com) 2 | Cross-browser audio playback |
 | [Lucide React](https://lucide.dev) | Icon library |
 | [JSZip](https://stuk.github.io/jszip/) | Project export/import |
 
-**AI Providers (optional, configured in-app):**
+**Server-Side:**
+
+| Technology | Purpose |
+|---|---|
+| [Express](https://expressjs.com) 4 | REST API server (embedded in Vite dev server) |
+| [sql.js](https://sql.js.org) | SQLite database (users, projects, config, usage) |
+| [bcryptjs](https://github.com/dcodeIO/bcrypt.js) | Password hashing |
+| [jsonwebtoken](https://github.com/auth0/node-jsonwebtoken) | JWT access tokens |
+| [uuid](https://github.com/uuidjs/uuid) | Unique ID generation |
+
+**AI Providers (configured in admin panel):**
 
 | Provider | Used For | API |
 |---|---|---|
+| [HyprLab](https://hyprlab.io) | LLM, Image gen, TTS, ASR (default) | api.hyprlab.io |
 | [Black Forest Labs](https://bfl.ai) | Image generation (FLUX 2) | api.bfl.ai |
 | [Google Gemini](https://aistudio.google.com) | Image gen, TTS, Writer LLM, ASR | Generative Language API |
 | Any OpenAI-compatible | Writer LLM, Image gen | /chat/completions, /images/generations |
@@ -221,44 +232,53 @@ npm --version    # Should be 9.x.x or higher
 
 ## Installation & Startup
 
-### Windows
+### Quick Start (All Platforms)
+
+```bash
+# 1. Clone and install
+git clone https://github.com/LAION-AI/Dream-E.git
+cd Dream-E
+npm install
+
+# 2. Start the server with your admin email
+# Replace with the email you'll use to log in (Google OAuth or local account)
+DREAME_ADMIN_EMAIL=your@email.com npm run dev
+```
+
+The app opens at **http://localhost:5173**.
+
+### First-Time Setup
+
+1. **Register or log in** — create an account with the email you set as `DREAME_ADMIN_EMAIL`
+2. **Open the Admin Panel** at `http://localhost:5173/admin`
+3. **Configure AI providers** in the "AI Config" tab:
+   - Set your API keys for image generation, LLM, TTS, and ASR
+   - Default provider is HyprLab (`api.hyprlab.io`) — works with FLUX 2, Gemini models, Whisper
+   - You can also use direct Google Gemini, BFL, or any OpenAI-compatible API
+4. **Manage users** in the "Users" tab — set quotas, promote admins, activate/deactivate accounts
+
+### Environment Variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `DREAME_ADMIN_EMAIL` | Email auto-promoted to admin on registration | (none) |
+| `PORT` | Server port | 5173 |
+| `DREAME_MASTER_KEY` | Encryption key for stored API keys (auto-generated if missing) | random |
+
+### Windows (PowerShell)
 
 ```powershell
-# Navigate to the project
-cd path\to\Dream-E
-
-# Install dependencies (first time only)
-npm install
-
-# Start the development server
+$env:DREAME_ADMIN_EMAIL="your@email.com"
 npm run dev
 ```
 
-### Ubuntu / Linux / WSL
+### Linux / macOS
 
 ```bash
-cd /path/to/Dream-E
-
-# Install dependencies
-npm install
-
-# Start the development server
-npm run dev
+DREAME_ADMIN_EMAIL=your@email.com npm run dev
 ```
 
-### macOS
-
-```bash
-cd ~/path/to/Dream-E
-
-# Install dependencies
-npm install
-
-# Start the development server
-npm run dev
-```
-
-The app opens at **http://localhost:5173** with hot module replacement — code changes appear instantly.
+The admin panel is at `/admin`. Only users whose email matches `DREAME_ADMIN_EMAIL` (or who have been manually promoted) can access it.
 
 Press **Ctrl+C** to stop the server.
 
@@ -266,42 +286,36 @@ Press **Ctrl+C** to stop the server.
 
 ## AI Configuration
 
-All AI features are optional and configured through the **AI Settings** panel (gear icon in the editor toolbar). You need API keys from the respective providers.
+All AI features are configured through the **Admin Panel** (`/admin` → AI Config tab). API keys are stored encrypted server-side — users never see or handle them. Regular users see a read-only summary of the active configuration in the AI Settings modal (gear icon).
 
-### Image Generation
+### Admin Panel — AI Config Tabs
 
-Dream-E supports three image generation providers. Select one from the **Provider** dropdown in AI Settings:
-
-| Provider | Models | Reference Images | API Key |
-|---|---|---|---|
-| **Black Forest Labs** | FLUX 2 Pro, FLUX 2 Max, FLUX 2 Flex, FLUX 2 Klein | Up to 8 ref images (FLUX 2) | [api.bfl.ai](https://api.bfl.ai) |
-| **Google Gemini** | Nano Banana 2, Nano Banana Pro, Imagen 3.0 | Inline reference images | [aistudio.google.com](https://aistudio.google.com) |
-| **OpenAI-Compatible** | DALL-E 3, DALL-E 2, or any compatible API | Varies by provider | Provider-specific |
-
-A green indicator shows which provider and model is currently active.
-
-**Default image style**: All generated images use the style prompt configured in AI Settings. The default produces cinematic, movie-quality scene images.
-
-**Entity reference images**: When entities (characters, locations) have reference portraits, these are sent to the image generation API for visual consistency. FLUX 2 models accept up to 8 reference images; Gemini includes them as inline context.
-
-### Story Writer (LLM)
-
-The Open World writer generates scene text, choices, and world state updates. Configure in AI Settings under "Story Writer":
-
-| Provider | Default Model | Notes |
+| Tab | Config Keys | What It Controls |
 |---|---|---|
-| **Google Gemini** | gemini-3-flash-preview | Uses your Google API key, supports up to ~1M token context |
-| **OpenAI-Compatible** | gpt-4o | Any /chat/completions endpoint (OpenAI, Anthropic, local LLMs) |
+| **Image Generation** | Provider, model, API key, endpoint | Scene backgrounds, entity portraits |
+| **LLM / Writer** | Provider, model, API key, endpoint | Chat agent, Open World writer |
+| **TTS** | Model, API key, endpoint, voice | Voiceover narration |
+| **ASR** | Model, API key, endpoint | Speech-to-text (Whisper) |
+| **Defaults** | Default image style | Style appended to all image prompts |
 
-The system prompt and continuation instruction are fully editable.
+### Supported Providers
 
-### Text-to-Speech
+| Provider | LLM | Images | TTS | ASR | Endpoint |
+|---|---|---|---|---|---|
+| **HyprLab** (default) | gemini-3-flash, gpt-4o | flux-2-pro, nano-banana-2 | gemini-3.1-flash-tts | whisper-1 | api.hyprlab.io |
+| **Google Gemini** | gemini-3-flash, gemini-2.5-pro | imagen-3.0 | gemini-2.5-flash-preview-tts | — | generativelanguage.googleapis.com |
+| **BFL** | — | flux-2-pro, flux-2-max | — | — | api.bfl.ai |
+| **OpenAI-Compatible** | gpt-4o, any model | dall-e-3 | — | whisper-1 | Any /v1 endpoint |
 
-Gemini TTS generates voiceover narration for every scene. Voices: Zephyr, Puck, Charon, Kore, Fenrir, Aoede, Leda, Orus, Perseus. Requires a Google API key.
+All model fields are editable dropdown+text combos — select from presets or type a custom model name.
 
-### Voice Input (ASR)
+### User Quotas
 
-Speak your player actions instead of typing. Uses Gemini's multimodal audio understanding. Select your microphone and test it in AI Settings.
+Admins can set per-user daily limits for each AI service:
+- **LLM tokens**: Daily token budget for chat and Open World
+- **Images**: Daily image generation count
+- **TTS seconds**: Daily text-to-speech audio seconds
+- **Max projects**: Maximum number of projects per user
 
 ---
 
@@ -398,6 +412,44 @@ Music is fully optional. If the music server is not running, Dream-E works norma
 
 ---
 
+## Server Architecture
+
+Dream-E uses an Express server embedded in the Vite dev server, mounted at `/api/v2`:
+
+```
+/api/v2/
+├── auth/           — Register, login, Google OAuth, token refresh
+│   ├── POST /register
+│   ├── POST /login
+│   ├── POST /google
+│   └── POST /refresh
+├── projects/       — CRUD for projects (per-user)
+├── assets/         — Binary asset storage (images, audio)
+├── ai/             — AI service proxies (all use admin-configured keys)
+│   ├── POST /chat              — Editor chat agent (SSE streaming, stateful)
+│   ├── POST /open-world        — Open World scene gen (SSE streaming, stateless)
+│   ├── POST /generate-image    — Image generation
+│   ├── POST /generate-tts      — Text-to-speech
+│   ├── POST /transcribe-audio  — Speech-to-text (Whisper)
+│   ├── POST /config/test       — Test API connection
+│   └── GET  /config            — Public config (no secrets)
+├── admin/          — Admin panel APIs (admin-only)
+│   ├── GET/PATCH /users/:id/limits
+│   ├── PUT /config             — Set AI config (encrypts secrets)
+│   ├── GET /config             — Read config (masks secrets)
+│   ├── GET /stats              — System statistics
+│   └── GET /usage              — Usage analytics
+└── exports/        — Temporary ZIP downloads
+```
+
+**Database**: SQLite via sql.js (`server-data/dream-e.db`). Tables: `users`, `user_limits`, `projects`, `assets`, `admin_config`, `usage_log`.
+
+**Authentication**: JWT access tokens (short-lived) + httpOnly refresh token cookies. Google OAuth supported.
+
+**API Key Security**: All AI API keys are stored AES-256-GCM encrypted in `admin_config`. They never reach the browser. The master encryption key is auto-generated on first run and stored in `server-data/master.key`.
+
+---
+
 ## Running a Production Build
 
 ```bash
@@ -482,7 +534,13 @@ Dream-E/
 │   │   ├── useProjectStore.ts        # Project data, undo/redo, auto-save
 │   │   ├── useEditorStore.ts         # Editor UI state, panels, clipboard
 │   │   ├── usePlayerStore.ts         # Game runtime, saves, audio
-│   │   └── useImageGenStore.ts       # AI settings (image, TTS, writer, ASR)
+│   │   ├── useImageGenStore.ts       # Legacy AI settings (being migrated to server)
+│   │   ├── useAuthStore.ts           # Authentication state (JWT, user info)
+│   │   └── useAdminStore.ts          # Admin panel state (users, config, usage)
+│   │
+│   ├── i18n/                         # Internationalization (EN/DE)
+│   │   ├── translations.ts           # ~200 translation keys per language
+│   │   └── useTranslation.ts         # React hook + Zustand language store
 │   │
 │   ├── db/                           # IndexedDB persistence (Dexie.js)
 │   │   ├── database.ts               # Schema and migrations
@@ -514,17 +572,40 @@ Dream-E/
 │       ├── variables/                # Variable manager modal
 │       ├── entities/                 # Entity editor (characters, locations, etc.)
 │       ├── notes/                    # Project notes editor
-│       ├── settings/                 # AI Settings modal
+│       ├── settings/                 # AI Settings modal (read-only for users)
+│       ├── admin/                    # Admin panel (users, AI config, usage)
+│       │   ├── AdminDashboard.tsx    # System stats overview
+│       │   ├── AdminUsers.tsx        # User management + inline editing
+│       │   ├── AdminConfig.tsx       # AI provider configuration
+│       │   └── AdminUsage.tsx        # Usage analytics
+│       ├── auth/                     # Login / Register pages
 │       └── player/                   # Adventure Engine (game runtime)
 │           ├── AdventureEngine.tsx    # Main game loop, OW mode, scene transitions
 │           ├── DialogBox.tsx          # Typewriter text display
 │           ├── HUD.tsx               # Health bars, stats, floating numbers
 │           └── OpenWorldInput.tsx     # Player action input (text + voice)
 │
+├── server/                           # Express API server
+│   ├── index.cjs                     # Server app factory
+│   ├── db.cjs                        # SQLite database (sql.js)
+│   ├── auth/                         # Auth routes + middleware + Google OAuth
+│   ├── projects/                     # Project CRUD routes
+│   ├── assets/                       # Binary asset storage routes
+│   ├── ai/                           # AI proxy routes (image, chat, TTS, ASR, OW)
+│   │   ├── routes.cjs                # All AI endpoints
+│   │   ├── quotaCheck.cjs            # Per-user rate limiting
+│   │   └── usageLogger.cjs           # Usage tracking
+│   ├── admin/                        # Admin panel routes
+│   └── utils/crypto.cjs              # AES-256-GCM encryption for API keys
+│
+├── server-data/                      # Runtime data (gitignored)
+│   ├── dream-e.db                    # SQLite database file
+│   └── master.key                    # Encryption master key
+│
 ├── docs/                             # HTML documentation
 ├── public/                           # Static assets
 ├── index.html                        # HTML entry point
-├── vite.config.ts                    # Vite config + API middleware
+├── vite.config.ts                    # Vite config + server middleware mount
 ├── tailwind.config.js                # Design system tokens
 ├── package.json                      # Dependencies and scripts
 └── README.md                         # This file

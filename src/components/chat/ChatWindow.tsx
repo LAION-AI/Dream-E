@@ -31,6 +31,7 @@ import { useProjectStore } from '@/stores/useProjectStore';
 import { useImageGenStore } from '@/stores/useImageGenStore';
 import { generateId } from '@/utils/idGenerator';
 import { sendChatMessage, resetAgentContext } from '@/services/aiChatService';
+import { authFetch } from '@services/authService';
 import type { ChatMessage } from '@/types';
 
 // =============================================================================
@@ -107,33 +108,45 @@ export default function ChatWindow({ isOpen, onClose, panelMode = false }: ChatW
   const streamRef = useRef<MediaStream | null>(null);
 
   // ---------------------------------------------------------------------------
-  // Check if writer API is configured when the chat opens
+  // Check if writer API is configured by querying the server's AI config
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!isOpen) return;
 
-    const settings = useImageGenStore.getState();
-    const writer = settings.writer;
-    // For gemini provider, the shared googleApiKey can be used
-    const apiKey = writer.provider === 'gemini'
-      ? (writer.apiKey || settings.googleApiKey)
-      : writer.apiKey;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/v2/ai/config');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (cancelled) return;
 
-    if (apiKey && writer.model) {
-      setCliStatus({
-        available: true,
-        version: `${writer.provider} — ${writer.model}`,
-        error: null,
-        checked: true,
-      });
-    } else {
-      setCliStatus({
-        available: false,
-        version: '',
-        error: 'No API key configured. Set it in AI Settings (gear icon).',
-        checked: true,
-      });
-    }
+        if (data.hasLlmKey && data.llmModel) {
+          setCliStatus({
+            available: true,
+            version: `${data.llmProvider} — ${data.llmModel}`,
+            error: null,
+            checked: true,
+          });
+        } else {
+          setCliStatus({
+            available: false,
+            version: '',
+            error: 'LLM not configured. Ask your admin to set an API key in the admin panel.',
+            checked: true,
+          });
+        }
+      } catch {
+        if (cancelled) return;
+        setCliStatus({
+          available: false,
+          version: '',
+          error: 'Could not check AI configuration. Try refreshing.',
+          checked: true,
+        });
+      }
+    })();
+    return () => { cancelled = true; };
   }, [isOpen]);
 
   // ---------------------------------------------------------------------------

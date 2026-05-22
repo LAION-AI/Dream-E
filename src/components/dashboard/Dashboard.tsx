@@ -54,6 +54,22 @@ import { Button, Modal } from '@components/common';
 import { useAuthStore } from '@stores/useAuthStore';
 import * as authService from '@services/authService';
 import * as syncService from '@services/syncService';
+import { useTranslation } from '@/i18n/useTranslation';
+import type { Language } from '@/i18n/translations';
+
+/** Compact language switcher for the Dashboard header. */
+function DashboardLanguageSwitcher() {
+  const { language, setLanguage } = useTranslation();
+  return (
+    <button
+      onClick={() => setLanguage(language === 'en' ? 'de' : 'en')}
+      className="px-2 py-1 rounded text-xs font-bold border border-editor-border text-editor-muted hover:text-editor-text hover:bg-editor-surface transition-colors"
+      title={language === 'en' ? 'Auf Deutsch umschalten' : 'Switch to English'}
+    >
+      {language === 'en' ? 'DE' : 'EN'}
+    </button>
+  );
+}
 
 /**
  * BACKUP SUMMARY TYPE
@@ -476,6 +492,7 @@ export default function Dashboard({ mode }: DashboardProps) {
                 {(authUser?.displayName || authUser?.email || 'U').charAt(0).toUpperCase()}
               </span>
             </div>
+            <DashboardLanguageSwitcher />
             <button
               onClick={handleLogout}
               className="text-editor-muted hover:text-editor-text"

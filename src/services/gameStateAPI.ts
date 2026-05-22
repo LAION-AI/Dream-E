@@ -24,6 +24,7 @@ import { COMMANDS } from './gameStateAPI.registry';
 import { runLifecycleChecks } from './lifecycleChecks';
 import { useImageGenStore } from '@/stores/useImageGenStore';
 import { blobUrlToBase64 } from '@/utils/blobCache';
+import { authFetch } from '@services/authService';
 
 // =============================================================================
 // TYPES
@@ -692,18 +693,15 @@ const handleGenerateSceneImage: CommandHandler = async (params, _store, project)
   const styleTag = useImageGenStore.getState().defaultImageStyle?.trim();
   const prompt = styleTag ? `${rawPrompt}. Style: ${styleTag}` : rawPrompt;
 
-  // For Gemini, include entity reference images for visual consistency
-  const settings = getImageGenSettings();
-  const referenceImages = settings.provider === 'gemini'
-    ? await getSceneReferenceImages(project, sceneId)
-    : [];
+  // Include entity reference images for visual consistency
+  const referenceImages = await getSceneReferenceImages(project, sceneId);
 
-  const res = await fetch('/api/generate-image', {
+  const res = await authFetch('/api/v2/ai/generate-image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       prompt, width: (params.width as number) || 1280, height: (params.height as number) || 720,
-      ...settings, referenceImages,
+      referenceImages,
     }),
   });
   const data = await res.json();
@@ -725,12 +723,11 @@ const handleGenerateEntityImage: CommandHandler = async (params, _store, project
   const styleTag = useImageGenStore.getState().defaultImageStyle?.trim();
   const prompt = styleTag ? `${rawPrompt}. Style: ${styleTag}` : rawPrompt;
 
-  const res = await fetch('/api/generate-image', {
+  const res = await authFetch('/api/v2/ai/generate-image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       prompt, width: (params.width as number) || 512, height: (params.height as number) || 512,
-      ...getImageGenSettings(),
     }),
   });
   const data = await res.json();
@@ -2087,17 +2084,14 @@ const handleGenerateNodeImage: CommandHandler = async (params, _store, project) 
     }
   }
 
-  const settings = getImageGenSettings();
-  const res = await fetch('/api/generate-image', {
+  const res = await authFetch('/api/v2/ai/generate-image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       prompt,
       width: (params.width as number) || 512,
       height: (params.height as number) || 512,
-      ...settings,
-      // Only include reference images for Gemini provider (which supports them)
-      ...(settings.provider === 'gemini' && referenceImages.length > 0 ? { referenceImages } : {}),
+      referenceImages,
     }),
   });
   const data = await res.json();

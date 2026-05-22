@@ -18,6 +18,7 @@
 import { buildOpenWorldContext } from './openWorldContext';
 import { useImageGenStore } from '@/stores/useImageGenStore';
 import { blobUrlToBase64, registerBlob } from '@/utils/blobCache';
+import { authFetch } from '@services/authService';
 import type { Project, Entity } from '@/types';
 import type { GameSession } from '@/types';
 
@@ -309,23 +310,13 @@ async function generateImage(
     });
 
     try {
-      const res = await fetch('/api/generate-image', {
+      const res = await authFetch('/api/v2/ai/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: attempt === 1 ? fullPrompt : simplifyPrompt(fullPrompt, attempt),
           width: 1280,
           height: 720,
-          provider: settings.provider,
-          apiKey: settings.apiKey,
-          model: settings.model,
-          endpoint: settings.endpoint,
-          googleApiKey: settings.googleApiKey,
-          geminiImageModel: settings.geminiImageModel,
-          // Pass reference images to ALL providers:
-          // - Gemini: sent as inlineData parts
-          // - BFL FLUX 2: sent as input_image, input_image_2, ... input_image_8
-          // - BFL FLUX 1.x: sent as image_prompt (single image only)
           referenceImages,
         }),
       });
@@ -523,32 +514,18 @@ async function streamOpenWorldResponse(
   entityRefImages: Array<{ entityId: string; entityName: string; base64: string }> = [],
   userUploadedImages: Array<{ base64: string; label: string }> = []
 ): Promise<string> {
-  const settings = useImageGenStore.getState();
-  const writer = settings.writer;
-
-  // Resolve API key: for gemini provider, use shared googleApiKey if writer.apiKey is empty
-  const apiKey = writer.provider === 'gemini'
-    ? (writer.apiKey || settings.googleApiKey)
-    : writer.apiKey;
-
-  const res = await fetch('/api/open-world', {
+  // Use the server-side /api/v2/ai/open-world endpoint which reads
+  // LLM config (provider, model, API key) from admin_config.
+  // Entity reference images and user-uploaded images are passed to the server
+  // for Gemini-compatible providers that support multimodal input.
+  const res = await authFetch('/api/v2/ai/open-world', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       systemPrompt,
       userMessage,
-      provider: writer.provider,
-      model: writer.model,
-      apiKey,
-      endpoint: writer.endpoint,
-      // Entity reference images for Gemini multimodal — allows the writing
-      // LLM to SEE what characters/locations look like when generating
-      // scene descriptions and imagePrompts for visual consistency.
-      entityRefImages: writer.provider === 'gemini' ? entityRefImages : [],
-      // User-uploaded images attached to the player's action input.
-      // These are passed as multimodal parts so the AI can see them and
-      // potentially assign them to entities via assignUploadedImages.
-      userUploadedImages: writer.provider === 'gemini' ? userUploadedImages : [],
+      entityRefImages,
+      userUploadedImages,
     }),
     signal,
   });
@@ -937,19 +914,13 @@ export function generateOpenWorldScene(
                 const refImgsForPortrait: string[] = [];
                 if (styleRefBase64) refImgsForPortrait.push(styleRefBase64);
 
-                const res = await fetch('/api/generate-image', {
+                const res = await authFetch('/api/v2/ai/generate-image', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     prompt: fullPrompt,
                     width: 512,
                     height: 512,
-                    provider: imgSettings.provider,
-                    apiKey: imgSettings.apiKey,
-                    model: imgSettings.model,
-                    endpoint: imgSettings.endpoint,
-                    googleApiKey: imgSettings.googleApiKey,
-                    geminiImageModel: imgSettings.geminiImageModel,
                     referenceImages: refImgsForPortrait,
                   }),
                 });

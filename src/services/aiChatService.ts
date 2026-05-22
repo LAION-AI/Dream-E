@@ -26,8 +26,8 @@ import { executeCommand } from './gameStateAPI';
 import { generateSystemPrompt } from './gameStateAPI.registry';
 import { getGameContext } from './gameStateAPI.context';
 import { runLifecycleChecks } from './lifecycleChecks';
-import { useImageGenStore } from '@/stores/useImageGenStore';
 import { useProjectStore } from '@/stores/useProjectStore';
+import { authFetch } from '@services/authService';
 
 // =============================================================================
 // CONSTANTS
@@ -47,7 +47,7 @@ const MAX_ITERATIONS = 10;
 
 /** Call this when the user clears chat — resets both local and server-side state */
 export function resetAgentContext() {
-  fetch('/api/chat-reset', { method: 'POST' }).catch(() => {});
+  authFetch('/api/v2/ai/chat-reset', { method: 'POST' }).catch(() => {});
 }
 
 // =============================================================================
@@ -72,6 +72,12 @@ function buildUserMessage(userText: string): string {
   }
 
   msg += userText;
+
+  // Append a command-format reminder to every user message.
+  // This ensures the model uses actual command blocks (not just narrative)
+  // even if the system prompt was set in an older session.
+  msg += '\n\n[IMPORTANT REMINDER: To modify the game, you MUST output command blocks in this EXACT format:\n<<<SW_CMD:action_name>>>\n{"param": "value"}\n<<</SW_CMD>>>\nDo NOT just describe or narrate changes. Without command blocks, NOTHING actually changes in the project. Always use create_scene, connect_scenes, generate_node_image etc. as command blocks.]';
+
   return msg;
 }
 
@@ -135,7 +141,8 @@ function parseCommands(
       (_match, action: string, json: string) => {
         try {
           commands.push({ action, params: JSON.parse(json.trim()) });
-        } catch {
+        } catch (e) {
+          console.warn('[Chat] Failed to parse SW_CMD JSON for', action, ':', e);
           return _match;
         }
         return '';
@@ -143,6 +150,14 @@ function parseCommands(
     )
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  if (commands.length > 0) {
+    console.log(`[Chat] Parsed ${commands.length} command(s):`, commands.map(c => c.action));
+  } else {
+    // Log first 200 chars to help debug if the model is not emitting commands
+    console.log('[Chat] No commands found in response. First 200 chars:', text.slice(0, 200));
+  }
+
   return { cleanText, commands };
 }
 
@@ -160,29 +175,19 @@ async function streamOneMessage(
   signal: AbortSignal,
   onTextDelta: (text: string) => void
 ): Promise<string> {
-  const settings = useImageGenStore.getState();
-  const writer = settings.writer;
-
-  // Resolve API key: for gemini provider, use shared googleApiKey if writer.apiKey is empty
-  const apiKey = writer.provider === 'gemini'
-    ? (writer.apiKey || settings.googleApiKey)
-    : writer.apiKey;
-
   // Pass the project mode so co-write projects get a completely different
   // system prompt (writing teacher mode, no game-mode scene creation).
   const projectMode = useProjectStore.getState().currentProject?.mode || 'game';
   const systemPrompt = generateSystemPrompt(projectMode as 'game' | 'cowrite');
 
-  const res = await fetch('/api/chat', {
+  // Use the server's /api/v2/ai/chat endpoint which reads LLM config
+  // (provider, model, API key) from admin_config — no client-side keys needed.
+  const res = await authFetch('/api/v2/ai/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       message,
       systemPrompt,
-      provider: writer.provider,
-      model: writer.model,
-      apiKey,
-      endpoint: writer.endpoint,
     }),
     signal,
   });

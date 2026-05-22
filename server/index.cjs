@@ -39,7 +39,10 @@ const path = require('path');
 const authRoutes = require('./auth/routes.cjs');
 const projectRoutes = require('./projects/routes.cjs');
 const assetRoutes = require('./assets/routes.cjs');
+const aiRoutes = require('./ai/routes.cjs');
+const adminRoutes = require('./admin/routes.cjs');
 const { requireAuth } = require('./auth/middleware.cjs');
+const { requireAdmin } = require('./admin/middleware.cjs');
 const { getDb, saveDb, EXPORTS_DIR } = require('./db.cjs');
 
 // ---------------------------------------------------------------------------
@@ -224,6 +227,15 @@ function createServerApp() {
   app.use('/projects', requireAuth, projectRoutes);
   app.use('/assets', requireAuth, assetRoutes);
 
+  // AI routes: all require authentication. Quota checks happen inside each handler.
+  // These provide server-managed AI API calls (image gen, TTS, chat) using
+  // admin-configured API keys, replacing the client-side key approach.
+  app.use('/ai', requireAuth, aiRoutes);
+
+  // Admin routes: require both authentication AND admin status.
+  // The requireAdmin middleware checks user_limits.is_admin = 1.
+  app.use('/admin', requireAuth, requireAdmin, adminRoutes);
+
   // Export download endpoint: public (URL contains unguessable UUID).
   app.get('/exports/:uuid', exportDownloadHandler);
 
@@ -281,7 +293,7 @@ function createServerApp() {
   }
 
   console.log('[SERVER] Dream-E server app created successfully');
-  console.log('[SERVER] Routes: /auth/*, /projects/*, /assets/*, /exports/*');
+  console.log('[SERVER] Routes: /auth/*, /projects/*, /assets/*, /ai/*, /admin/*, /exports/*');
   console.log(`[SERVER] Cleanup job scheduled every ${CLEANUP_INTERVAL_MS / 1000}s`);
 
   return app;

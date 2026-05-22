@@ -68,6 +68,14 @@ const ConfirmEmailPage = lazy(() => import('@components/auth/ConfirmEmailPage'))
 const ForgotPasswordPage = lazy(() => import('@components/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('@components/auth/ResetPasswordPage'));
 
+// Admin pages -- lazy-loaded since they're only needed by admin users.
+// Each admin page is a separate chunk so non-admin users never download this code.
+const AdminLayout = lazy(() => import('@components/admin/AdminLayout'));
+const AdminDashboard = lazy(() => import('@components/admin/AdminDashboard'));
+const AdminUsers = lazy(() => import('@components/admin/AdminUsers'));
+const AdminConfig = lazy(() => import('@components/admin/AdminConfig'));
+const AdminUsage = lazy(() => import('@components/admin/AdminUsage'));
+
 // AuthGuard is NOT lazy-loaded because it's used on every protected route
 // and needs to be available immediately to prevent route flicker.
 import AuthGuard from '@components/auth/AuthGuard';
@@ -306,6 +314,44 @@ function App() {
            * Supports ?startNode=nodeId to begin from a specific node.
            */}
           <Route path="/cowrite/story/:projectId" element={<AuthGuard><PhotoStoryPlayer /></AuthGuard>} />
+
+          {/* ============================================================
+              ADMIN ROUTES - Admin Panel
+              These routes use AdminLayout which includes its own admin
+              guard (checks is_admin via /api/v2/auth/me). They are also
+              wrapped in AuthGuard for authentication. The AdminLayout
+              provides sidebar navigation and renders child routes via
+              <Outlet />.
+              ============================================================ */}
+          <Route path="/admin" element={<AuthGuard><AdminLayout /></AuthGuard>}>
+            {/**
+             * ADMIN DASHBOARD (index route)
+             * URL: /admin
+             * System overview with stats and today's usage summary.
+             */}
+            <Route index element={<AdminDashboard />} />
+
+            {/**
+             * ADMIN USERS
+             * URL: /admin/users
+             * User management with inline-editable limits and toggles.
+             */}
+            <Route path="users" element={<AdminUsers />} />
+
+            {/**
+             * ADMIN AI CONFIG
+             * URL: /admin/config
+             * Server-side AI provider configuration (image, LLM, TTS).
+             */}
+            <Route path="config" element={<AdminConfig />} />
+
+            {/**
+             * ADMIN USAGE
+             * URL: /admin/usage
+             * Usage analytics with date range and API type filters.
+             */}
+            <Route path="usage" element={<AdminUsage />} />
+          </Route>
 
           {/**
            * CATCH-ALL ROUTE (404)

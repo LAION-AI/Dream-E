@@ -205,6 +205,19 @@ router.post('/register', async (req, res) => {
        VALUES (?, ?, ?, ?, 0, ?, ?, ?)`,
       [userId, email.toLowerCase(), passwordHash, displayName || '', confirmationToken, now, now]
     );
+
+    // Create user_limits row with defaults. If DREAME_ADMIN_EMAIL matches,
+    // auto-promote to admin so the first admin can be bootstrapped via env var.
+    const isAdmin = (process.env.DREAME_ADMIN_EMAIL || '').toLowerCase() === email.toLowerCase() ? 1 : 0;
+    db.run(
+      `INSERT INTO user_limits (user_id, max_projects, daily_llm_tokens, daily_images, daily_tts_seconds, is_admin, is_active, notes, updated_at)
+       VALUES (?, 20, 500000, 50, 600, ?, 1, '', ?)`,
+      [userId, isAdmin, now]
+    );
+    if (isAdmin) {
+      console.log(`[AUTH] Auto-promoted ${email.toLowerCase()} to admin (DREAME_ADMIN_EMAIL match)`);
+    }
+
     saveDb();
 
     console.log(`[AUTH] New user registered: ${email.toLowerCase()} (id: ${userId})`);
@@ -421,6 +434,15 @@ router.post('/google', async (req, res) => {
            VALUES (?, ?, ?, ?, 1, ?, ?)`,
           [userId, userEmail, userDisplayName, googleId, now, now]
         );
+
+        // Create user_limits row. Auto-promote if DREAME_ADMIN_EMAIL matches.
+        const isGoogleAdmin = (process.env.DREAME_ADMIN_EMAIL || '').toLowerCase() === userEmail ? 1 : 0;
+        db.run(
+          `INSERT INTO user_limits (user_id, max_projects, daily_llm_tokens, daily_images, daily_tts_seconds, is_admin, is_active, notes, updated_at)
+           VALUES (?, 20, 500000, 50, 600, ?, 1, '', ?)`,
+          [userId, isGoogleAdmin, now]
+        );
+
         saveDb();
         console.log(`[AUTH] New Google user registered: ${userEmail} (id: ${userId})`);
       }
@@ -540,6 +562,15 @@ router.get('/me', requireAuth, async (req, res) => {
 
     const [id, email, displayName, emailConfirmed, googleId, createdAt] = result[0].values[0];
 
+    // Check admin status from user_limits table
+    const limitsResult = db.exec(
+      'SELECT is_admin, is_active, max_projects, daily_llm_tokens, daily_images, daily_tts_seconds FROM user_limits WHERE user_id = ?',
+      [req.userId]
+    );
+    const limits = limitsResult.length > 0 && limitsResult[0].values.length > 0
+      ? limitsResult[0].values[0]
+      : [0, 1, 20, 500000, 50, 600];
+
     res.json({
       user: {
         id,
@@ -548,6 +579,14 @@ router.get('/me', requireAuth, async (req, res) => {
         emailConfirmed: !!emailConfirmed,
         hasGoogleAccount: !!googleId,
         createdAt,
+        is_admin: !!limits[0],
+        is_active: !!limits[1],
+        limits: {
+          maxProjects: limits[2],
+          dailyLlmTokens: limits[3],
+          dailyImages: limits[4],
+          dailyTtsSeconds: limits[5],
+        },
       },
     });
   } catch (err) {

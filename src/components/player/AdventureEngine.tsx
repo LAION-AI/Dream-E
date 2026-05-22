@@ -58,6 +58,7 @@ import { generateId } from '@/utils/idGenerator';
 import { getBlobUrl, evictBlobsExcept, revokeStaleEvictions, collectAssetReplacements, cleanStaleBlobUrls, blobUrlToBase64 } from '@/utils/blobCache';
 import { clearThumbnailCache } from '@/utils/thumbnailCache';
 import { setOwContext, getOwContext, clearOwContextStore } from '@/utils/owContextStore';
+import { buildOpenWorldContext } from '@/services/openWorldContext';
 
 /**
  * ADVENTURE ENGINE COMPONENT
@@ -3197,18 +3198,54 @@ export default function AdventureEngine() {
               System Prompt
             </button>
           </div>
-          <p className="text-xs text-editor-muted">
-            {contextViewerTab === 'user'
-              ? 'The full user message assembled from notes, entities, story timeline, variables, and player action. This is exactly what the scene-writing model received.'
-              : 'The system prompt (from Writer Settings) that instructs the model how to write scenes.'}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-editor-muted flex-1">
+              {contextViewerTab === 'user'
+                ? 'The full user message assembled from notes, entities, story timeline, variables, and player action.'
+                : 'The system prompt that instructs the model how to write scenes.'}
+            </p>
+            <button
+              className="px-3 py-1 rounded text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 whitespace-nowrap"
+              onClick={() => {
+                try {
+                  const projStore = useProjectStore.getState();
+                  const proj = projStore.currentProject;
+                  if (!proj || !session) {
+                    setContextViewerText('(No project/session — cannot build context)');
+                    return;
+                  }
+                  const ctx = buildOpenWorldContext(proj, session, '[preview — no action yet]');
+                  if (contextViewerTab === 'user') {
+                    setContextViewerText(ctx.userMessage || '(empty)');
+                  } else {
+                    setContextViewerText(ctx.systemPrompt || '(empty)');
+                  }
+                } catch (e: any) {
+                  setContextViewerText(`Error building context: ${e.message}`);
+                }
+              }}
+            >
+              Rebuild Now
+            </button>
+          </div>
           <textarea
             className="w-full font-mono text-xs bg-editor-bg text-editor-text p-3 rounded-lg border border-editor-border resize-y focus:outline-none"
             style={{ minHeight: '60vh' }}
             value={contextViewerText}
             readOnly
           />
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <button
+              className="px-4 py-2 rounded-lg bg-accent/20 hover:bg-accent/30 text-accent text-sm"
+              onClick={() => {
+                navigator.clipboard.writeText(contextViewerText).then(
+                  () => { /* copied */ },
+                  () => { /* fallback: select all text in textarea */ }
+                );
+              }}
+            >
+              Copy to Clipboard
+            </button>
             <button
               className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 text-sm"
               onClick={() => setShowContextViewer(false)}

@@ -121,6 +121,57 @@ const SCHEMA_SQL = `
     created_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  -- Admin config table: centralized API keys, model settings, and other server-wide config.
+  -- Secrets (API keys) are AES-256-GCM encrypted when is_secret = 1.
+  -- Settings (provider names, models, styles) are stored in plain text.
+  -- This eliminates the need for users to manage their own API keys.
+  CREATE TABLE IF NOT EXISTS admin_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    is_secret INTEGER DEFAULT 0,
+    updated_at INTEGER NOT NULL
+  );
+
+  -- Usage log table: tracks every AI API call per user for quota enforcement and analytics.
+  -- Each row represents a single API call (image generation, LLM chat, TTS synthesis).
+  -- Cost estimates are optional and can be populated based on known provider pricing.
+  CREATE TABLE IF NOT EXISTS usage_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    api_type TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    tokens_in INTEGER DEFAULT 0,
+    tokens_out INTEGER DEFAULT 0,
+    image_count INTEGER DEFAULT 0,
+    audio_seconds REAL DEFAULT 0,
+    cost_estimate REAL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  -- Indexes for efficient usage queries: user+date for per-user daily totals,
+  -- api_type+date for aggregate stats by service type.
+  CREATE INDEX IF NOT EXISTS idx_usage_user_date ON usage_log(user_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_usage_type ON usage_log(api_type, created_at);
+
+  -- Per-user limits table: daily quotas, admin flag, active status.
+  -- Each user gets a row here (created on first AI call or by admin).
+  -- The is_admin flag controls access to the admin panel and admin API routes.
+  -- is_active = 0 disables ALL API access for the user (admin can toggle).
+  CREATE TABLE IF NOT EXISTS user_limits (
+    user_id TEXT PRIMARY KEY,
+    max_projects INTEGER DEFAULT 20,
+    daily_llm_tokens INTEGER DEFAULT 500000,
+    daily_images INTEGER DEFAULT 50,
+    daily_tts_seconds REAL DEFAULT 600,
+    is_admin INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    notes TEXT DEFAULT '',
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `;
 
 // ---------------------------------------------------------------------------
@@ -172,10 +223,92 @@ async function initializeDb() {
   db.run(SCHEMA_SQL);
   console.log('[DB] Schema initialized (all tables ensured)');
 
+  // Run post-schema migrations (create user_limits rows, seed admin, etc.)
+  runMigrations(db);
+
   // Flush the (possibly new) schema to disk immediately.
   saveDbImmediate();
 
   return db;
+}
+
+// ---------------------------------------------------------------------------
+// Migrations
+// ---------------------------------------------------------------------------
+
+/**
+ * Post-schema migration logic. Runs every startup but is idempotent.
+ *
+ * 1. Creates user_limits rows for any existing users who don't have one.
+ *    This handles the case where users were created before the user_limits
+ *    table existed — they get default quotas automatically.
+ *
+ * 2. If DREAME_ADMIN_EMAIL env var is set, promotes that user to admin.
+ *    This allows the server operator to designate an admin without needing
+ *    a UI or manual DB editing. Safe to run repeatedly — if the user is
+ *    already admin, the UPDATE is a no-op (same values).
+ *
+ * @param {import('sql.js').Database} database - The initialized database instance.
+ */
+function runMigrations(database) {
+  const now = Date.now();
+  let migrationCount = 0;
+
+  // --- Migration 1: Ensure every user has a user_limits row ---
+  // Find all users who do NOT have a corresponding user_limits entry.
+  // This covers users created before the admin system was added.
+  const usersWithoutLimits = database.exec(
+    `SELECT u.id FROM users u
+     LEFT JOIN user_limits ul ON u.id = ul.user_id
+     WHERE ul.user_id IS NULL`
+  );
+
+  if (usersWithoutLimits.length > 0 && usersWithoutLimits[0].values.length > 0) {
+    for (const row of usersWithoutLimits[0].values) {
+      const userId = row[0];
+      database.run(
+        `INSERT INTO user_limits (user_id, max_projects, daily_llm_tokens, daily_images, daily_tts_seconds, is_admin, is_active, notes, updated_at)
+         VALUES (?, 20, 500000, 50, 600, 0, 1, '', ?)`,
+        [userId, now]
+      );
+      migrationCount++;
+    }
+    console.log(`[DB] Migration: Created user_limits rows for ${migrationCount} existing user(s)`);
+  }
+
+  // --- Migration 2: Auto-promote admin by email ---
+  // If DREAME_ADMIN_EMAIL is set, find the user with that email and
+  // ensure their user_limits.is_admin = 1. This allows bootstrapping
+  // admin access without touching the database manually.
+  const adminEmail = process.env.DREAME_ADMIN_EMAIL;
+  if (adminEmail) {
+    const adminUser = database.exec(
+      'SELECT id FROM users WHERE email = ?',
+      [adminEmail.toLowerCase()]
+    );
+
+    if (adminUser.length > 0 && adminUser[0].values.length > 0) {
+      const adminUserId = adminUser[0].values[0][0];
+
+      // Ensure user_limits row exists (might have just been created above,
+      // but INSERT OR IGNORE handles the race).
+      database.run(
+        `INSERT OR IGNORE INTO user_limits (user_id, max_projects, daily_llm_tokens, daily_images, daily_tts_seconds, is_admin, is_active, notes, updated_at)
+         VALUES (?, 20, 500000, 50, 600, 1, 1, 'Auto-promoted admin via DREAME_ADMIN_EMAIL', ?)`,
+        [adminUserId, now]
+      );
+
+      // Update to admin if the row already existed.
+      database.run(
+        'UPDATE user_limits SET is_admin = 1, updated_at = ? WHERE user_id = ?',
+        [now, adminUserId]
+      );
+
+      console.log(`[DB] Migration: Auto-promoted ${adminEmail} to admin (user ID: ${adminUserId})`);
+    } else {
+      console.log(`[DB] Migration: DREAME_ADMIN_EMAIL="${adminEmail}" set but no matching user found yet. Admin will be promoted on next restart after registration.`);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

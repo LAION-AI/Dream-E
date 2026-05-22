@@ -1542,8 +1542,8 @@ When writing scene text: show the character's inner shifts through action, dialo
 - **Connections** (edges): directed edges forming the story graph. Each has source, target, and optional sourceHandle (choice ID).
 - **Start Node**: the scene where the game begins
 
-## Modifying the Game
-Output command blocks inline in your response:
+## Modifying the Game — CRITICAL FORMAT REQUIREMENT
+To execute actions, you MUST output command blocks in EXACTLY this format:
 
 <<<SW_CMD:action_name>>>
 {"param": "value"}
@@ -1551,18 +1551,30 @@ Output command blocks inline in your response:
 
 Multiple commands per response are fine — they execute in order.
 
+**NEVER describe or narrate what you "did" without actual command blocks.** If you write "I created scene X" but don't include a <<<SW_CMD:create_scene>>> block, NOTHING actually happens. The scene won't exist. You MUST use command blocks for EVERY modification.
+
+**WRONG** (narrating without commands — nothing happens):
+"I've created a new scene called 'The Forest' with choices..."
+
+**CORRECT** (actual command that creates the scene):
+<<<SW_CMD:create_scene>>>
+{"title": "The Forest", "text": "You enter a dark forest...", "choices": ["Go left", "Go right"]}
+<<</SW_CMD>>>
+
+When the user asks you to create scenes, generate images, or modify the game, you MUST respond with the actual command blocks. Your text outside of commands is just commentary for the user.
+
 ## PARALLEL IMAGE GENERATION — batch for speed
 Image commands (generate_scene_image, generate_entity_image, generate_node_image) run IN PARALLEL when issued in the same response. Always batch multiple image requests into one response — they all fire simultaneously (N images = same time as 1 image).
 
-Example — generate 3 images at once (put them all in one response):
-  <<<SW_CMD:generate_node_image>>>
-  {"targetId": "scene_A", "prompt": "..."}
+Example — generate 3 scene images at once (put them all in one response):
+  <<<SW_CMD:generate_scene_image>>>
+  {"sceneId": "node_abc123", "prompt": "A dark forest at twilight with glowing mushrooms..."}
   <<</SW_CMD>>>
-  <<<SW_CMD:generate_node_image>>>
-  {"targetId": "scene_B", "prompt": "..."}
+  <<<SW_CMD:generate_scene_image>>>
+  {"sceneId": "node_def456", "prompt": "A cozy tavern with a roaring fireplace..."}
   <<</SW_CMD>>>
-  <<<SW_CMD:generate_node_image>>>
-  {"targetId": "scene_C", "prompt": "..."}
+  <<<SW_CMD:generate_entity_image>>>
+  {"entityId": "entity_ghi789", "prompt": "Portrait of an elderly wizard with a long white beard..."}
   <<</SW_CMD>>>
 
 Non-image commands still run sequentially (first), then all image commands fire at once.
@@ -1653,14 +1665,19 @@ The TTS service uses Google Gemini and produces natural-sounding narration. Cons
     'search_music', 'get_music_track', 'list_music_genres', // music group — search & browse tracks
   ]);
 
+  /** Co-write commands that should ALSO be available in game mode */
+  const GAME_MODE_EXTRA_COMMANDS = new Set([
+    'generate_node_image',  // General-purpose image gen (works for any node)
+  ]);
+
   // Filter commands based on project mode
   const filteredCommands = COMMANDS.filter((cmd) => {
     if (isCowrite) {
       // Co-write mode: only co-write groups + specifically allowed commands
       return COWRITE_GROUPS.has(cmd.group) || COWRITE_EXTRA_COMMANDS.has(cmd.name);
     } else {
-      // Game mode: everything EXCEPT co-write-only commands
-      return cmd.group !== 'cowrite';
+      // Game mode: everything EXCEPT co-write-only commands + specific exceptions
+      return cmd.group !== 'cowrite' || GAME_MODE_EXTRA_COMMANDS.has(cmd.name);
     }
   });
 
